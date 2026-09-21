@@ -14,7 +14,7 @@ def _environment() -> dict[str, str]:
         'CHESS_MODEL_REPO_ID': 'owner/chess-model',
         'CHESS_MODEL_REVISION': 'main',
         'CHESS_MODEL_CHECKPOINT_FILENAME': 'model.pt',
-        'CHESS_MODEL_TORCHSCRIPT_FILENAME': 'model.jit.pt',
+        'CHESS_MODEL_INFERENCE_FILENAME': 'model.jit.pt',
         'CHESS_WEB_ALLOWED_ORIGINS': 'https://chess.example, http://localhost:5173/',
     }
 
@@ -43,7 +43,7 @@ def test_deployment_configuration_rejects_ambiguous_revision(revision: str) -> N
         DeploymentConfiguration.from_environment(environment)
 
 
-def test_downloads_both_named_artifacts_and_returns_torchscript_path() -> None:
+def test_downloads_both_named_artifacts_and_returns_inference_path() -> None:
     downloaded_filenames: list[str] = []
 
     def downloader(*, repo_id: str, filename: str, revision: str, token: str | None) -> str:
@@ -61,6 +61,13 @@ def test_downloads_both_named_artifacts_and_returns_torchscript_path() -> None:
     )
     assert downloaded_filenames == ['model.pt', 'model.jit.pt']
     assert model_path == Path('/cache/model.jit.pt')
+
+
+def test_deployment_configuration_accepts_onnx_inference_artifact() -> None:
+    environment = _environment()
+    environment['CHESS_MODEL_INFERENCE_FILENAME'] = 'model.int8.onnx'
+    configuration = DeploymentConfiguration.from_environment(environment)
+    assert configuration.inference_filename == 'model.int8.onnx'
 
 
 def test_download_rejects_an_unresolved_revision() -> None:

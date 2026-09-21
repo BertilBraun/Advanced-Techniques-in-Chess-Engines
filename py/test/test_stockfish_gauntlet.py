@@ -8,6 +8,7 @@ from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, Eva
 from src.experiment.configuration import load_chess_experiment_configuration
 
 pytest.importorskip('AlphaZeroCpp')
+from src.self_play.configuration import TorchScriptInferenceBackend
 from tools.run_stockfish_gauntlet import (
     FixedModelSearchBudget,
     GauntletShardResult,
@@ -36,7 +37,7 @@ def test_fixed_budget_reproduces_production_evaluation_search() -> None:
         outstanding_batches_per_worker=1,
     )
 
-    search = _search_configuration(budget)
+    search = _search_configuration(budget, TorchScriptInferenceBackend())
 
     assert search.searches_per_move == 64
     assert search.parallel_searches == 1
@@ -55,7 +56,7 @@ def test_timed_budget_builds_only_internal_validation_search() -> None:
         outstanding_batches_per_worker=2,
     )
 
-    search = _search_configuration(budget)
+    search = _search_configuration(budget, TorchScriptInferenceBackend())
 
     assert search.searches_per_move == 65
     assert search.parallel_searches == 64

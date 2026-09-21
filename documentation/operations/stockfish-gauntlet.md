@@ -98,10 +98,16 @@ The two budget modes answer different questions:
   compute process on any selected GPU. Every move starts from a fresh search root, matching scheduled evaluation
   semantics rather than retaining a tree across moves. The result records actual searches and elapsed milliseconds.
 
+Both fixed-search and timed-search gauntlets use the evaluation inference backend in the resolved experiment.
+For a TensorRT experiment, the requested batch-specific ONNX checkpoint is published through the same verified
+TensorRT template/refit cache used by scheduled evaluation before the interactive timed engine starts. The timed
+path does not silently fall back to TorchScript. Direct-policy diagnostics remain raw model inference by design and
+are not searched strength measurements.
+
 Both modes use one Stockfish process per GPU shard. Every process uses the experiment's configured thread and hash
 limits, applies the requested `--stockfish-nodes` value, and never applies `Skill Level` or `UCI_Elo`. The final JSON
 records the source revision, tool/model/opening/Stockfish hashes, Stockfish identity, GPU UUID/model/memory/driver,
-complete per-game evidence, paired-bootstrap interval, and shard timings.
+the resolved inference backend, complete per-game evidence, paired-bootstrap interval, and shard timings.
 
 ## Fixed-search examples
 

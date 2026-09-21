@@ -108,6 +108,15 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         configuration: EvaluationSearchConfiguration,
         tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> ChessSelfPlaySearch:
+        checkpoint = self.evaluation_deployment_checkpoint(checkpoint, configuration)
+        parameters = self.evaluation_parameters_at(checkpoint.generation, configuration, tree_search)
+        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
+
+    def evaluation_deployment_checkpoint(
+        self,
+        checkpoint: CheckpointReference,
+        configuration: EvaluationSearchConfiguration,
+    ) -> CheckpointReference:
         match configuration.inference.backend, self.configuration.training.trainer.quantization:
             case TensorRtInferenceBackend(), _ if checkpoint.inference_model_path.suffix == '.onnx':
                 checkpoint = onnx_inference_checkpoint_for_batch(
@@ -116,8 +125,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
                 )
             case _:
                 pass
-        parameters = self.evaluation_parameters_at(checkpoint.generation, configuration, tree_search)
-        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
+        return self.deployment_checkpoint(checkpoint, configuration.inference)
 
     def evaluation_parameters_at(
         self,

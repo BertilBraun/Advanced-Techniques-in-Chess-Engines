@@ -8,18 +8,27 @@ import modal
 from fastapi import FastAPI
 
 _REMOTE_ROOT = '/opt/chess'
+_TENSORRT_CACHE_ROOT = '/cache/tensorrt'
 _GPU_SINGLE_POSITION_WARMUPS = 2
 _GPU_WARMUP_SEARCHES = 4096
+_INFERENCE_BATCH_SIZE = 64
+_INPUT_CHANNELS = 52
+_BOARD_ROWS = 8
+_BOARD_COLUMNS = 8
+_TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3] if modal.is_local() else Path(_REMOTE_ROOT)
 
 image = (
     modal.Image.from_registry(
-        'nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04',
-        add_python='3.10',
+        'nvcr.io/nvidia/tensorrt:25.11-py3',
+        add_python='3.12',
     )
     .entrypoint([])
     .apt_install('build-essential', 'cmake', 'git')
-    .pip_install_from_pyproject(str(_REPOSITORY_ROOT / 'pyproject.toml'), optional_dependencies=['web'])
+    .pip_install_from_pyproject(
+        str(_REPOSITORY_ROOT / 'pyproject.toml'),
+        optional_dependencies=['web', 'tensorrt'],
+    )
     .pip_install(
         'torch==2.12.1',
         index_url='https://download.pytorch.org/whl/cu126',
@@ -33,7 +42,7 @@ image = (
     )
     .run_commands(
         f'cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build '
-        '-DCMAKE_BUILD_TYPE=Release -DENABLE_NATIVE_ARCHITECTURE=OFF',
+        '-DCMAKE_BUILD_TYPE=Release -DENABLE_NATIVE_ARCHITECTURE=OFF -DENABLE_TENSORRT=ON',
         f'cmake --build {_REMOTE_ROOT}/cpp/build --parallel 2',
         f'ctest --test-dir {_REMOTE_ROOT}/cpp/build --output-on-failure',
     )
@@ -53,6 +62,7 @@ image = (
 )
 
 app = modal.App('chess-model-web-play')
+tensor_rt_cache = modal.Volume.from_name('chess-web-play-tensorrt-cache', create_if_missing=True)
 
 
 @app.cls(
@@ -66,6 +76,7 @@ app = modal.App('chess-model-web-play')
     memory=2048,
     timeout=90,
     startup_timeout=900,
+    volumes={_TENSORRT_CACHE_ROOT: tensor_rt_cache},
 )
 @modal.concurrent(max_inputs=1)
 class ChessWebPlay:
@@ -74,7 +85,11 @@ class ChessWebPlay:
         import torch
         from huggingface_hub import HfApi, hf_hub_download
         from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnalysis
-        from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+        from src.games.chess.interactive.configuration import (
+            InferenceTarget,
+            InteractiveEngineConfiguration,
+            InteractiveInferenceBackend,
+        )
         from src.games.chess.interactive.engine import InteractiveEngine
 
         from deployment.web.backend.api import create_app
@@ -83,6 +98,11 @@ class ChessWebPlay:
             download_model_artifacts,
         )
         from deployment.web.backend.service import GameService
+        from deployment.web.backend.tensorrt_cache import prepare_cached_tensorrt_engine
+        from deployment.web.backend.tensorrt_runtime import (
+            build_and_verify_tensorrt_engine,
+            modal_runtime_identity,
+        )
 
         configuration = DeploymentConfiguration.from_environment(os.environ)
         hugging_face_token = os.environ.get('HF_TOKEN')
@@ -102,12 +122,27 @@ class ChessWebPlay:
         )
         if not torch.cuda.is_available():
             raise RuntimeError('The GPU deployment cannot access CUDA.')
-        print(f'Loading interactive engine on {torch.cuda.get_device_name(0)}.')
+        cached_engine = prepare_cached_tensorrt_engine(
+            source_path=model_path,
+            cache_root=Path(_TENSORRT_CACHE_ROOT),
+            runtime=modal_runtime_identity(),
+            build_engine=build_and_verify_tensorrt_engine,
+            batch_size=_INFERENCE_BATCH_SIZE,
+            channels=_INPUT_CHANNELS,
+            rows=_BOARD_ROWS,
+            columns=_BOARD_COLUMNS,
+            builder_optimization_level=_TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
+        )
+        if cached_engine.built:
+            tensor_rt_cache.commit()
+        cache_status = 'built and cached' if cached_engine.built else 'loaded from cache'
+        print(f'Loading {cache_status} TensorRT engine on {torch.cuda.get_device_name(0)}.')
         engine = InteractiveEngine(
             InteractiveEngineConfiguration(
-                model_path=str(model_path),
+                model_path=str(cached_engine.path),
                 parallel_searches=16,
                 inference_target=InferenceTarget.CUDA,
+                inference_backend=InteractiveInferenceBackend.TENSORRT,
             )
         )
         for _ in range(_GPU_SINGLE_POSITION_WARMUPS):
@@ -116,7 +151,8 @@ class ChessWebPlay:
             CountedMctsAnalysis(searches=_GPU_WARMUP_SEARCHES)
         )
         print(
-            f'Warmed CUDA inference with {warmup_result.searches} searches in {warmup_result.elapsed_milliseconds} ms.'
+            f'Warmed TensorRT inference with {warmup_result.searches} searches '
+            f'in {warmup_result.elapsed_milliseconds} ms.'
         )
         self._web_application = create_app(GameService(engine), configuration.allowed_origins)
 
