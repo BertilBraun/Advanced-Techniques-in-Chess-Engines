@@ -26,7 +26,7 @@ channels to 10x128, 15x192, and 20x256, with switches at roughly 0.75, 1.75, and
 separate training GPU for the concurrently trained next size. See [Accelerating Self-Play Learning in
 Go](https://arxiv.org/abs/1902.10565), section 2 and appendix C. KataGo's current training guide describes its normal
 official pipeline as asynchronous self-play, shuffling, training, exporting, and optional gating, and explicitly
-supports extra or train-only models; see [SelfplayTraining.md](https://github.com/lightvector/KataGo/blob/master/SelfplayTraining.md).
+supports extra or train-only models; see [SelfplayTraining.md](https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md).
 
 This platform intentionally differs:
 

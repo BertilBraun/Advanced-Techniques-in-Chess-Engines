@@ -397,7 +397,7 @@ be reported by the canary, but a separate two-versus-four selection experiment i
 - [KataGo](https://arxiv.org/abs/1902.10565) demonstrates that mixed search budgets and auxiliary targets can improve
   training efficiency, and documents forced-playout pruning. It does not establish the numeric chess stopping
   thresholds in this plan.
-- [KataGo's methods documentation](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md) describes
+- [KataGo's methods documentation](https://github.com/lightvector/KataGo/blob/v1.17.1/docs/KataGoMethods.md) describes
   additional value targets and search heuristics. Its reported benefits motivate compact auxiliary supervision, not
   wholesale transfer of Go-specific heads.
 - [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/abs/2012.07910) demonstrates a

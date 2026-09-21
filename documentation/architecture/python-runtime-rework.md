@@ -1132,7 +1132,7 @@ place the explicitly configured binary and preserve the
 when the binary is redistributed.
 
 KataGo uses its
-[asynchronous JSON analysis protocol](https://github.com/lightvector/KataGo/blob/master/docs/Analysis_Engine.md)
+[asynchronous JSON analysis protocol](https://github.com/lightvector/KataGo/blob/v1.17.1/docs/Analysis_Engine.md)
 rather than stateful GTP. The job keeps one KataGo process
 alive, submits several active positions with stable request IDs, and accepts out-of-order responses. Every request
 supplies the complete move history, board size, exact rules, komi, fixed maximum visits, and the requested policy
@@ -1142,7 +1142,7 @@ second protocol. The executable, network, backend, and analysis configuration ar
 translation and exact rule composition are the only game-specific protocol concerns. Node provisioning installs the KataGo
 executable, a compatible network, and an analysis configuration outside the evaluation child; run preparation only
 validates and hashes those configured files. KataGo's repository code uses a
-[permissive license with separately licensed bundled dependencies](https://github.com/lightvector/KataGo/blob/master/LICENSE);
+[permissive license with separately licensed bundled dependencies](https://github.com/lightvector/KataGo/blob/v1.17.1/LICENSE);
 the selected network artifact's terms must be reviewed separately before redistribution.
 
 ### Results, reporting, and statistics
