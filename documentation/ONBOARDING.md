@@ -18,12 +18,53 @@ Read-in-this-order path for a new contributor or agent.
 
 ## Build and validate
 
-- Python (from `py/`): `python -m pytest --import-mode=importlib ./test -q` — always keep
-  `--import-mode=importlib`. Tests needing the native extension or CUDA are marked and skip when unavailable.
-- Lint: `ruff format` and `ruff check` on touched files before committing; all warnings resolved.
-- Native: CompileCheck build in a persistent build directory with ccache for routine checks; Release for
-  anything deployed or measured; all native tests run through the single `NativeTests` executable
-  (see `cpp/AGENTS.md`).
+Python validation, from `py/`:
+
+```powershell
+uv run ruff format
+uv run ruff check --fix
+python -m pytest --import-mode=importlib .\test -q
+```
+
+Always keep `--import-mode=importlib`. Tests that need the native extension or CUDA are marked and skip when
+unavailable; real Stockfish/KataGo smoke tests are opt-in and need provisioned external artifacts. Run
+`ruff format` and `ruff check` on touched files before committing, with all warnings resolved.
+
+Native build and tests, from the repository root:
+
+```powershell
+cmake -S .\cpp -B .\cpp\build -DCMAKE_BUILD_TYPE=Release
+cmake --build .\cpp\build --parallel
+ctest --test-dir .\cpp\build --output-on-failure
+```
+
+Native-facing Python tests require the freshly built extension. For routine compile checks use the
+`CompileCheck` build type in a persistent build directory with ccache; Release is required for anything
+deployed or measured. All native tests run through the single `NativeTests` executable (see `cpp/AGENTS.md`).
+
+## Provisioning a training node
+
+[`deployment/setup_remote.sh`](../deployment/setup_remote.sh) is the authoritative bootstrap for a fresh
+training node. It clones the requested revision, installs the hashed training environment, builds the Release
+extension, exports `ENGINE_SOURCE_REVISION`, and executes the supplied command. Set `ENGINE_REPOSITORY_REF`,
+`ENGINE_REPOSITORY_DIRECTORY`, `ENGINE_VIRTUAL_ENVIRONMENT` or `ENGINE_REPOSITORY_URL` to override the
+checkout and environment locations. The script intentionally does not install Stockfish, KataGo, or their
+model and configuration artifacts — see [evaluation engines](operations/evaluation-engines.md).
+
+After bootstrap, runs are started, stopped, inspected and archived exclusively through
+[`deployment/run_control.sh`](../deployment/run_control.sh) — see [run control](operations/run-control.md).
+
+The checked-in `py/configs/*-experiment-template.yaml` files are validation templates, not approved production
+runs: hardware, artifact paths and hashes, output paths, source revision and approval must be resolved
+explicitly before a run.
+
+## Playing against a trained model
+
+The native interactive chess engine is shared by both deployments and is retained production code:
+[web play](operations/web-play.md) uses the typed FastAPI backend and browser client (deployed at
+[chess.bertil-braun.de](https://chess.bertil-braun.de)), and the
+[Lichess/Vast path](../deployment/lichess/README.md) invokes `python -m src.games.chess.uci` through the
+checked-in UCI launcher.
 
 ## What you may and may not do
 
