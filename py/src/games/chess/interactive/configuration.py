@@ -13,6 +13,11 @@ class InferenceTarget(str, Enum):
     CUDA = 'cuda'
 
 
+class InteractiveInferenceBackend(str, Enum):
+    TORCHSCRIPT = 'torchscript'
+    TENSORRT = 'tensorrt'
+
+
 DEFAULT_EXPLORATION_CONSTANT = 1.0
 
 
@@ -26,6 +31,7 @@ class InteractiveEngineConfiguration:
     outstanding_batches_per_worker: int = 2
     maximum_batch_size: int | None = None
     inference_target: InferenceTarget = InferenceTarget.AUTO
+    inference_backend: InteractiveInferenceBackend = InteractiveInferenceBackend.TORCHSCRIPT
     sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
 
     def __post_init__(self) -> None:

@@ -15,7 +15,9 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import Field
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
+    StockfishAdaptiveNodesEvaluationDefinition,
     StockfishEngineConfiguration,
+    StockfishEvaluationDefinition,
     StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
@@ -40,11 +42,20 @@ from src.experiment.configuration import experiment_configuration_sha256, load_e
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.contract import ChessPosition
 from src.games.chess.interactive.analysis import TimedMctsAnalysis
-from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.games.chess.interactive.configuration import (
+    InferenceTarget,
+    InteractiveEngineConfiguration,
+    InteractiveInferenceBackend,
+)
 from src.games.chess.interactive.engine import InteractiveEngine
 from src.games.chess.stockfish import StockfishClient, StockfishFixedNodesMatchEngine
 from src.games.chess.training import ChessImplementation
-from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.configuration import (
+    BatchedInferenceParams,
+    InferenceBackendConfiguration,
+    TensorRtInferenceBackend,
+    TorchScriptInferenceBackend,
+)
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -114,7 +125,7 @@ class GauntletShardResult(FrozenModel):
 
 
 class StockfishGauntletResult(FrozenModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     source_revision: str = Field(min_length=40, max_length=40)
     tool_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     started_at_utc: datetime
@@ -136,6 +147,7 @@ class StockfishGauntletResult(FrozenModel):
     stockfish_threads: int = Field(gt=0)
     stockfish_hash_mib: int = Field(gt=0)
     model_search_budget: ModelSearchBudget
+    inference_backend: InferenceBackendConfiguration
     gpus: tuple[GpuProvenance, ...] = Field(min_length=1)
     idle_device_check_enforced: bool
     timed_move_measurements: TimedMoveMeasurements | None
@@ -211,6 +223,7 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
         checkpoint: CheckpointReference,
         device_id: int,
         budget: TimedModelSearchBudget,
+        inference_backend: InteractiveInferenceBackend,
     ) -> None:
         self._seconds_per_move = budget.seconds_per_move
         self._engine = InteractiveEngine(
@@ -223,6 +236,7 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
                 outstanding_batches_per_worker=budget.outstanding_batches_per_worker,
                 maximum_batch_size=budget.inference_batch_size,
                 inference_target=InferenceTarget.CUDA,
+                inference_backend=inference_backend,
             )
         )
         self._searches: list[int] = []
@@ -311,6 +325,7 @@ def _busy_gpu_processes(gpus: tuple[GpuProvenance, ...]) -> tuple[BusyGpuProcess
 
 def _search_configuration(
     budget: DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget,
+    inference_backend: InferenceBackendConfiguration,
 ) -> EvaluationSearchConfiguration:
     # Timed budgets ignore this count, but EvaluationSearchConfiguration demands it exceed parallel_searches.
     match budget:
@@ -334,8 +349,37 @@ def _search_configuration(
             inference_workers=budget.inference_workers,
             inference_batch_size=budget.inference_batch_size,
             outstanding_batches_per_worker=budget.outstanding_batches_per_worker,
+            backend=inference_backend,
         ),
     )
+
+
+def _gauntlet_inference_backend(
+    configuration: ChessExperimentConfiguration,
+    inference_batch_size: int,
+) -> InferenceBackendConfiguration:
+    backends = tuple(
+        definition.search.inference.backend
+        for definition in configuration.evaluation.definitions
+        if isinstance(
+            definition,
+            (
+                StockfishEvaluationDefinition,
+                StockfishFixedNodesEvaluationDefinition,
+                StockfishAdaptiveNodesEvaluationDefinition,
+            ),
+        )
+        and definition.search.inference.inference_batch_size == inference_batch_size
+    )
+    if not backends:
+        raise ValueError(
+            f'The experiment has no Stockfish evaluation inference backend for batch size {inference_batch_size}.'
+        )
+    if any(backend != backends[0] for backend in backends[1:]):
+        raise ValueError(
+            f'The experiment has conflicting Stockfish evaluation backends for batch size {inference_batch_size}.'
+        )
+    return backends[0]
 
 
 def _stockfish_configuration(
@@ -442,7 +486,10 @@ def _shard_context(request: _ShardRequest) -> _ShardContext:
         openings=openings.model_copy(
             update={'openings': tuple(openings.openings[index] for index in request.opening_indices)}
         ),
-        search=_search_configuration(request.model_search_budget),
+        search=_search_configuration(
+            request.model_search_budget,
+            _gauntlet_inference_backend(loaded, request.model_search_budget.inference_batch_size),
+        ),
     )
 
 
@@ -510,7 +557,18 @@ def _run_timed_shard_rungs(request: _ShardRequest, context: _ShardContext) -> tu
     results: list[GauntletShardResult] = []
     for rung in request.rungs:
         rung_started_at = time.monotonic()
-        selector = _TimedSearchActionSelector(context.checkpoint, request.device_id, request.model_search_budget)
+        deployment_checkpoint = context.game.evaluation_deployment_checkpoint(context.checkpoint, context.search)
+        inference_backend = (
+            InteractiveInferenceBackend.TENSORRT
+            if isinstance(context.search.inference.backend, TensorRtInferenceBackend)
+            else InteractiveInferenceBackend.TORCHSCRIPT
+        )
+        selector = _TimedSearchActionSelector(
+            deployment_checkpoint,
+            request.device_id,
+            request.model_search_budget,
+            inference_backend,
+        )
         engine = _open_stockfish_engine(request, context, rung)
         stockfish_identity = engine.client.engine_identity
         try:
@@ -688,6 +746,10 @@ def _rung_result(
         stockfish_threads=engine_configuration.threads,
         stockfish_hash_mib=engine_configuration.hash_mib,
         model_search_budget=arguments.model_search_budget,
+        inference_backend=_gauntlet_inference_backend(
+            configuration,
+            arguments.model_search_budget.inference_batch_size,
+        ),
         gpus=gpus,
         idle_device_check_enforced=idle_check_enforced,
         timed_move_measurements=_combine_timed_measurements(shards),
@@ -855,7 +917,7 @@ def parse_arguments() -> Arguments:
         raise ValueError('Gauntlet devices must be nonempty and unique.')
     if arguments.output_directory.exists():
         raise ValueError(f'Gauntlet output directory already exists: {arguments.output_directory}')
-    _search_configuration(arguments.model_search_budget)
+    _search_configuration(arguments.model_search_budget, TorchScriptInferenceBackend())
     return arguments
 
 

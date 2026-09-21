@@ -7,6 +7,7 @@ from AlphaZeroCpp import (
     AnalysisMode,
     AnalysisParameters,
     BatchedInferenceParameters,
+    InferenceBackend,
     InferenceConfiguration,
     InferenceDevice,
     InferenceExecutionOptions,
@@ -26,7 +27,11 @@ from src.games.chess.interactive.analysis import (
     PolicyAnalysis,
     TimedMctsAnalysis,
 )
-from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.games.chess.interactive.configuration import (
+    InferenceTarget,
+    InteractiveEngineConfiguration,
+    InteractiveInferenceBackend,
+)
 from src.self_play.native_configuration import native_sdpa_backend
 
 
@@ -52,12 +57,17 @@ class InteractiveEngine:
             InferenceTarget.CPU: InferenceDevice.CPU,
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
+        backend_mapping = {
+            InteractiveInferenceBackend.TORCHSCRIPT: InferenceBackend.TORCHSCRIPT,
+            InteractiveInferenceBackend.TENSORRT: InferenceBackend.TENSORRT,
+        }
         batch_size = configuration.resolved_batch_size
         runtime_parameters = InferenceConfiguration(
             device_id=configuration.device_id,
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
             execution_options=InferenceExecutionOptions(sdpa_backend=native_sdpa_backend(configuration.sdpa_backend)),
+            backend=backend_mapping[configuration.inference_backend],
         )
         self._bound_analysis = BoundChessAnalysis(
             runtime_parameters,

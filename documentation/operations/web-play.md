@@ -83,14 +83,23 @@ Use `npm run build` for the static production bundle in
 
 ## Modal deployment
 
-The deployment builds the CUDA-enabled native extension into an ephemeral image.
+The deployment builds the CUDA- and TensorRT-enabled native extension in NVIDIA's TensorRT 25.11 image.
 It requests one NVIDIA A10 GPU, has zero warm containers, at most one container,
 two CPU cores, 2 GiB of requested system memory, a 120-second scale-down window,
-a 90-second request timeout, and no Modal Volume. CUDA is required explicitly;
-startup fails instead of silently falling back to CPU inference. At container
-startup it downloads the named `.pt` and `.jit.pt` artifacts into the
-revision-aware Hugging Face cache, then loads two TorchScript replicas once for
-the direct inference workers. Startup warms the single-position path on both
+a 90-second request timeout, and a persistent Modal Volume named
+`chess-web-play-tensorrt-cache`. CUDA is required explicitly; startup fails
+instead of silently falling back to CPU inference. At container startup it
+downloads the named training checkpoint and `.jit.pt` or `.onnx` inference
+artifact into the revision-aware Hugging Face cache. It then resolves a cache
+key from the inference artifact SHA-256, TensorRT, CUDA runtime, and NVIDIA driver versions,
+A10 identity and compute capability, static input shape, batch size, and builder
+settings. A valid engine is reused from the Volume. A miss builds and refits the
+engine on the serving A10, verifies TensorRT output against ONNX, writes engine
+and metadata atomically, and commits the Volume before serving traffic. The
+generated `.engine` is deliberately not a Hugging Face artifact: it is a
+regenerable, runtime- and hardware-specific deployment cache.
+
+The engine loads two TensorRT inference workers once. Startup warms the single-position path on both
 workers, then runs a fixed 4,096-search warm-up to initialize full batches and
 stabilize the native deadline estimator before the first request. The native
 extension also disables build-host-specific CPU instructions because Modal may
@@ -106,7 +115,8 @@ and embeds the 14x160 network's 52-plane input contract. `latest.pt` and
 paths and pinned revision make the deployment unambiguous.
 
 The 120-second window is two minutes after the container becomes idle. Scaling
-to zero discards in-memory sessions, inference cache, and search subtrees, but it
+to zero discards in-memory sessions and search subtrees, but preserves the
+TensorRT engine in the Modal Volume. It
 does not lose a browser game: each subsequent turn contains the starting FEN and
 complete move history. Recovery may pay another cold-start delay and does not
 retain the previous search tree, but produces the same correct position.
@@ -121,7 +131,7 @@ modal secret create chess-web-play `
   CHESS_MODEL_REPO_ID=owner/repository `
   CHESS_MODEL_REVISION=main `
   CHESS_MODEL_CHECKPOINT_FILENAME=model.pt `
-  CHESS_MODEL_TORCHSCRIPT_FILENAME=model.jit.pt `
+  CHESS_MODEL_INFERENCE_FILENAME=model.int8.onnx `
   CHESS_WEB_ALLOWED_ORIGINS=https://your-static-site.example
 ```
 
