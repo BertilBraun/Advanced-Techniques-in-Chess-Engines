@@ -227,8 +227,12 @@ def _policy_distribution_agreement(
     reference_log_probabilities = reference_shifted - np.log(np.exp(reference_shifted).sum(axis=1, keepdims=True))
     candidate_log_probabilities = candidate_shifted - np.log(np.exp(candidate_shifted).sum(axis=1, keepdims=True))
     reference_probabilities = np.exp(reference_log_probabilities)
+    # A masked-out action has probability zero and log-probability minus infinity in both
+    # distributions, so its term is zero; subtracting the infinities directly would make it NaN.
+    reference_finite = np.where(np.isneginf(reference_log_probabilities), 0.0, reference_log_probabilities)
+    candidate_finite = np.where(np.isneginf(candidate_log_probabilities), 0.0, candidate_log_probabilities)
     divergences = np.maximum(
-        np.sum(reference_probabilities * (reference_log_probabilities - candidate_log_probabilities), axis=1),
+        np.sum(reference_probabilities * (reference_finite - candidate_finite), axis=1),
         0.0,
     )
     top1_agreement = np.mean(reference.argmax(axis=1) == candidate.argmax(axis=1))
