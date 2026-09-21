@@ -141,6 +141,7 @@ class ChessWebPlay:
             InteractiveEngineConfiguration(
                 model_path=str(cached_engine.path),
                 parallel_searches=16,
+                maximum_batch_size=_INFERENCE_BATCH_SIZE,
                 inference_target=InferenceTarget.CUDA,
                 inference_backend=InteractiveInferenceBackend.TENSORRT,
             )
