@@ -1,9 +1,9 @@
 # Native game, inference, and search runtime
 
 The C++20 extension is the authoritative runtime for chess and Go rules, immutable state transitions, packed neural
-network encoding, batched TorchScript inference, tree search, self-play search, and retained-root interactive
-analysis. Python supervises experiments and consumes this coarse native boundary; there is no Python MCTS or second
-native search implementation.
+network encoding, batched TorchScript or TensorRT inference, tree search, self-play search, and retained-root
+interactive analysis. Python supervises experiments and consumes this coarse native boundary; there is no Python
+MCTS or second native search implementation.
 
 ## Source ownership
 
@@ -48,8 +48,14 @@ and Release build before starting the supplied runner command.
 The ordinary build copies `AlphaZeroCpp.so` into `py/`, regenerates `py/AlphaZeroCpp.pyi` from the bindings and
 restyles it with `ruff check --fix` and `ruff format`, so a rebuild of unchanged bindings leaves the checkout clean
 and `deployment/run_control.sh` can start. This needs `ruff` in the build interpreter's environment (the `dev`
-dependency group); configuration fails with a clear message if it is missing. Production
-inference loads the trimmed TorchScript policy/WDL artifact published by the Python checkpoint writer.
+dependency group); configuration fails with a clear message if it is missing. Production inference loads the
+policy/WDL-only artifact selected by the experiment's backend configuration. The final chess recipe uses a trimmed
+TorchScript artifact only to bootstrap generation zero. Later checkpoints export fixed-batch QAT ONNX, which Python
+refits into a checkpoint-specific TensorRT engine before passing its path to the native runtime. Training-only
+auxiliary heads never cross this boundary. See
+[`documentation/system/inference-and-evaluation.md`](../documentation/system/inference-and-evaluation.md) and the
+fully expanded
+[`py/configs/production/chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml).
 
 Every search runs to a fixed visit limit: production self-play searches its configured baseline, and explicit
 additional-visit limits serve evaluation. Requests may still carry heterogeneous limits and parallelism in one

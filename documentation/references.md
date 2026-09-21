@@ -1,4 +1,8 @@
-# AlphaZero & Related Reinforcement Learning Resources
+# Historical AlphaZero reading list
+
+> This early reading list is retained for provenance but is not the technical report's bibliography. Use the
+> maintained [bibliography and citation plan](report/bibliography.md) for claims in the report; it prioritizes
+> primary sources, records verification status, and separates external literature from repository evidence.
 
 ## Papers & Articles
 

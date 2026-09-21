@@ -17,5 +17,22 @@ status before applying a conclusion to current code.
 - [Conversion investigation](chess-conversion-investigation-20260826.md) — diagnosis of games that failed to
   convert winning positions.
 
+## Regression and reproducibility investigations
+
+- [V35-to-V42 regression audit](v35-v42-regression-audit-20260913.md) — complete source/configuration comparison.
+  It found no demonstrated post-V35 defect explaining V42, identified the generation-zero seeding confound, and
+  narrowed the only material fixed-model runtime difference to the warmup floor.
+- [V35-to-V42 executable bisect](v35-v42-executable-bisect-20260913.md) — controlled follow-up that cleared typed
+  template selection, phase-specific post-fold warmup, and live QAT sidecar identity for the compared settings. Its
+  endpoint/control protocol should not be generalized into an optimizer or architecture conclusion.
+
+## How these analyses feed the report
+
+The [experiment catalog](../experiments/README.md) assigns a consistent status to each technique and links analyses
+to their primary measurements. The [technical report](../report/README.md) is the narrative synthesis. In
+particular, the SGD/QAT frozen-replay screens are benchmark evidence rather than analyses of playing strength, and
+the corrected TensorRT equal-scale refit finding lives in the
+[2026-09-21 benchmark record](../benchmarks/int8-template-staleness-rtx4070super-20260921/README.md).
+
 The root [documentation index](../README.md) gives the complete reader path and distinguishes these analyses from
 current operations and committed benchmark results.

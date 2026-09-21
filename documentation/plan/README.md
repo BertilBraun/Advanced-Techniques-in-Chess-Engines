@@ -4,20 +4,33 @@ Plans record decisions and protocols. They do not authorize GPU spending or run 
 this directory belong to completed stages of the 2026 chess campaign and should be read as a chronological research
 ledger rather than current instructions.
 
-## Closing phase
+## Current phase
 
-- [v34 final evaluation and small-model distillation](v34-final-evaluation-and-distillation.md) — terminal
-  measurement protocol. Replay compression is complete; terminal-run preservation and the final absolute-strength
-  benchmark remain open.
+The active work is training completion, terminal evaluation, and the documentation/publication pass for the final
+chess run. Current authority lives outside the plan ledger:
+
+- [Final chess configuration](../../py/configs/production/chess-final-config.yaml) — fully expanded reproduction
+  entry point for the settled recipe.
+- [Final chess run](../results/final-chess-run.md) — status plus the required archive, statistics, evaluation matrix,
+  and pending final-result fields.
+- [Technical report](../report/README.md) — long-form methods and research synthesis; quantitative conclusions remain
+  pending until the final evidence is archived.
+
+## Completed closing work
+
+- [v34 final evaluation and small-model distillation](v34-final-evaluation-and-distillation.md) — historical v34
+  terminal protocol. Its generation-1465 evaluation and replay-compression work are complete; it is not the terminal
+  protocol for the active final run.
 
 ## Campaign narrative
 
 - [Post-four-day regression analysis](chess-post-four-day-regression-analysis-20260820.md) — diagnosis that led to
-  the recovery campaign.
+  the historical recovery campaign.
 - [Chess recovery plan](chess-recovery-plan-20260820.md) — completed work-package ledger; no longer the active plan.
 - [Chess search follow-up](chess-search-followup-plan-20260827.md) — measurement agenda that led to fixed-search
   decisions.
-- [v29 handoff and next-run design](next-run-handoff-20260906.md) — evidence and questions that shaped v34.
+- [v29 handoff and next-run design](next-run-handoff-20260906.md) — historical evidence and questions that shaped
+  later runs.
 
 ## Superseded search designs
 
@@ -36,5 +49,5 @@ The following designs were implemented or evaluated and then retired. Their conc
 - [Run 2 versus r3](run2-r3-diff.md)
 
 Older preparation plans with explicit supersession banners live under [`archive/`](archive/). The
-[experiment backlog](../../THINGS_TO_TRY.md) contains uncommitted ideas, and [references](../references.md) lists
-papers and external resources.
+[experiment backlog](../../THINGS_TO_TRY.md) is a historical research ledger rather than current authority, and
+[references](../references.md) lists papers and external resources.

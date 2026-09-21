@@ -1,37 +1,60 @@
 # Experiment platform
 
-> Partly superseded 2026-08-20. Production and test runs are started, stopped and archived through
-> `documentation/operations/run-control.md`, not through the queue commands below. The ingestion and
-> self-play-pause behaviour in "Training and evaluation lifecycle" was replaced by WP2 of
-> `documentation/plan/chess-recovery-plan-20260820.md` (landed 2026-08-21, `1e8e24f9`).
+> **Current authority and historical scope (2026-09-21).** Production and test runs are started, stopped,
+> inspected, preserved, and fetched through [Run control](run-control.md). The active campaign is the final chess
+> run defined by the fully expanded
+> [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml); its result contract and pending
+> terminal measurements are in [Final chess run](../results/final-chess-run.md). The Go screening queue, bounded
+> ingestion, and older pause/evaluation procedures retained later in this document are historical records. Do not
+> use them to operate the current run.
 
-This is the current operational entry point for configuring, provisioning, launching, observing, and collecting
-AlphaZero experiments. The architecture rework ledgers are historical design records; consult them only for an
-architectural change or a concrete design ambiguity.
+This document explains the experiment platform's ownership and preserves the former screening-campaign procedure.
+For a current run, read [Run control](run-control.md), [Current node](current-node.md), and
+[Experiment result export](experiment-result-export.md). Architecture rework ledgers are historical design records;
+consult them only for an architectural change or a concrete design ambiguity.
+
+## Current final-run path
+
+The readable recipe is `py/configs/production/chess-final-config.yaml`. It inherits nothing, so the file itself is
+the entry point for understanding or reproducing the settled chess configuration. A reported result must also freeze
+the exact source revision, resolved configuration hash, run manifest, checkpoint and inference-artifact hashes, and
+fetched archive identity. The living recipe and the frozen result identity have different purposes; neither replaces
+the other.
+
+The final run is controlled directly with `deployment/run_control.sh`, not through `py/queue_experiments.py`.
+Provision a fresh node with `deployment/setup_remote.sh`, use the current node record for connection and hardware
+facts, and preserve/fetch evidence before releasing an ephemeral node. This page does not authorize a launch, stop,
+rental, or deletion.
 
 ## Architecture at a glance
 
-Python owns typed configuration, run preparation, the coordinator, replay credits, two-rank DDP training,
-self-play, elapsed-time evaluation, TensorBoard, and result export. Native C++ owns game rules, representations,
-and batched search. `py/train.py` runs one approved experiment. `py/queue_experiments.py` owns resource slots and
-starts stable children through `py/run_approved_experiment.py`; the queue is supervision, not another training
-mode.
+Python owns typed configuration, run preparation, the coordinator, replay credits, DDP training, self-play
+supervision, elapsed-time evaluation, TensorBoard, and result export. Native C++ owns game rules, representations,
+and batched search. `py/train.py` runs one approved experiment. The current final configuration uses eight trainer
+ranks and a shared eight-GPU self-play topology. Exact topology and schedules come from the resolved configuration,
+not from examples in this document.
 
 Experiment YAML has one canonical resolved form. A small authored override may use `extends`; paths resolve relative
 to the child YAML, mappings merge recursively, lists replace, and changing a base invalidates every dependent
-approval. The current production baseline is `py/configs/baselines/vast-go-9x9-2gpu-4h.yaml`, its removal
-ablations are under `py/configs/screening/go-9x9-strong`, and the canonical queue is
-`py/configs/queues/vast-go-9x9-screening.yaml`. See [`py/README.md`](../../py/README.md) for the schema and entry-point
-details.
+approval. The final chess configuration is intentionally fully expanded instead. See
+[`py/README.md`](../../py/README.md) for the schema and entry-point details.
 
-The 9x9 baseline is an integrated wall-clock recipe rather than a minimal algorithmic control: 8x96 global-pooling
+> **Historical Go screening recipe.** The following paragraph describes the superseded 9x9 screening campaign. It
+> remains useful when interpreting its benchmark evidence but is not the current production baseline.
+
+The 9x9 baseline was an integrated wall-clock recipe rather than a minimal algorithmic control: 8x96 global-pooling
 network, AdamW `0.01` to `0.001` through generation 150, full searches 64 to 256 and fast searches 16 to 64 through
 generation 50, full-search probability 1.0 to 0.25 through generation 25, 0.6 tree retention, balanced restart
 states, reduced-parent FPU 0.2, forced playouts, delayed root-value blending to 0.15, and next-policy plus
-remaining-length auxiliary heads. Challengers remove one treatment at a time; fixed-budget, no-mixed-search,
-replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run campaign.
+remaining-length auxiliary heads. Challengers removed one treatment at a time; fixed-budget, no-mixed-search,
+replay-ratio-8, and constant-LR-0.007 runs completed the authored twelve-run campaign.
 
 ## Training and evaluation lifecycle
+
+The final chess run uses the lifecycle resolved from `chess-final-config.yaml`: staged replay growth, progressive
+models, shared-node self-play and DDP, and two adaptive Stockfish definitions for policy-only and 64-search play.
+Terminal evaluation is a separate closing protocol recorded in [Final chess run](../results/final-chess-run.md).
+Do not infer current job counts, pause topology, opening counts, or opponent limits from the older examples below.
 
 New adaptive Stockfish evaluation configurations use `bracket_rungs: 3` on every adaptive definition and
 `maximum_concurrent_jobs: 16`. This preserves the selected-rung legacy series while also fitting the bracketed
@@ -49,25 +72,28 @@ private restart state and are not production inference artifacts.
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
 immutable evaluation inputs.
 
-> Historical as of 2026-08-21: the bounded ingestion and self-play pause described in the next paragraph were
+> **Historical as of 2026-08-21.** The bounded ingestion and self-play pause described in the next paragraph were
 > identified as a throughput and freshness defect by the regression analysis and replaced by WP2's file-staged
 > materialization (`1e8e24f9`). The paragraph is retained as a description of the four-day-era behaviour only.
 
 The coordinator starts self-play, ingests completed games into replay only until the
 next training quantum is funded, grants trainer credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
-and records a durable outcome on clean shutdown. Six of eight self-play workers pause during each training quantum
-in the current two-GPU baseline.
+and records a durable outcome on clean shutdown. Six of eight self-play workers paused during each training quantum
+in the former two-GPU baseline.
 
-Evaluation belongs to the coordinator and is scheduled by elapsed 20-minute boundaries. Jobs are asynchronous,
-device-cycled, limited to ten concurrent jobs, and individually time out after 30 minutes. The timeout bounds each
-job independently and does not change the 20-minute scheduling cadence. The 9x9 ladder contains
+> **Historical Go screening evaluation.** The following two paragraphs describe the former 9x9 queue campaign and
+> its immutable v2 assets. They are evidence for that campaign, not configuration for the final chess run.
+
+Evaluation belonged to the coordinator and was scheduled by elapsed 20-minute boundaries. Jobs were asynchronous,
+device-cycled, limited to ten concurrent jobs, and individually timed out after 30 minutes. The timeout bounded each
+job independently and did not change the 20-minute scheduling cadence. The 9x9 ladder contained
 the book-derived fixed dataset; previous 20-, 40-, and 60-minute checkpoints; the same-time baseline; and KataGo at
 64 visits. All match participants search 64 times per move. Checkpoint and same-time matches use 100 paired openings
 (200 games); KataGo uses 50 pairs (100 games). The checked-in
 v2 dataset and openings are immutable and must be reused, never regenerated. Exact engine assets, checksums, and
 artifact preparation checks are in [Evaluation engines](evaluation-engines.md).
 
-For a screening campaign, run a fresh baseline first. Its
+For that screening campaign, the procedure was to run a fresh baseline first. Its
 `py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json` and referenced
 checkpoints are the only runtime same-time baseline. Historical archives are analysis evidence, not runtime input.
 Give the baseline roughly two to five minutes of lead before adding challengers, then confirm at their first
@@ -109,8 +135,10 @@ and must be re-issued. Never reuse an approval from another revision, configurat
 
 ## Queue ownership and operation
 
-> For production and test runs use `documentation/operations/run-control.md`. `py/queue_experiments.py` remains
-> the screening-campaign supervisor only, and no screening campaign is currently authorised.
+> **Historical screening-queue procedure.** For current production and test runs use
+> [Run control](run-control.md). `py/queue_experiments.py` was the screening-campaign supervisor; no screening
+> campaign is currently active or authorised. The commands and ownership rules below are retained so archived queue
+> evidence can be interpreted. They are not the launch procedure for the final chess run.
 
 The queue owns slot allocation, per-experiment detached Git worktrees, child process groups, sampled process-tree
 RAM limits, logs, and the atomic summary.
@@ -226,6 +254,10 @@ paths.
 
 ## Monitoring and TensorBoard
 
+> **Historical queue-monitoring example.** Current direct-run status, logs, and preservation are accessed through
+> [Run control](run-control.md). The queue summary, four-slot expectations, and SSH forwarding example below belong
+> to the former screening campaign. Connection details must always come from [Current node](current-node.md).
+
 Inspect the queue summary, per-slot stdout/stderr, run outcome, credit ledger, evaluation manager state/results,
 resource telemetry, `nvidia-smi`, host RAM, and disk. A healthy four-slot launch shows four independent two-GPU
 children progressing in games, credits, optimizer steps, generations, checkpoints, and TensorBoard. Watch replay
@@ -248,6 +280,10 @@ durations, optimizer steps, and generations are evaluation metadata. Compare exp
 metadata at each boundary as supporting context.
 
 ## Result export and validation checklist
+
+> **Historical queue-export checklist.** Current direct runs are preserved and fetched through
+> [Run control](run-control.md). The `py/export_experiment_results.py` workflow below applies to terminal queue
+> entries and remains documentation for their archived evidence.
 
 Export terminal entries with `py/export_experiment_results.py`. A full archive contains authored/resolved configs,
 identity/outcome, telemetry, queue and child logs, evaluation state/results, TensorBoard, every elapsed evaluation

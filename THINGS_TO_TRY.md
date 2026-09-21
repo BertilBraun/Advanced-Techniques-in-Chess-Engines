@@ -1,4 +1,13 @@
-### Experiment status
+# Historical experiment backlog
+
+> **Superseded as a status tracker.** This backlog reflects the programme as of 2026-08-22. Its checkboxes were not
+> maintained through the later chess, TensorRT, quantization, optimizer, replay, and final-run work, so unchecked
+> items do not imply that a feature is absent. Use the current
+> [experiment catalog](documentation/experiments/README.md) for what was attempted, retained, rejected, or left as a
+> proposal, and [`chess-final-config.yaml`](py/configs/production/chess-final-config.yaml) for the settled recipe.
+> The material below is retained as historical research input.
+
+### Experiment status at the time
 
 Every method has three checkboxes:
 
