@@ -62,7 +62,9 @@ def main() -> None:
         qdq, qdq_providers = ort_outputs(qdq_path, states)
         tensorrt = _TensorRtCudaGraphRunner(engine_path, states.to(torch.int8), device, 10).outputs()
         rows[name] = {
-            'qdq_node_count': sum(node.op_type == 'QuantizeLinear' for node in __import__('onnx').load(qdq_path).graph.node),
+            'qdq_node_count': sum(
+                node.op_type == 'QuantizeLinear' for node in __import__('onnx').load(qdq_path).graph.node
+            ),
             'source_ort_providers': source_providers,
             'qdq_ort_providers': qdq_providers,
             'source_ort_vs_qdq_ort': fidelity(source, qdq, legal_mask, count),

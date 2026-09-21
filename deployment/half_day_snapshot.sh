@@ -38,6 +38,8 @@ while true; do
     if [[ -n "${run_name}" && -f "${registry}" ]]; then
         # shellcheck disable=SC1090
         source "${registry}"
+        # The registry does not carry the checkout, but its config path is inside it.
+        repository="${RUN_CONFIG%/py/configs/*}"
         elapsed="$(elapsed_evaluation_seconds "${SAVE_PATH}")"
         if [[ -n "${elapsed}" ]] && ((elapsed >= FIRST_EVALUATION_SECONDS + SNAPSHOT_GRACE_SECONDS)); then
             crossed=$(((elapsed - SNAPSHOT_GRACE_SECONDS - FIRST_EVALUATION_SECONDS) / SNAPSHOT_INTERVAL_SECONDS))
@@ -45,8 +47,8 @@ while true; do
             marker="${SNAPSHOT_MARKER_ROOT}/${threshold}"
             if [[ ! -f "${marker}" ]]; then
                 echo "$(date -u +%FT%TZ) snapshotting ${run_name} at evaluation second ${threshold} (elapsed ${elapsed})"
-                if bash "${ENGINE_REPOSITORY_DIRECTORY}/deployment/run_control.sh" preserve "${run_name}"; then
-                    archive="$(ls -dt "${ENGINE_REPOSITORY_DIRECTORY}/.codex-diagnostics/${run_name}-"*/ 2>/dev/null | head -1)"
+                if bash "${repository}/deployment/run_control.sh" preserve "${run_name}"; then
+                    archive="$(ls -dt "${repository}/.codex-diagnostics/${run_name}-"*/ 2>/dev/null | head -1)"
                     printf 'evaluation_seconds=%s\nrun_name=%s\nelapsed_at_snapshot=%s\narchive=%s\n' \
                         "${threshold}" "${run_name}" "${elapsed}" "${archive}" > "${marker}"
                     echo "$(date -u +%FT%TZ) snapshot recorded: ${archive}"

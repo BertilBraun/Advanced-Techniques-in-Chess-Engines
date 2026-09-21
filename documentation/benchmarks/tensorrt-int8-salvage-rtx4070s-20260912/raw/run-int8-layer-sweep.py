@@ -10,8 +10,7 @@ import onnx
 
 ROOT = Path('/workspace/int8-salvage/layer-sweep')
 SOURCE = Path(
-    '/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/'
-    'chess-cnn-14x160-fromto-batch320-fp32-for-int8.onnx'
+    '/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-fp32-for-int8.onnx'
 )
 PYTHON = '/workspace/alphazero-engine-venv/bin/python'
 COMMON = (
@@ -28,8 +27,7 @@ COMMON = (
     '--benchmark-dataset',
     '/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin',
     '--calibration-replay',
-    '/workspace/alphazero-engine-v34-lr-001/py/training_data/production/'
-    'vast-chess-8gpu-integrated-v34/replay.bin',
+    '/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin',
     '--calibration-position-count',
     '32000',
     '--calibration-random-seed',
@@ -68,14 +66,18 @@ def run_node(index_and_name: tuple[int, str]) -> tuple[str, int]:
         str(output / 'report.json'),
     )
     with (output / 'stdout.log').open('w') as stdout, (output / 'stderr.log').open('w') as stderr:
-        completed = subprocess.run(command, cwd='/workspace/alphazero-engine/py', env=environment, stdout=stdout, stderr=stderr)
+        completed = subprocess.run(
+            command, cwd='/workspace/alphazero-engine/py', env=environment, stdout=stdout, stderr=stderr
+        )
     (output / 'node.txt').write_text(node_name + '\n')
     return node_name, completed.returncode
 
 
 def main() -> None:
     model = onnx.load(SOURCE)
-    node_names = tuple(node.name for node in model.graph.node if node.op_type == 'Conv' and 'value_head' not in node.name)
+    node_names = tuple(
+        node.name for node in model.graph.node if node.op_type == 'Conv' and 'value_head' not in node.name
+    )
     ROOT.mkdir(parents=True, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         for result in executor.map(run_node, enumerate(node_names)):

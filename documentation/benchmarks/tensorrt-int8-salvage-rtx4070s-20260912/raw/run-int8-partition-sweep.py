@@ -24,8 +24,7 @@ COMMON = (
     '--benchmark-dataset',
     '/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin',
     '--calibration-replay',
-    '/workspace/alphazero-engine-v34-lr-001/py/training_data/production/'
-    'vast-chess-8gpu-integrated-v34/replay.bin',
+    '/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin',
     '--calibration-position-count',
     '32000',
     '--calibration-random-seed',
@@ -52,7 +51,9 @@ def layer_ranking() -> tuple[str, ...]:
     rows: list[tuple[float, float, str]] = []
     for report_path in LAYER_ROOT.glob('*/report.json'):
         report = json.loads(report_path.read_text())
-        candidate = next(candidate for candidate in report['candidates'] if candidate['backend'] == 'tensorrt_int8_calibrated')
+        candidate = next(
+            candidate for candidate in report['candidates'] if candidate['backend'] == 'tensorrt_int8_calibrated'
+        )
         node_name = (report_path.parent / 'node.txt').read_text().strip()
         if 'start_block' in node_name:
             continue
@@ -78,15 +79,15 @@ def run_partition(index_and_partition: tuple[int, tuple[str, tuple[str, ...]]]) 
     )
     (output / 'nodes.json').write_text(json.dumps(nodes, indent=2) + '\n')
     with (output / 'stdout.log').open('w') as stdout, (output / 'stderr.log').open('w') as stderr:
-        completed = subprocess.run(command, cwd='/workspace/alphazero-engine/py', env=environment, stdout=stdout, stderr=stderr)
+        completed = subprocess.run(
+            command, cwd='/workspace/alphazero-engine/py', env=environment, stdout=stdout, stderr=stderr
+        )
     return label, completed.returncode
 
 
 def main() -> None:
     ranking = layer_ranking()
-    contiguous_early = tuple(
-        node for node in ranking if any(f'/backbone.{index}/' in node for index in range(4))
-    )
+    contiguous_early = tuple(node for node in ranking if any(f'/backbone.{index}/' in node for index in range(4)))
     partitions = tuple((f'ranked-{count:02d}', ranking[:count]) for count in (4, 8, 12, 16, 20, 24, 28)) + (
         ('contiguous-blocks-0-3', contiguous_early),
     )

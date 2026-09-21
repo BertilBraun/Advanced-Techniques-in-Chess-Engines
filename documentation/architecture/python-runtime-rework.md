@@ -127,8 +127,7 @@ class ConstantSchedule(FrozenModel, Generic[ScheduleValueT]):
     kind: Literal['constant']
     value: ScheduleValueT
 
-    def value_at(self, model_generation: int) -> ScheduleValueT:
-        ...
+    def value_at(self, model_generation: int) -> ScheduleValueT: ...
 
 
 class GenerationStage(FrozenModel, Generic[ScheduleValueT]):
@@ -140,8 +139,7 @@ class StagedSchedule(FrozenModel, Generic[ScheduleValueT]):
     kind: Literal['staged']
     stages: tuple[GenerationStage[ScheduleValueT], ...]
 
-    def value_at(self, model_generation: int) -> ScheduleValueT:
-        ...
+    def value_at(self, model_generation: int) -> ScheduleValueT: ...
 ```
 
 Staged schedules require:
@@ -171,8 +169,7 @@ class LinearSchedule(FrozenModel, Generic[NumericScheduleValueT]):
     end_value: NumericScheduleValueT
     rounding: ScheduleRounding
 
-    def value_at(self, model_generation: int) -> NumericScheduleValueT:
-        ...
+    def value_at(self, model_generation: int) -> NumericScheduleValueT: ...
 ```
 
 The typed specializations enforce:
@@ -185,17 +182,9 @@ The typed specializations enforce:
 The implementation may use precise type aliases such as:
 
 ```python
-FloatGenerationSchedule: TypeAlias = (
-    ConstantSchedule[float]
-    | StagedSchedule[float]
-    | LinearSchedule[float]
-)
+FloatGenerationSchedule: TypeAlias = ConstantSchedule[float] | StagedSchedule[float] | LinearSchedule[float]
 
-IntegerGenerationSchedule: TypeAlias = (
-    ConstantSchedule[int]
-    | StagedSchedule[int]
-    | LinearSchedule[int]
-)
+IntegerGenerationSchedule: TypeAlias = ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int]
 ```
 
 Closed-set or Boolean values use constant or staged schedules, not linear interpolation.
@@ -328,9 +317,7 @@ to the coordinator.
 
 ```python
 def _ingest_available_games(self) -> None:
-    ingestion = self.replay_manager.ingest_available_games(
-        self.ledger.model_generation
-    )
+    ingestion = self.replay_manager.ingest_available_games(self.ledger.model_generation)
     if ingestion.samples_added:
         self.ledger.add_samples(
             ingestion.samples_added,
@@ -423,17 +410,13 @@ class ReplayDescription(FrozenModel):
 
 class ReplayManager:
     @property
-    def live_samples(self) -> int:
-        ...
+    def live_samples(self) -> int: ...
 
-    def ingest_available_games(self, model_generation: int) -> ReplayIngestion:
-        ...
+    def ingest_available_games(self, model_generation: int) -> ReplayIngestion: ...
 
-    def description(self) -> ReplayDescription:
-        ...
+    def description(self) -> ReplayDescription: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 ```
 
 `ingest_available_games()`:
@@ -606,24 +589,18 @@ It derives model generation from completed optimizer steps.
 ```python
 class CreditLedger:
     @property
-    def progress(self) -> TrainingProgress:
-        ...
+    def progress(self) -> TrainingProgress: ...
 
     @property
-    def model_generation(self) -> int:
-        ...
+    def model_generation(self) -> int: ...
 
-    def can_train_quantum(self, live_samples: int) -> bool:
-        ...
+    def can_train_quantum(self, live_samples: int) -> bool: ...
 
-    def add_samples(self, sample_count: int, model_generation: int) -> None:
-        ...
+    def add_samples(self, sample_count: int, model_generation: int) -> None: ...
 
-    def commit_quantum(self, result: TrainingQuantumResult) -> None:
-        ...
+    def commit_quantum(self, result: TrainingQuantumResult) -> None: ...
 
-    def save(self) -> None:
-        ...
+    def save(self) -> None: ...
 ```
 
 New samples earn credits according to the credit schedule at their ingestion generation. Previously earned credits are not retroactively revalued when the schedule changes. A quantum consumes the amount configured for its source generation. Surplus credits carry forward. Training permission requires both sufficient available credits and at least one global batch of live replay rows. Configuration requires every scheduled logical replay capacity to be at least the global batch size.
@@ -670,14 +647,11 @@ class TrainerGroup:
         configuration: ExperimentConfiguration,
         game: GameImplementation,
         startup: TrainerStartup,
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    def train_quantum(self, quantum: TrainerQuantum) -> TrainingQuantumResult:
-        ...
+    def train_quantum(self, quantum: TrainerQuantum) -> TrainingQuantumResult: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 ```
 
 Trainer-rank transport is another focused duplex `multiprocessing.Connection` per rank, not the self-play protocol
@@ -797,9 +771,7 @@ class StoppedSelfPlayState(FrozenModel):
     kind: Literal['stopped']
 
 
-SelfPlayDesiredState: TypeAlias = (
-    RunningSelfPlayState | PausedSelfPlayState | StoppedSelfPlayState
-)
+SelfPlayDesiredState: TypeAlias = RunningSelfPlayState | PausedSelfPlayState | StoppedSelfPlayState
 ```
 
 Running desired state always names the exact checkpoint that must be loaded before acknowledgement.
@@ -840,11 +812,7 @@ class StoppedSelfPlayStateApplied(FrozenModel):
     worker_id: int
 
 
-SelfPlayStateApplied: TypeAlias = (
-    RunningSelfPlayStateApplied
-    | PausedSelfPlayStateApplied
-    | StoppedSelfPlayStateApplied
-)
+SelfPlayStateApplied: TypeAlias = RunningSelfPlayStateApplied | PausedSelfPlayStateApplied | StoppedSelfPlayStateApplied
 ```
 
 Before training, the coordinator sends every worker a paused desired state, then waits
@@ -950,14 +918,11 @@ class EvaluationManager:
     def schedule_due_jobs(
         self,
         checkpoint: CheckpointReference,
-    ) -> tuple[EvaluationJob, ...]:
-        ...
+    ) -> tuple[EvaluationJob, ...]: ...
 
-    def collect_completed_jobs(self) -> tuple[EvaluationResult, ...]:
-        ...
+    def collect_completed_jobs(self) -> tuple[EvaluationResult, ...]: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 ```
 
 `schedule_due_jobs()` returns quickly. Every configured dataset or opponent comparison becomes its own short-lived
@@ -1393,18 +1358,15 @@ class GameImplementation(
 ):
     @property
     @abstractmethod
-    def configuration(self) -> ExperimentConfiguration:
-        ...
+    def configuration(self) -> ExperimentConfiguration: ...
 
     @property
     @abstractmethod
-    def network_dimensions(self) -> NetworkDimensions:
-        ...
+    def network_dimensions(self) -> NetworkDimensions: ...
 
     @property
     @abstractmethod
-    def state(self) -> GameStateContract[PositionT]:
-        ...
+    def state(self) -> GameStateContract[PositionT]: ...
 
     @abstractmethod
     def create_native_search(
@@ -1412,15 +1374,13 @@ class GameImplementation(
         device_id: int,
         checkpoint: CheckpointReference,
         parameters: ResolvedSelfPlayParameters,
-    ) -> NativeSearchT:
-        ...
+    ) -> NativeSearchT: ...
 
     @abstractmethod
     def training_objective_at(
         self,
         model_generation: int,
-    ) -> ResolvedTrainingObjective:
-        ...
+    ) -> ResolvedTrainingObjective: ...
 ```
 
 Evaluation adds only focused construction hooks for the concrete bound native search and external opponent. It does
@@ -1452,58 +1412,47 @@ class WdlTarget(FrozenModel):
 class GameStateContract(ABC, Generic[PositionT]):
     @property
     @abstractmethod
-    def action_size(self) -> int:
-        ...
+    def action_size(self) -> int: ...
 
     @property
     @abstractmethod
-    def packed_plane_layout(self) -> PackedPlaneLayout:
-        ...
+    def packed_plane_layout(self) -> PackedPlaneLayout: ...
 
     @abstractmethod
-    def initial_position(self) -> PositionT:
-        ...
+    def initial_position(self) -> PositionT: ...
 
     @abstractmethod
-    def legal_action_ids(self, position: PositionT) -> tuple[int, ...]:
-        ...
+    def legal_action_ids(self, position: PositionT) -> tuple[int, ...]: ...
 
     @abstractmethod
-    def child_position(self, position: PositionT, action_id: int) -> PositionT:
-        ...
+    def child_position(self, position: PositionT, action_id: int) -> PositionT: ...
 
     @abstractmethod
-    def current_player(self, position: PositionT) -> Player:
-        ...
+    def current_player(self, position: PositionT) -> Player: ...
 
     @abstractmethod
-    def terminal_wdl(self, position: PositionT) -> WdlTarget | None:
-        ...
+    def terminal_wdl(self, position: PositionT) -> WdlTarget | None: ...
 
     @abstractmethod
     def adjudicated_wdl(
         self,
         position: PositionT,
         reason: TerminationReason,
-    ) -> WdlTarget:
-        ...
+    ) -> WdlTarget: ...
 
     @abstractmethod
-    def encode_network_input(self, position: PositionT) -> PackedPlanePayload:
-        ...
+    def encode_network_input(self, position: PositionT) -> PackedPlanePayload: ...
 
     @property
     @abstractmethod
-    def augmentation_count(self) -> int:
-        ...
+    def augmentation_count(self) -> int: ...
 
     @abstractmethod
     def transform_replay_targets(
         self,
         sample: ReplaySample,
         augmentation_index: int,
-    ) -> ReplaySample:
-        ...
+    ) -> ReplaySample: ...
 ```
 
 `encode_network_input()` encodes only one network input. It does not construct value or auxiliary targets.

@@ -6,8 +6,7 @@ from pathlib import Path
 import tensorrt as trt
 
 ONNX_PATH = Path(
-    '/workspace/int8-salvage/calibration-sweep/max-4/artifacts/'
-    'chess-cnn-14x160-fromto-batch320-int8-qdq.onnx'
+    '/workspace/int8-salvage/calibration-sweep/max-4/artifacts/chess-cnn-14x160-fromto-batch320-int8-qdq.onnx'
 )
 OUTPUT = Path('/workspace/int8-salvage/full-trunk-engine-inspector-detailed.json')
 
