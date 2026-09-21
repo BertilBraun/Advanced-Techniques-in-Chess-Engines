@@ -34,19 +34,32 @@ INPUT_NAME = 'states'
 POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
-# These separate a broken engine from a healthy one; they are not a quality bar. The probe feeds
-# random binary planes rather than positions and softmaxes over all 1880 actions without a legality
-# mask, so its absolute numbers are argmax noise on a near-uniform distribution: the same engine
-# measures 0.87 top1 here and 0.97 legal-masked on real positions. Set from 591 historical
-# publications of this run, 584 healthy and 7 served by a defective template. Healthy spans top1
-# 0.688-0.956, mean KL 0.0004-0.0298, max KL 0.0006-0.226; broken spans top1 0.134-0.219, mean KL
-# 0.389-0.522, max KL 1.01-2.06. The WDL errors overlap between the two and cannot discriminate, so
-# they are set only loosely enough not to fire on their own.
-MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.1
-MAXIMUM_WDL_ABSOLUTE_ERROR = 0.5
-MINIMUM_POLICY_TOP1_AGREEMENT = 0.45
-MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 0.1
-MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.5
+
+
+@dataclass(frozen=True)
+class FidelityLimits:
+    """What separates a broken engine from a healthy one, for one kind of probe."""
+
+    minimum_policy_top1_agreement: float
+    maximum_policy_mean_kl_divergence: float
+    maximum_policy_maximum_kl_divergence: float
+    maximum_wdl_mean_absolute_error: float
+    maximum_wdl_maximum_absolute_error: float
+
+
+# Real positions with illegal moves masked out. Measured against a defective engine and two sound
+# ones: healthy reaches top1 0.959-0.975, mean KL 0.0012, max KL 0.013, WDL 0.0023 and 0.036; the
+# defective engine reads 0.531, 0.471, 2.489, 0.110 and 0.747. Every limit clears the healthy case
+# by at least sevenfold, which also leaves room for the quantisation error that grows as a model
+# sharpens over a run.
+MASKED_POSITION_LIMITS = FidelityLimits(0.85, 0.05, 0.5, 0.05, 0.35)
+
+# Random binary planes, softmaxed over every action. The distribution is near-uniform because
+# illegal-move logits are untrained, so the numbers are argmax noise and far looser: across 591
+# historical publications healthy spanned top1 0.688-0.956, mean KL 0.0004-0.0298 and max KL
+# 0.0006-0.226, against 0.134-0.219, 0.389-0.522 and 1.01-2.06 for the seven broken ones. The WDL
+# errors overlap between the two populations here and cannot discriminate at all.
+RANDOM_INPUT_LIMITS = FidelityLimits(0.45, 0.1, 0.5, 0.1, 0.5)
 
 
 @dataclass(frozen=True)
@@ -300,12 +313,13 @@ def verify_engine(
         onnx_policy, tensor_rt_policy, legal_mask
     )
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
+    limits = RANDOM_INPUT_LIMITS if legal_mask is None else MASKED_POSITION_LIMITS
     fidelity_limits_passed = not (
-        policy_top1_agreement < MINIMUM_POLICY_TOP1_AGREEMENT
-        or policy_mean_kl_divergence > MAXIMUM_POLICY_MEAN_KL_DIVERGENCE
-        or policy_maximum_kl_divergence > MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE
-        or wdl_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
-        or wdl_maximum_error > MAXIMUM_WDL_ABSOLUTE_ERROR
+        policy_top1_agreement < limits.minimum_policy_top1_agreement
+        or policy_mean_kl_divergence > limits.maximum_policy_mean_kl_divergence
+        or policy_maximum_kl_divergence > limits.maximum_policy_maximum_kl_divergence
+        or wdl_mean_error > limits.maximum_wdl_mean_absolute_error
+        or wdl_maximum_error > limits.maximum_wdl_maximum_absolute_error
     )
     if not fidelity_limits_passed and not allow_fidelity_deviation:
         raise ValueError(
