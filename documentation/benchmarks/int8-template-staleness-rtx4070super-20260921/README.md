@@ -133,12 +133,62 @@ quarantined 17 September template reproduces the broken engine bit-for-bit (max 
 activation scales does take effect. Same-lineage staleness was measured at only +18% relative KL
 over 240,000 steps, with no measurable Stockfish effect.
 
-The leading hypothesis is **template provenance**, not age: TensorRT under `kREFIT` can fold away a
-weight that is exactly zero at build time (the documented case is a GEMM bias "dropped and treated
-as zero"), after which it is not exposed to refit. `refit_from_file` silently skips tensors the
-engine does not list, and `get_missing_weights()` stays empty. A template built from a freshly grown
-progressive 14x160, whose new blocks are still zero, would then freeze those tensors at zero for
-every later checkpoint. That is a progressive-model-sizing landmine and is under test.
+The root cause is a **TensorRT scale-equality refit bug**, reproduced from scratch and fixed under
+control.
+
+TensorRT rewrites Q/DQ pairs whose scales compare equal. Its explicit-quantization documentation
+states that when building a refittable engine it withholds those rewrites where a refit could change
+two scales from equal to not equal. At optimization level 5 in 10.14.1 it applies them anyway. A
+template built from a checkpoint whose activation scales are equal to one another is therefore
+silently mis-optimised, and refitting it with a checkpoint whose scales are distinct returns wrong
+logits - and different wrong logits on each refit of the same file. `refit_from_file`,
+`get_missing_weights()` and `refit_cuda_engine()` all report success.
+
+Equal scales come from saturation. Max calibration of a Clip(0,6) activation gives 6/127 = 0.04724,
+and 20 of the 28 activation quantizers sit exactly there in an early or freshly grown checkpoint.
+V89's grown 14x160 has 28 distinct scales, none at the cap. The 17 September template was built from
+the 12 September V35 generation-1 checkpoint, so refitting V89 weights into it separated the scales
+the engine had been optimised around.
+
+Legal-masked mean KL against the float model, 516 real positions:
+
+| template source | built at | refit with | legal KL | repeat-refit max delta logit |
+|---|---|---|---|---|
+| v87 gen 43, 20 equal scales | L5 | V89 486 | 1.05, varies run to run | 10-15 |
+| same source | L0 / L3 | V89 486 | 0.0012 | 0 |
+| same source, scales jittered distinct | L5 | V89 486 | 0.0012 | 0 |
+| quarantined 17 Sep template | L5 | V35 g1, its own lineage | 0.0015 | 0 |
+| quarantined 17 Sep template | L5 | V89 486 | 0.33 to 1.30, varies | 10-15 |
+
+Three conditions must coincide: equal scales in the build source, optimization level 4 or above, and
+a refit that makes them unequal. Exact-zero weight folding is **rejected** as the cause: templates
+built from an identity-BN source and from a zero-bias source refit cleanly at 0.00114 and 0.00123
+against 0.00117 for a direct build.
+
+This is a progressive-model-sizing landmine rather than a one-off. A freshly grown model starts
+saturated. The 12x128 survived 480 generations on the same kind of template only because its own
+checkpoints kept saturating, so the equalities the template assumed stayed true; it would have
+collapsed as soon as they stopped.
+
+### Fix and its validation
+
+`build_tensorrt_refit_template.py` now spreads per-tensor Q/DQ scale constants so they are pairwise
+distinct before the build, and defaults to optimization level 3. Spreading costs nothing because
+every publish refits the template's scales anyway.
+
+Validated against the exact failure configuration - the same equal-scale v87 generation 43 source,
+the same optimization level 5:
+
+```
+separated 28 equal quantization scales before building the refit template
+refittable weights 188, missing after refit_from_file 0
+```
+
+| engine | legal top1 | legal mean KL |
+|---|---|---|
+| ORT of the Q/DQ graph, reference | 0.96705 | 0.00119 |
+| L5 from equal scales, with the fix | 0.96705 | 0.00117 |
+| L5 from equal scales, without it | - | 1.05, non-deterministic |
 
 ## Build cost
 
@@ -160,7 +210,6 @@ insurance, not the fix.
 
 ## Open
 
-- Root cause of the 17 September template: the zero-folding test is still running.
 - The `.engine` files are never pruned: one exists for every generation from 1 to 506 (4.7 GB),
   while `model_*.pt` is correctly pruned to 87. `inference_retention` does not cover built engines.
 - `REFIT_INDIVIDUAL` with the current initializer-only marking leaves 0 of 56 scales refittable and
