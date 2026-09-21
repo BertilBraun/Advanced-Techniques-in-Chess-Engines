@@ -89,8 +89,10 @@ two CPU cores, 2 GiB of requested system memory, a 120-second scale-down window,
 a 90-second request timeout, and a persistent Modal Volume named
 `chess-web-play-tensorrt-cache`. CUDA is required explicitly; startup fails
 instead of silently falling back to CPU inference. At container startup it
-downloads the named training checkpoint and `.jit.pt` or `.onnx` inference
-artifact into the revision-aware Hugging Face cache. It then resolves a cache
+downloads the named `.jit.pt` or `.onnx` inference artifact into the
+revision-aware Hugging Face cache. Fixed-batch training ONNX exports are
+specialized to the serving batch size before TensorRT compilation. The service
+then resolves a cache
 key from the inference artifact SHA-256, TensorRT, CUDA runtime, and NVIDIA driver versions,
 A10 identity and compute capability, static input shape, batch size, and builder
 settings. A valid engine is reused from the Volume. A miss builds and refits the
@@ -104,15 +106,14 @@ workers, then runs a fixed 4,096-search warm-up to initialize full batches and
 stabilize the native deadline estimator before the first request. The native
 extension also disables build-host-specific CPU instructions because Modal may
 serve the image on a different host. With revision `main`, each cold container
-resolves the branch to one commit before downloading either artifact, so both
-files come from the same latest snapshot. The production deployment currently
-uses Hugging Face revision `22df1c7d90aa01397c5f501a9d2cf0380b98a56d`,
-with `production/v34-generation-1465/model.pt` and
-`production/v34-generation-1465/model.jit.pt`. The latter has SHA-256
-`402efb61146b5a0f569c960e1f7a7e7714ba1bb28982fcdfb7f10e8ec5a98ad6`
-and embeds the 14x160 network's 52-plane input contract. `latest.pt` and
-`latest.jit.pt` are byte-identical convenience aliases, while the descriptive
-paths and pinned revision make the deployment unambiguous.
+resolves the branch to one commit before downloading the artifact. The
+production deployment currently uses Hugging Face revision
+`0a3e449e02eb0ef03241911dea3e0487d06a82b5` and
+`production/v93-generation-782/model.int8.onnx`. The artifact has SHA-256
+`86c4d0820fc41c1aab223ef521ac45a8c8050482faf2a8ac2c40c0927e2774ba`,
+contains the V93 14x160 network's 52-plane input contract, and is specialized
+from its 320-position training batch to the serving batch of 64 during the
+Modal engine build.
 
 The 120-second window is two minutes after the container becomes idle. Scaling
 to zero discards in-memory sessions and search subtrees, but preserves the
@@ -130,7 +131,6 @@ hashes are rejected.
 modal secret create chess-web-play `
   CHESS_MODEL_REPO_ID=owner/repository `
   CHESS_MODEL_REVISION=main `
-  CHESS_MODEL_CHECKPOINT_FILENAME=model.pt `
   CHESS_MODEL_INFERENCE_FILENAME=model.int8.onnx `
   CHESS_WEB_ALLOWED_ORIGINS=https://your-static-site.example
 ```

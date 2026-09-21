@@ -14,7 +14,6 @@ _LATEST_REVISION = 'main'
 class DeploymentConfiguration:
     hugging_face_repository_id: str
     hugging_face_revision: str
-    checkpoint_filename: str
     inference_filename: str
     allowed_origins: tuple[str, ...]
 
@@ -22,7 +21,6 @@ class DeploymentConfiguration:
     def from_environment(cls, environment: Mapping[str, str]) -> DeploymentConfiguration:
         repository_id = _required(environment, 'CHESS_MODEL_REPO_ID')
         revision = _required(environment, 'CHESS_MODEL_REVISION')
-        checkpoint_filename = _required(environment, 'CHESS_MODEL_CHECKPOINT_FILENAME')
         inference_filename = _required(environment, 'CHESS_MODEL_INFERENCE_FILENAME')
         origins_text = _required(environment, 'CHESS_WEB_ALLOWED_ORIGINS')
 
@@ -30,15 +28,13 @@ class DeploymentConfiguration:
             raise ValueError('CHESS_MODEL_REPO_ID must be a namespace/repository id.')
         if revision != _LATEST_REVISION and _COMMIT_REVISION.fullmatch(revision) is None:
             raise ValueError("CHESS_MODEL_REVISION must be 'main' or a full 40-character commit hash.")
-        if not checkpoint_filename.endswith('.pt') or checkpoint_filename.endswith('.jit.pt'):
-            raise ValueError('CHESS_MODEL_CHECKPOINT_FILENAME must name the training .pt artifact.')
         if not inference_filename.endswith(('.jit.pt', '.onnx')):
             raise ValueError('CHESS_MODEL_INFERENCE_FILENAME must name a .jit.pt or .onnx artifact.')
 
         origins = tuple(origin.strip().rstrip('/') for origin in origins_text.split(',') if origin.strip())
         if not origins or any(origin == '*' for origin in origins):
             raise ValueError('CHESS_WEB_ALLOWED_ORIGINS must contain explicit browser origins.')
-        return cls(repository_id, revision, checkpoint_filename, inference_filename, origins)
+        return cls(repository_id, revision, inference_filename, origins)
 
 
 class ArtifactDownloader(Protocol):
@@ -52,7 +48,7 @@ class ArtifactDownloader(Protocol):
     ) -> str: ...
 
 
-def download_model_artifacts(
+def download_model_artifact(
     configuration: DeploymentConfiguration,
     resolved_revision: str,
     token: str | None,
@@ -60,21 +56,13 @@ def download_model_artifacts(
 ) -> Path:
     if _COMMIT_REVISION.fullmatch(resolved_revision) is None:
         raise ValueError('The resolved Hugging Face revision must be a commit hash.')
-    inference_path: Path | None = None
-    for filename in (
-        configuration.checkpoint_filename,
-        configuration.inference_filename,
-    ):
-        downloaded_path = downloader(
-            repo_id=configuration.hugging_face_repository_id,
-            filename=filename,
-            revision=resolved_revision,
-            token=token,
-        )
-        if filename == configuration.inference_filename:
-            inference_path = Path(downloaded_path)
-    assert inference_path is not None
-    return inference_path
+    downloaded_path = downloader(
+        repo_id=configuration.hugging_face_repository_id,
+        filename=configuration.inference_filename,
+        revision=resolved_revision,
+        token=token,
+    )
+    return Path(downloaded_path)
 
 
 def _required(environment: Mapping[str, str], name: str) -> str:

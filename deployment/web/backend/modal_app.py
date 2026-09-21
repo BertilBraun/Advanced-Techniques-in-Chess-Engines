@@ -95,7 +95,7 @@ class ChessWebPlay:
         from deployment.web.backend.api import create_app
         from deployment.web.backend.artifacts import (
             DeploymentConfiguration,
-            download_model_artifacts,
+            download_model_artifact,
         )
         from deployment.web.backend.service import GameService
         from deployment.web.backend.tensorrt_cache import prepare_cached_tensorrt_engine
@@ -114,7 +114,7 @@ class ChessWebPlay:
         resolved_revision = model_information.sha
         if resolved_revision is None:
             raise ValueError('Hugging Face returned no resolved model revision.')
-        model_path = download_model_artifacts(
+        model_path = download_model_artifact(
             configuration=configuration,
             resolved_revision=resolved_revision,
             token=hugging_face_token,

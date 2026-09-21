@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
 import tensorrt
 import torch
+from src.training.quantization.runtime import specialize_qat_onnx_batch
 from tools.build_tensorrt_refit_template import RefitMode, build_template
 from tools.publish_tensorrt_engine import export_onnx, refit_engine, verify_engine
 
@@ -50,7 +50,7 @@ def build_and_verify_tensorrt_engine(
     template_path.unlink(missing_ok=True)
     try:
         if source_path.suffix == '.onnx':
-            shutil.copyfile(source_path, onnx_path)
+            specialize_qat_onnx_batch(source_path, onnx_path, batch_size)
         else:
             export_onnx(source_path, onnx_path, (batch_size, channels, rows, columns))
         build_template(

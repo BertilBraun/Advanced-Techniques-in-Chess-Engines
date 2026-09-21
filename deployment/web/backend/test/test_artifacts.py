@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from deployment.web.backend.artifacts import DeploymentConfiguration, download_model_artifacts
+from deployment.web.backend.artifacts import DeploymentConfiguration, download_model_artifact
 
 _RESOLVED_REVISION = '0123456789abcdef0123456789abcdef01234567'
 
@@ -13,7 +13,6 @@ def _environment() -> dict[str, str]:
     return {
         'CHESS_MODEL_REPO_ID': 'owner/chess-model',
         'CHESS_MODEL_REVISION': 'main',
-        'CHESS_MODEL_CHECKPOINT_FILENAME': 'model.pt',
         'CHESS_MODEL_INFERENCE_FILENAME': 'model.jit.pt',
         'CHESS_WEB_ALLOWED_ORIGINS': 'https://chess.example, http://localhost:5173/',
     }
@@ -43,7 +42,7 @@ def test_deployment_configuration_rejects_ambiguous_revision(revision: str) -> N
         DeploymentConfiguration.from_environment(environment)
 
 
-def test_downloads_both_named_artifacts_and_returns_inference_path() -> None:
+def test_downloads_named_inference_artifact() -> None:
     downloaded_filenames: list[str] = []
 
     def downloader(*, repo_id: str, filename: str, revision: str, token: str | None) -> str:
@@ -53,13 +52,13 @@ def test_downloads_both_named_artifacts_and_returns_inference_path() -> None:
         downloaded_filenames.append(filename)
         return str(Path('/cache') / filename)
 
-    model_path = download_model_artifacts(
+    model_path = download_model_artifact(
         DeploymentConfiguration.from_environment(_environment()),
         resolved_revision=_RESOLVED_REVISION,
         token='secret',
         downloader=downloader,
     )
-    assert downloaded_filenames == ['model.pt', 'model.jit.pt']
+    assert downloaded_filenames == ['model.jit.pt']
     assert model_path == Path('/cache/model.jit.pt')
 
 
@@ -75,7 +74,7 @@ def test_download_rejects_an_unresolved_revision() -> None:
         raise AssertionError('The downloader must not be called.')
 
     with pytest.raises(ValueError, match='resolved Hugging Face revision'):
-        download_model_artifacts(
+        download_model_artifact(
             DeploymentConfiguration.from_environment(_environment()),
             resolved_revision='main',
             token=None,
