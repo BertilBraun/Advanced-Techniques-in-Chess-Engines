@@ -1,0 +1,23 @@
+extends: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml
+
+run:
+  run_name: vast-chess-8gpu-v94-windowed-plateau
+  tensorboard_run_directory: vast-chess-8gpu-v94-windowed-plateau
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_874.json
+    generation: 874
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 200
+        start_value: 0.1
+        end_value: 0.01
+        rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v94-windowed-plateau.stop
