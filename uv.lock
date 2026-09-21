@@ -162,6 +162,7 @@ lichess = [
 tensorrt = [
     { name = "nvidia-modelopt", marker = "sys_platform == 'linux'" },
     { name = "onnx", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "requests", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "tensorrt-cu12", marker = "sys_platform == 'linux'" },
 ]
 web = [
@@ -191,6 +192,7 @@ requires-dist = [
     { name = "pydantic", specifier = "==2.13.2" },
     { name = "pyyaml" },
     { name = "requests", marker = "extra == 'lichess'" },
+    { name = "requests", marker = "extra == 'tensorrt'" },
     { name = "rich", marker = "extra == 'lichess'" },
     { name = "tensorboard" },
     { name = "tensorboardx" },
