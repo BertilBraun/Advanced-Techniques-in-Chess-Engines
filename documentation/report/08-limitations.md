@@ -33,6 +33,17 @@ Policy cross-entropy, top-action agreement, KL divergence, and fixed-position ac
 The adaptive-budget work is direct evidence that a proxy can improve while Elo worsens. TensorRT work similarly
 showed that a fidelity probe over random inputs and illegal actions can obscure a broken serving model.
 
+## Historical corrections and missing artifacts
+
+Several early conclusions were later corrected: attention precision was mismatched, generation-zero policy scale
+confounded architecture, the configured seed did not initialize the network, a parallel-search sweep missed the
+binding batch regime, and the TensorRT incident was not ordinary template staleness. This report follows the corrected
+conclusions, but those failures limit retrospective causal claims.
+
+Some exploratory evidence was run-local rather than committed, including an early dense low-rank policy-head
+bake-off. Exact numbers from such work should not be elevated to the same grade as preserved benchmark artifacts.
+The [benchmark coverage ledger](../experiments/benchmark-coverage.md) makes this artifact boundary explicit.
+
 ## Search conclusions are regime-specific
 
 Graph search was unattractive at the tested chess budgets and exact history semantics; it may differ for other games,

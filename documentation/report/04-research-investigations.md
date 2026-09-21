@@ -3,6 +3,12 @@
 This chapter organizes the research by question rather than version number. Each section states what was learned and
 whether it survives in the final recipe.
 
+It is the concise synthesis. Detailed evidence and corrections are split into
+[search](04a-search.md), [data/replay/curriculum](04b-data-and-replay.md),
+[networks/training](04c-networks-and-training.md), and
+[lineage/decision chronology](04d-lineage-and-decisions.md). The
+[coverage matrix](coverage-matrix.md) maps all substantive analyses and all benchmark README records to the report.
+
 ## Search budgets: fixed, mixed, and adaptive
 
 Early recipes borrowed KataGo's distinction between expensive full searches and cheap fast searches. Fast searches

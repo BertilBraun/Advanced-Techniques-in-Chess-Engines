@@ -26,3 +26,7 @@ terminal evaluation matrix is complete, [Chapter 7](07-final-run-results.md) wil
 training volume, cost, policy-only and searched strength, uncertainty, latency, and comparison with v34. The root
 README can then present the concise headline while this report preserves the full chain from research question to
 evidence.
+
+The final publication work is specified in the [publication plan](publication-plan.md), and the
+[coverage matrix](coverage-matrix.md) keeps supporting, superseded, and primary evidence reviewable rather than
+allowing the polished narrative to erase the experimental ledger.

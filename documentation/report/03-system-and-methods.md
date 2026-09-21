@@ -92,3 +92,20 @@ paired-opening Stockfish ladders for policy-only and searched play. The final ev
 protocol with larger matches and deeper budgets. Engine binaries, datasets, opening books, and their hashes are
 configuration-owned; [evaluation engine documentation](../operations/evaluation-engines.md) records installation and
 identity rules.
+
+Evaluation itself became an engineered subsystem. Adaptive ladders bracket the candidate against adjacent Stockfish
+node limits rather than extrapolating from one score; paired openings reverse colors; concurrent jobs are
+device-cycled; and reports retain raw W/D/L and exact search identity. Batch shape can alter serving behavior and
+reshuffle outcomes, so it is part of the protocol rather than an invisible speed setting. The
+[ladder-batching study](../benchmarks/ladder-batching-rtx4070s-20260906/README.md),
+[strength-over-generation series](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md), and
+[deep generation-936 match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) show the
+progression from frequent noisy signal to terminal-strength measurement.
+
+## Failure and restart semantics
+
+Operational loss is research loss on rented compute. The coordinator persists credit, replay, active/candidate model
+state, and evaluation state at explicit boundaries. Workers publish completed games atomically; replay
+materialization isolates an individual bad game but fails loudly on a systemic rejection rate; and final export
+binds evidence to source and configuration identity before the ephemeral node is released. These are **M** claims
+about recoverability, not model-quality features, but they determine whether a multi-day result is trustworthy.

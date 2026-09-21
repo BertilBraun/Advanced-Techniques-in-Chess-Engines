@@ -51,6 +51,9 @@ checkpoint is selected, document why and preserve the terminal checkpoint too.
 | Effective replay reuse | **Pending** |
 | Time and volume per model stage | **Pending** |
 | Time and volume per visit stage | **Pending** |
+| Replay age percentiles and effective unique-row reuse | **Pending** |
+| Materialization rejection and quarantine counts | **Pending** |
+| Resignation threshold, triggers, continuations, and false non-losses | **Pending** |
 
 Counts must come from the fetched archive and reconcile coordinator, replay, and trainer accounting. If restart or
 resume boundaries create duplicate counters, report the reconciliation method.
@@ -85,6 +88,8 @@ matched protocols or explicitly identify differences.
 7. Replay occupancy, age distribution, and sampling mixture over time.
 8. INT8 legal-policy fidelity over time, with engine-template rebuilds and model transitions.
 9. Cost/strength comparison with the v34 result under matched definitions.
+10. Backend usage over time: TensorRT INT8, FP16 fallback, and bootstrap TorchScript.
+11. Resignation threshold, trigger volume, continuation outcomes, and estimated search saved.
 
 Figures must be generated from archived machine-readable evidence, record their source files, and avoid hand-entered
 curves.
@@ -100,6 +105,8 @@ The completed discussion should answer:
 - Did policy-only strength and searched strength improve together?
 - How much wall-clock and cost were lost to operational faults or resume boundaries?
 - Does the deepest measured search continue to add strength, and how far is the result from unrestricted engines?
+- Did the 19x176 stage run through a validated INT8 path, and what fidelity/throughput did it achieve?
+- Were replay rejection, fallback inference, false resignation, or operational interruption rates material?
 
 Until those inputs exist, the abstract, root README, and conclusion should contain a clearly marked result placeholder
 rather than a speculative live number.

@@ -46,6 +46,39 @@ than arms resumed from the same checkpoint and replay state. See the
 [adaptive-search conclusion](../analysis/adaptive-search-conclusion-20260904.md). Frozen-replay studies are excellent
 for optimizer, architecture, and quantization diagnosis, but they do not by themselves establish self-play Elo.
 
+## Evidence dimensions
+
+A single “strong/weak” label is too imprecise for this project. Conclusions are classified by the observation they
+actually contain:
+
+| Grade | Observation | Valid use |
+| --- | --- | --- |
+| **S — strength** | Paired games or a calibrated ladder under a frozen protocol | Strength claim for that checkpoint, search, and opponent |
+| **O — online learning** | Self-play learning slope, preferably from a shared-state fork | Learning-system comparison within the measured regime |
+| **P — proxy** | Frozen replay, held-out loss, target fidelity, policy agreement, or fixed-batch fit | Candidate selection or mechanism diagnosis, not Elo |
+| **T — throughput** | Forward, search, actor, trainer, or admitted-replay rate | Performance claim under the recorded workload, not learning quality |
+| **M — mechanics** | Unit/integration test, smoke, persistence audit, or telemetry | Correctness and operation, not efficacy |
+| **R — rationale** | Literature transfer, design analysis, or an unexecuted plan | Motivation only |
+
+A technique can have several grades. Progressive sizing has **T** evidence for the small-model premise and **M**
+evidence for durable promotion, but no isolated **O/S** comparison of the exact final ladder against a fixed model.
+QAT has **P/T/M** evidence; the final run determines whether the resulting extra data production converted to
+learning and strength.
+
+The [experiment ledger](../experiments/README.md) records technique status, the
+[benchmark coverage ledger](../experiments/benchmark-coverage.md) accounts for benchmark artifacts, and the
+[report coverage matrix](coverage-matrix.md) records where every analysis and benchmark family enters this report.
+
+## Corrections and supersession
+
+The repository preserves intermediate interpretations when they explain how a diagnosis changed. This report uses
+the latest controlled conclusion and states the correction. Examples include FP32 attention measurements that did
+not represent production BF16, a parallel-search sweep whose batch regime did not exercise the intended cap, and
+the initial “template staleness” explanation superseded by the TensorRT equal-scale refit defect.
+
+Where raw evidence was not preserved—most notably an early low-rank dense policy-head bake-off—the report may
+describe the historical direction but must not promote exact numbers to the same status as a tracked benchmark.
+
 ## Strength measurement
 
 Chess strength is measured through paired-opening matches against Stockfish at fixed node limits. Reported absolute
