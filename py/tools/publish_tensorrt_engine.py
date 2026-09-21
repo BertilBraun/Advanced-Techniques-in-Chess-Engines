@@ -34,14 +34,19 @@ INPUT_NAME = 'states'
 POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
-MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
-MAXIMUM_WDL_ABSOLUTE_ERROR = 0.1
-MINIMUM_POLICY_TOP1_AGREEMENT = 0.90
-# A correctly calibrated INT8 export of the 14x160 measures 0.00155 mean and 0.00626 maximum policy
-# KL against its float reference, and a miscalibrated one measures 0.42 and 2.06. The old 1e-3 and
-# 0.01 sat below the healthy case, so every export failed and the warning said nothing.
-MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-2
-MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.05
+# These separate a broken engine from a healthy one; they are not a quality bar. The probe feeds
+# random binary planes rather than positions and softmaxes over all 1880 actions without a legality
+# mask, so its absolute numbers are argmax noise on a near-uniform distribution: the same engine
+# measures 0.87 top1 here and 0.97 legal-masked on real positions. Set from 591 historical
+# publications of this run, 584 healthy and 7 served by a defective template. Healthy spans top1
+# 0.688-0.956, mean KL 0.0004-0.0298, max KL 0.0006-0.226; broken spans top1 0.134-0.219, mean KL
+# 0.389-0.522, max KL 1.01-2.06. The WDL errors overlap between the two and cannot discriminate, so
+# they are set only loosely enough not to fire on their own.
+MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.1
+MAXIMUM_WDL_ABSOLUTE_ERROR = 0.5
+MINIMUM_POLICY_TOP1_AGREEMENT = 0.45
+MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 0.1
+MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.5
 
 
 @dataclass(frozen=True)

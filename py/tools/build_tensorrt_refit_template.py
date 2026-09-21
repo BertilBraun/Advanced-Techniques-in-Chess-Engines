@@ -7,6 +7,7 @@ from pathlib import Path
 
 import onnx
 import tensorrt as trt
+from onnx import numpy_helper
 from src.util.atomic_file import write_bytes_atomically
 from tools.publish_tensorrt_engine import export_onnx
 
@@ -29,6 +30,52 @@ def _mark_onnx_weights_refittable(network: trt.INetworkDefinition, onnx_path: Pa
     return marked
 
 
+def _separate_equal_quantization_scales(onnx_path: Path) -> int:
+    """Make per-tensor Q/DQ scales pairwise distinct, returning how many were changed.
+
+    TensorRT rewrites Q/DQ pairs whose scales compare equal, and documents that it withholds those
+    rewrites when building a refittable engine because a refit could separate the scales. At
+    optimization level 5 in 10.14.1 it applies them anyway: a template built from a checkpoint whose
+    activations sit at the ReLU6 cap, where twenty of twenty-eight scales are exactly 6/127, then
+    refit with a checkpoint whose scales differ, returns wrong and run-to-run non-deterministic
+    logits while every refit call reports success. That is what served V90 and cost about 400 Elo.
+    A template's own scale values are overwritten by every publish, so spreading them is free.
+    """
+    model = onnx.load(onnx_path, load_external_data=False)
+    initializers = {initializer.name: initializer for initializer in model.graph.initializer}
+    constants = {
+        node.output[0]: attribute.t
+        for node in model.graph.node
+        if node.op_type == 'Constant' and node.output
+        for attribute in node.attribute
+        if attribute.name == 'value'
+    }
+    scale_names = sorted(
+        {
+            node.input[1]
+            for node in model.graph.node
+            if node.op_type in ('QuantizeLinear', 'DequantizeLinear') and len(node.input) >= 2
+        }
+    )
+    scalar_names = []
+    for name in scale_names:
+        tensor = initializers.get(name) or constants.get(name)
+        if tensor is not None and numpy_helper.to_array(tensor).size == 1:
+            scalar_names.append(name)
+    values = [
+        float(numpy_helper.to_array(initializers.get(name) or constants[name]).reshape(())) for name in scalar_names
+    ]
+    if len(set(values)) == len(values):
+        return 0
+    for index, name in enumerate(scalar_names):
+        tensor = initializers.get(name) or constants[name]
+        array = numpy_helper.to_array(tensor)
+        factor = 0.7 + 0.3 * index / max(len(scalar_names) - 1, 1)
+        tensor.CopyFrom(numpy_helper.from_array((array * factor).astype(array.dtype), tensor.name))
+    onnx.save(model, onnx_path)
+    return len(scalar_names)
+
+
 def build_template(
     model_path: Path,
     output_path: Path,
@@ -47,6 +94,9 @@ def build_template(
             shutil.copyfile(model_path, onnx_path)
         else:
             export_onnx(model_path, onnx_path, (batch_size, channels, rows, columns))
+        separated = _separate_equal_quantization_scales(onnx_path)
+        if separated:
+            print(f'separated {separated} equal quantization scales before building the refit template')
         logger = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(logger)
         network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
@@ -88,7 +138,9 @@ def main() -> None:
     parser.add_argument('--channels', type=int, default=52)
     parser.add_argument('--rows', type=int, default=8)
     parser.add_argument('--columns', type=int, default=8)
-    parser.add_argument('--optimization-level', type=int, default=5, choices=range(0, 6))
+    # Levels 4 and 5 apply the Myelin scale-equality fusions that make a refit template unsafe;
+    # level 3 emitted none in testing, matched every direct build on fidelity and built faster.
+    parser.add_argument('--optimization-level', type=int, default=3, choices=range(0, 6))
     parser.add_argument('--timing-cache', type=Path)
     parser.add_argument('--refit-mode', type=RefitMode, choices=tuple(RefitMode), default=RefitMode.ALL)
     arguments = parser.parse_args()
