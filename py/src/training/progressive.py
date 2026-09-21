@@ -21,7 +21,13 @@ from src.util.generation_schedule import FloatGenerationSchedule
 # 0.90 spans about ten. The stage thresholds are raised alongside it, because a longer average lags
 # further behind a flattening curve and so reports a higher gain for the same plateau.
 ELO_EMA_DECAY = 0.90
-ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 2
+# Two observations is forty minutes, and a healthy climb dips below the threshold that often on
+# evaluation noise alone: V91 latched the 19x176 during ordinary wobble while it was still gaining
+# nineteen Elo per hour against a five Elo threshold. Five spans a hundred minutes, which the
+# decay's own three-hour average has to agree with before the latch closes. The decay stays at
+# 0.90: it measures the curve, and lengthening it as well would bring back the 0.95 behaviour of
+# never detecting a plateau at all.
+ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 5
 SECONDS_PER_HOUR = 3_600.0
 SECONDS_PER_DAY = 86_400.0
 
