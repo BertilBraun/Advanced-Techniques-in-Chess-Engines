@@ -5,10 +5,15 @@ repository-native: claims link to the benchmark, analysis, configuration, or fro
 Chess is the research result. Go 7x7 and 9x9 appear only where they explain the shared platform or an early design
 decision.
 
-The report is being written while the final chess run is still active. Its methods and historical conclusions can
-therefore be reviewed now, while its terminal strength, cost, and training-volume fields remain deliberately
-centralized in [Final-run results](07-final-run-results.md). No placeholder number elsewhere in this report should
-be interpreted as a result.
+> **Reconstruction in progress.** The existing chapters are evidence-bearing drafts, but they are not yet ready for
+> project-owner review. Their chronological organization, internal run labels, compact evidence codes, and uneven
+> treatment of major investigations are being replaced by a topic-first report. Review the
+> [source-dossier method](source-notes/README.md), [topic inventory](source-notes/topic-inventory.md), and
+> [restructure plan](source-notes/report-restructure.md) before relying on the current reader path.
+
+The report is being reconstructed while the final chess training lineage remains active. Terminal strength, cost,
+and training-volume fields remain deliberately centralized in [Final-run results](07-final-run-results.md). No live
+dashboard value or placeholder elsewhere in this report should be interpreted as a result.
 
 ## Reader path
 
@@ -33,7 +38,7 @@ be interpreted as a result.
 
 | Area | Status | Authority |
 | --- | --- | --- |
-| Problem, system, methods, and experiment history | Drafted from committed evidence | Chapters 1–6 and linked records |
+| Problem, system, methods, and investigations | Reconstruction required before review | [Source dossiers](source-notes/README.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
 | Exact run identity and terminal result | Pending archive and evaluation | [Chapter 7](07-final-run-results.md) |
 | External bibliography | Working list | [Bibliography](bibliography.md); entries marked “verify” need publication-pass checks |
