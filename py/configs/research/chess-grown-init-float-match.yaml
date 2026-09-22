@@ -1,0 +1,14 @@
+extends: ../production/vast-chess-8gpu-v98-catchup-floor.yaml
+
+# Measures a grown checkpoint against the parent it was grown from, with no quantisation on either
+# side: the TensorRT templates are per-architecture and INT8, which would confound the comparison
+# with a calibration difference. Not a training configuration; nothing starts from this.
+run:
+  run_name: chess-grown-init-float-match
+  tensorboard_run_directory: chess-grown-init-float-match
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: torchscript
