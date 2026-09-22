@@ -823,17 +823,30 @@ def test_candidate_catchup_schedule_runs_on_the_candidate_clock(tmp_path: Path) 
     assert session._candidate_learning_rate('large', 10) == pytest.approx(0.055)
 
 
+@dataclass(frozen=True)
+class _CountingStatistics:
+    total_loss: float = 1.0
+
+
+@dataclass(frozen=True)
+class _CountingResult:
+    completed_optimizer_steps: int
+    checkpoint: CheckpointReference | None
+    statistics: _CountingStatistics
+
+
 @dataclass
 class _CountingTrainerGroup:
     steps_per_quantum: int
     calls: list[int]
 
-    def train_quantum(self, quantum: object) -> _FoldTrainingResult:
+    def train_quantum(self, quantum: object) -> _CountingResult:
         source = quantum.model_progress.completed_optimizer_steps  # type: ignore[attr-defined]
         self.calls.append(source)
-        return _FoldTrainingResult(
+        return _CountingResult(
             completed_optimizer_steps=source + self.steps_per_quantum,
             checkpoint=None,
+            statistics=_CountingStatistics(),
         )
 
     def close(self) -> None:
