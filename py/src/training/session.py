@@ -252,24 +252,35 @@ class ProgressiveTrainingSession(TrainingSession):
                 imported,
             )
             candidate = self.state.candidate(model_id)
-        model_progress = TrainingProgress(
-            completed_optimizer_steps=candidate.completed_optimizer_steps,
-            optimizer_steps_per_generation=self.optimizer_steps_per_quantum,
-        )
         trainer = self._trainer_group(
             model_id,
             definition.network,
             model_path,
             0 if candidate.checkpoint is None else candidate.checkpoint.generation,
         )
-        result = trainer.train_quantum(
-            TrainerQuantum(
-                replay=replay,
-                model_progress=model_progress,
-                replay_source_progress=replay_source_progress,
-                base_learning_rate=self._candidate_learning_rate(model_id, replay_source_progress.model_generation),
-            )
+        # Quanta are repeated rather than enlarged so the candidate keeps one generation per quantum:
+        # its accumulated steps stay a multiple of the quantum, and its catch-up schedule, which is
+        # read on its own clock, still advances one generation per quantum of its own training.
+        quanta = (
+            1
+            if model_id == self.state.state.active_model_id
+            else self.progressive_configuration.promotion.candidate_step_multiplier
         )
+        completed_optimizer_steps = candidate.completed_optimizer_steps
+        for _ in range(quanta):
+            model_progress = TrainingProgress(
+                completed_optimizer_steps=completed_optimizer_steps,
+                optimizer_steps_per_generation=self.optimizer_steps_per_quantum,
+            )
+            result = trainer.train_quantum(
+                TrainerQuantum(
+                    replay=replay,
+                    model_progress=model_progress,
+                    replay_source_progress=replay_source_progress,
+                    base_learning_rate=self._candidate_learning_rate(model_id, replay_source_progress.model_generation),
+                )
+            )
+            completed_optimizer_steps = result.completed_optimizer_steps
         self._restart_trainer_after_qat_fold(model_id, definition.network, model_path, result)
         self.state.record_candidate(
             CompletedCandidateTraining(

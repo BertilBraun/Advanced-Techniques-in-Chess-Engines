@@ -25,6 +25,7 @@ from src.training.network import (
     NetworkParams,
     ScaledPostActivationResidualBlockConfiguration,
 )
+from src.training.progress import TrainingProgress
 from src.training.progressive import (
     ELO_EMA_DECAY,
     ELO_PLATEAU_CONFIRMATION_OBSERVATIONS,
@@ -820,3 +821,77 @@ def test_candidate_catchup_schedule_runs_on_the_candidate_clock(tmp_path: Path) 
     # Halfway through its own two hundred generations, regardless of the run's generation.
     assert session._candidate_learning_rate('large', 900) == pytest.approx(0.055)
     assert session._candidate_learning_rate('large', 10) == pytest.approx(0.055)
+
+
+@dataclass
+class _CountingTrainerGroup:
+    steps_per_quantum: int
+    calls: list[int]
+
+    def train_quantum(self, quantum: object) -> _FoldTrainingResult:
+        source = quantum.model_progress.completed_optimizer_steps  # type: ignore[attr-defined]
+        self.calls.append(source)
+        return _FoldTrainingResult(
+            completed_optimizer_steps=source + self.steps_per_quantum,
+            checkpoint=None,
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTrainingSession, list[int]]:
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    sizing = _configuration().validated_copy(
+        update={
+            'promotion': _configuration()
+            .promotion.validated_copy(update={'candidate_step_multiplier': multiplier})
+            .model_dump(mode='json')
+        }
+    )
+    configuration = loaded.model_copy(
+        update={
+            'training': loaded.training.model_copy(
+                update={'save_path': str(tmp_path), 'progressive_model_sizing': sizing}
+            )
+        }
+    )
+    calls: list[int] = []
+    steps = configuration.training.lifecycle.credit.optimizer_steps_per_quantum
+
+    def factory(experiment: ExperimentConfiguration, game: GameImplementation, startup: TrainerStartup) -> TrainerGroup:
+        return cast(TrainerGroup, _CountingTrainerGroup(steps, calls))
+
+    session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()), factory)
+    return session, calls
+
+
+def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
+    session, calls = _multiplier_session(tmp_path, 4)
+    steps = session.optimizer_steps_per_quantum
+
+    session._train_candidate(
+        'medium',
+        cast(ReplayDescription, object()),
+        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
+        cast(CheckpointReference, object()),
+    )
+
+    assert calls == [0, steps, steps * 2, steps * 3]
+    session.close()
+
+
+def test_the_active_model_ignores_the_candidate_step_multiplier(tmp_path: Path) -> None:
+    session, calls = _multiplier_session(tmp_path, 4)
+    steps = session.optimizer_steps_per_quantum
+    session.state.state = session.state.state.validated_copy(update={'active_model_id': 'medium'})
+
+    session._train_candidate(
+        'medium',
+        cast(ReplayDescription, object()),
+        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
+        cast(CheckpointReference, object()),
+    )
+
+    assert calls == [0]
+    session.close()

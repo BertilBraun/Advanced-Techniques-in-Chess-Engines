@@ -87,6 +87,11 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
     # A schedule here runs on the candidate's own clock: its generation zero is the quantum it began
     # training, not the run's. A bare number is still accepted and stays constant, as before.
     candidate_catchup_learning_rate: FloatGenerationSchedule
+    # A candidate is outside the credit ledger: credits are consumed once per quantum for the active
+    # model alone, so extra candidate quanta cost wall-clock rather than replay credits. A stage that
+    # trains from scratch needs far more steps than the model it must overtake, and at one quantum
+    # per generation it cannot close that in a useful time.
+    candidate_step_multiplier: int = Field(default=1, ge=1)
 
 
 class FixedModelSizingConfiguration(FrozenModel):
