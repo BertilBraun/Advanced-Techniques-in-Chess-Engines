@@ -28,10 +28,14 @@ def main() -> None:
     )
     parser.add_argument('--configuration', type=Path, required=True)
     parser.add_argument('--first-contaminated-generation', type=int, required=True)
+    # The configuration's save path is repository relative, so a run inspected from another
+    # checkout has to name its store directly.
+    parser.add_argument('--replay-path', type=Path)
     parser.add_argument('--apply', action='store_true')
     arguments = parser.parse_args()
 
-    layout, replay_path = _store_layout(arguments.configuration)
+    layout, resolved_path = _store_layout(arguments.configuration)
+    replay_path = arguments.replay_path or resolved_path
     store = ReplayStore.open(replay_path, layout, writable=arguments.apply)
     try:
         state = store.state
