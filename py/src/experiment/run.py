@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import psutil
 import torch
+from pydantic import ValidationError
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.evaluation.dataset import load_dataset_probe_legality, load_dataset_probe_states
 from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
@@ -156,7 +157,16 @@ def _validate_approval(
 def _write_manifest(path: Path, manifest: ExperimentRunManifest) -> ExperimentRunManifest:
     serialized = manifest.model_dump_json(indent=2)
     if path.exists():
-        existing = ExperimentRunManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        raw = path.read_text(encoding='utf-8')
+        try:
+            existing = ExperimentRunManifest.model_validate_json(raw)
+        except ValidationError:
+            # A configuration schema that moved on since this run last started would otherwise make
+            # its save path unresumable. The manifest is history, so archive it exactly as it stands.
+            history_hash = hashlib.sha256(raw.encode('utf-8')).hexdigest()
+            write_text_atomically(path.parent / 'run_manifests' / f'run_manifest-{history_hash}.json', raw)
+            write_text_atomically(path, serialized + '\n')
+            return manifest
         current = existing.model_copy(update={'resolved_hardware': manifest.resolved_hardware})
         if current == manifest:
             return existing
