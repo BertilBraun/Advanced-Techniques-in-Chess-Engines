@@ -15,7 +15,7 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.training.quantization.configuration import QatCheckpointPhase
-from src.util.frozen_model import FrozenModel
+from src.util.frozen_model import ConfigurationPath, FrozenModel
 from src.util.generation_schedule import (
     FloatGenerationSchedule,
     IntegerGenerationSchedule,
@@ -49,21 +49,21 @@ class TorchScriptInferenceBackend(FrozenModel):
 class TensorRtFloatTemplate(FrozenModel):
     kind: Literal['float'] = 'float'
     model_id: str
-    engine_path: Path
+    engine_path: ConfigurationPath
 
 
 class TensorRtQatFloatTemplate(FrozenModel):
     kind: Literal['qat_float'] = 'qat_float'
     model_id: str
     phase: QatCheckpointPhase
-    engine_path: Path
+    engine_path: ConfigurationPath
 
 
 class TensorRtQatTemplate(FrozenModel):
     kind: Literal['qat'] = 'qat'
     model_id: str
     phase: QatCheckpointPhase
-    engine_path: Path
+    engine_path: ConfigurationPath
 
 
 TensorRtTemplate: TypeAlias = Annotated[
