@@ -116,5 +116,6 @@ watcher dies silently. After any drop, query the run directly rather than inferr
 about 33 GB and the capacity schedule keeps stepping. Check that the whole schedule fits before a long run, not
 once it is already filling.
 
-**Resolve the configuration hash on the node.** Paths serialise differently elsewhere, so a hash computed on a
-workstation will not match the one `start` resolves. `prepare` does this correctly; doing it by hand does not.
+**Let `prepare` write the approval.** It resolves the configuration hash on the node, which is where `start`
+checks it. The hash no longer depends on the platform - configuration paths serialise with forward slashes on every
+host - but `prepare` also pins the revision and writes the approval in one step, which doing it by hand does not.

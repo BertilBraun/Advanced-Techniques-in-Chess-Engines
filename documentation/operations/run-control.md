@@ -66,8 +66,11 @@ that both wrote and checked the approval would only be validating itself.
 It refuses while a run from the same checkout is live. The supervisor executes this script *from* the checkout and
 bash reads a script as it runs, so swapping revisions underneath a running run can corrupt it mid-execution.
 
-The configuration hash must be computed on the node. Paths serialise differently on other platforms, so a hash
-produced on a workstation will not match the one `start` resolves.
+`prepare` resolves the configuration hash on the node, which is where `start` will check it. The hash itself is
+now platform independent: configuration paths serialise through `ConfigurationPath`, which normalises either
+separator on the way in and emits forward slashes on the way out, so the same configuration hashes identically on a
+Windows workstation and on the node. Until 2026-09-22 the three TensorRT template `engine_path` fields were plain
+`Path` and serialised with backslashes on Windows, which is what made a locally computed hash disagree.
 
 Dependencies and the native extension are only brought up when absent or stale — the extension is stamped with the
 `cpp` tree hash — so a `prepare` that changes nothing costs seconds rather than a rebuild.
