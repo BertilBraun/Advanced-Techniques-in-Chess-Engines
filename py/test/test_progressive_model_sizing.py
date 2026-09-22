@@ -831,7 +831,7 @@ class _CountingStatistics:
 @dataclass(frozen=True)
 class _CountingResult:
     completed_optimizer_steps: int
-    checkpoint: CheckpointReference | None
+    checkpoint: CheckpointReference
     statistics: _CountingStatistics
 
 
@@ -839,13 +839,15 @@ class _CountingResult:
 class _CountingTrainerGroup:
     steps_per_quantum: int
     calls: list[int]
+    model_path: Path
 
     def train_quantum(self, quantum: object) -> _CountingResult:
         source = quantum.model_progress.completed_optimizer_steps  # type: ignore[attr-defined]
         self.calls.append(source)
+        completed = source + self.steps_per_quantum
         return _CountingResult(
-            completed_optimizer_steps=source + self.steps_per_quantum,
-            checkpoint=None,
+            completed_optimizer_steps=completed,
+            checkpoint=checkpoint_reference(self.model_path, completed // self.steps_per_quantum),
             statistics=_CountingStatistics(),
         )
 
@@ -873,7 +875,7 @@ def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTra
     steps = configuration.training.lifecycle.credit.optimizer_steps_per_quantum
 
     def factory(experiment: ExperimentConfiguration, game: GameImplementation, startup: TrainerStartup) -> TrainerGroup:
-        return cast(TrainerGroup, _CountingTrainerGroup(steps, calls))
+        return cast(TrainerGroup, _CountingTrainerGroup(steps, calls, startup.save_path))
 
     session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()), factory)
     return session, calls
