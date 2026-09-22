@@ -19,7 +19,7 @@ training:
       candidate_catchup_learning_rate:
         kind: linear
         start_generation: 0
-        end_generation: 200
+        end_generation: 600
         start_value: 0.1
         end_value: 0.01
         rounding: none
