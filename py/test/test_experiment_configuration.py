@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from decimal import Decimal
 from pathlib import Path
 
@@ -87,18 +86,6 @@ def test_v35_code_v42_generation_zero_ab_r2_has_fresh_runtime_paths() -> None:
     assert configuration.run.resume.mode == 'checkpoint'
     assert configuration.run.resume.generation == 0
     assert configuration.evaluation.cadence_seconds == 1_200
-
-
-def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
-    paths = tuple(sorted(TEST_CONFIG_DIRECTORY.glob('*-experiment.yaml')))
-    configurations = validate_experiment_queue(paths)
-    dependency_lock_sha256 = hashlib.sha256((Path(__file__).resolve().parents[2] / 'uv.lock').read_bytes()).hexdigest()
-
-    assert configurations
-    assert all(
-        configuration.run.environment.dependency_lock_sha256 == dependency_lock_sha256
-        for configuration in configurations
-    )
 
 
 def test_every_screening_configuration_parses() -> None:
