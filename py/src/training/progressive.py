@@ -440,8 +440,15 @@ class ProgressiveTrainingStateStore:
             raise ValueError('Progressive candidate result is out of training order.')
         candidate = self.candidate(result.model_id)
         quantum_steps = pending.target_global_optimizer_steps - pending.replay_batch.source_optimizer_steps
-        if result.completed_optimizer_steps != candidate.completed_optimizer_steps + quantum_steps:
-            raise ValueError('Progressive candidate result must advance exactly one optimizer quantum.')
+        # A candidate may train several quanta per generation; the active model always trains one,
+        # because its progress is what the credit ledger has paid for.
+        expected_quanta = (
+            1
+            if result.model_id == self.state.active_model_id
+            else self.configuration.promotion.candidate_step_multiplier
+        )
+        if result.completed_optimizer_steps != candidate.completed_optimizer_steps + quantum_steps * expected_quanta:
+            raise ValueError('Progressive candidate result must advance its configured optimizer quanta.')
         if result.completed_optimizer_steps % quantum_steps:
             raise ValueError('Progressive candidate optimizer progress must align with complete quanta.')
         if result.checkpoint.generation != result.completed_optimizer_steps // quantum_steps:

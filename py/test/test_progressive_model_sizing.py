@@ -881,32 +881,36 @@ def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTra
     return session, calls
 
 
-def _train_one_candidate(session: ProgressiveTrainingSession, tmp_path: Path, model_id: str) -> None:
+def _train_required_models(session: ProgressiveTrainingSession, tmp_path: Path) -> None:
     steps = session.optimizer_steps_per_quantum
     replay = _replay(tmp_path)
-    session.state.begin_quantum(0.0, replay, 0, steps)
-    session._train_candidate(
-        model_id,
-        replay,
-        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
-        checkpoint_reference(tmp_path / 'models' / model_id, 0),
-    )
+    pending = session.state.begin_quantum(0.0, replay, 0, steps)
+    for model_id in pending.required_model_ids:
+        session._train_candidate(
+            model_id,
+            replay,
+            TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
+            checkpoint_reference(tmp_path / 'models' / model_id, 0),
+        )
 
 
 def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
     session, calls = _multiplier_session(tmp_path, 4)
     steps = session.optimizer_steps_per_quantum
+    _latch_candidate_start(session.state)
 
-    _train_one_candidate(session, tmp_path, 'medium')
+    _train_required_models(session, tmp_path)
 
-    assert calls == [0, steps, steps * 2, steps * 3]
+    # 'small' is active and trains once; 'medium' is the candidate and trains four times.
+    assert calls == [0, 0, steps, steps * 2, steps * 3]
     session.close()
 
 
 def test_the_active_model_ignores_the_candidate_step_multiplier(tmp_path: Path) -> None:
-    session, calls = _multiplier_session(tmp_path, 4)
+    session, calls = _multiplier_session(tmp_path, 1)
+    _latch_candidate_start(session.state)
 
-    _train_one_candidate(session, tmp_path, 'small')
+    _train_required_models(session, tmp_path)
 
-    assert calls == [0]
+    assert calls == [0, 0]
     session.close()
