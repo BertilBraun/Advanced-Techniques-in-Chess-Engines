@@ -884,6 +884,9 @@ def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTra
 def _train_required_models(session: ProgressiveTrainingSession, tmp_path: Path) -> None:
     steps = session.optimizer_steps_per_quantum
     replay = _replay(tmp_path)
+    for model_id in ('small', 'medium'):
+        # Seeding the checkpoint keeps the active model off the import path, which wants real files.
+        session.state.initialize_candidate(model_id, 0, checkpoint_reference(tmp_path / 'models' / model_id, 0))
     pending = session.state.begin_quantum(0.0, replay, 0, steps)
     for model_id in pending.required_model_ids:
         session._train_candidate(
