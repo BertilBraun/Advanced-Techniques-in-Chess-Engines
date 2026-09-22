@@ -12,3 +12,11 @@ chess:
     inference:
       backend:
         kind: torchscript
+
+training:
+  trainer:
+    # The grown model cannot inherit its parent's QAT quantiser state: the structure follows depth
+    # and width, and both changed. Quantisation is a separate question from whether training keeps
+    # the initialisation, so this measures the second one on its own.
+    quantization:
+      kind: disabled
