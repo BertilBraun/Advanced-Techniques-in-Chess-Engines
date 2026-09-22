@@ -881,16 +881,23 @@ def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTra
     return session, calls
 
 
+def _train_one_candidate(session: ProgressiveTrainingSession, tmp_path: Path, model_id: str) -> None:
+    steps = session.optimizer_steps_per_quantum
+    replay = _replay(tmp_path)
+    session.state.begin_quantum(0.0, replay, 0, steps)
+    session._train_candidate(
+        model_id,
+        replay,
+        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
+        checkpoint_reference(tmp_path / 'models' / model_id, 0),
+    )
+
+
 def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
     session, calls = _multiplier_session(tmp_path, 4)
     steps = session.optimizer_steps_per_quantum
 
-    session._train_candidate(
-        'medium',
-        cast(ReplayDescription, object()),
-        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
-        cast(CheckpointReference, object()),
-    )
+    _train_one_candidate(session, tmp_path, 'medium')
 
     assert calls == [0, steps, steps * 2, steps * 3]
     session.close()
@@ -898,15 +905,8 @@ def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
 
 def test_the_active_model_ignores_the_candidate_step_multiplier(tmp_path: Path) -> None:
     session, calls = _multiplier_session(tmp_path, 4)
-    steps = session.optimizer_steps_per_quantum
-    session.state.state = session.state.state.validated_copy(update={'active_model_id': 'medium'})
 
-    session._train_candidate(
-        'medium',
-        cast(ReplayDescription, object()),
-        TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
-        cast(CheckpointReference, object()),
-    )
+    _train_one_candidate(session, tmp_path, 'small')
 
     assert calls == [0]
     session.close()
