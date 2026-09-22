@@ -708,3 +708,47 @@ def test_column_descriptor_rejects_unrepresentable_name_and_rank() -> None:
             ReplayElementType.UINT8,
             (1, 1, 1, 1, 1),
         )
+
+
+def test_truncate_newest_drops_the_latest_rows_and_keeps_the_counters_reconciled(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=8, logical_capacity=8)
+    for index in range(6):
+        store.append(_sample(layout, index, generation=index))
+
+    store.truncate_newest(2)
+
+    state = store.state
+    assert state.size == 4
+    assert state.total_appended_rows == 4
+    assert state.evicted_rows + state.size == state.total_appended_rows
+    generations = store.gather_logical(np.arange(state.size, dtype=np.int64)).source_model_generation
+    assert list(generations) == [0, 1, 2, 3]
+    store.close()
+
+
+def test_truncate_newest_leaves_the_write_position_on_the_dropped_rows(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=8, logical_capacity=8)
+    for index in range(6):
+        store.append(_sample(layout, index, generation=index))
+    store.truncate_newest(2)
+
+    store.append(_sample(layout, 9, generation=99))
+
+    state = store.state
+    assert state.size == 5
+    generations = store.gather_logical(np.arange(state.size, dtype=np.int64)).source_model_generation
+    assert list(generations) == [0, 1, 2, 3, 99]
+    store.close()
+
+
+def test_truncate_newest_rejects_more_rows_than_the_window_holds(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=8, logical_capacity=8)
+    store.append(_sample(layout, 0, generation=0))
+
+    with pytest.raises(ValueError, match='more rows than the live window'):
+        store.truncate_newest(2)
+
+    store.close()

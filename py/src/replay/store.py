@@ -323,6 +323,23 @@ class ReplayStore:
             self._header[0]['evicted_rows'] = state.evicted_rows + removed
         self._header[0]['logical_capacity'] = logical_capacity
 
+    def truncate_newest(self, row_count: int) -> None:
+        """Drop the newest rows from the live window.
+
+        Shrinking the window rather than rewinding `head` keeps the oldest rows where they are and
+        leaves the write position on the first dropped row, so the next appends overwrite exactly the
+        rows that were removed. `evicted_rows` is untouched because nothing aged out; the rows are
+        un-appended, so `total_appended_rows` falls with the size to keep the two reconciled.
+        """
+        self._ensure_writable()
+        state = self.state
+        if not 0 <= row_count <= state.size:
+            raise ValueError('Cannot truncate more rows than the live window holds.')
+        self._header[0]['size'] = state.size - row_count
+        self._header[0]['total_appended_rows'] = state.total_appended_rows - row_count
+        self.flush()
+        self._validate_header()
+
     def append(self, sample: ReplaySample) -> None:
         self.extend((sample,))
 
