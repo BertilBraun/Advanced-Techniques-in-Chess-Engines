@@ -22,6 +22,7 @@ from src.training.progressive import (
     ProgressiveTrainingStateStore,
     StagedEloPlateauCandidateStartConfiguration,
     StagedEloPlateauCandidateStartState,
+    candidate_quanta_at,
     retain_progressive_candidate_checkpoints,
 )
 from src.training.quantization import QatFoldingMode, TensorRtInt8QatConfiguration
@@ -264,7 +265,11 @@ class ProgressiveTrainingSession(TrainingSession):
         quanta = (
             1
             if model_id == self.state.state.active_model_id
-            else self.progressive_configuration.promotion.candidate_step_multiplier
+            else candidate_quanta_at(
+                candidate.completed_optimizer_steps,
+                self.optimizer_steps_per_quantum,
+                self.progressive_configuration.promotion.candidate_step_multiplier,
+            )
         )
         completed_optimizer_steps = candidate.completed_optimizer_steps
         for _ in range(quanta):

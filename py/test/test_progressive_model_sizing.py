@@ -40,6 +40,7 @@ from src.training.progressive import (
     ProgressiveTrainingStateStore,
     StagedEloPlateauCandidateStartConfiguration,
     TotalLossEmaPromotionConfiguration,
+    candidate_quanta_at,
     retain_progressive_candidate_checkpoints,
 )
 from src.training.quantization.configuration import QatCheckpointPhase, QatStateIdentity, TensorRtInt8QatConfiguration
@@ -895,6 +896,23 @@ def _train_required_models(session: ProgressiveTrainingSession, tmp_path: Path) 
             TrainingProgress(completed_optimizer_steps=0, optimizer_steps_per_generation=steps),
             checkpoint_reference(tmp_path / 'models' / model_id, 0),
         )
+
+
+@pytest.mark.parametrize(
+    ('multiplier', 'expected'),
+    (
+        (1.0, [1, 1, 1, 1]),
+        (1.5, [1, 2, 1, 2]),
+        (2.0, [2, 2, 2, 2]),
+        (4.0, [4, 4, 4, 4]),
+    ),
+)
+def test_a_fractional_multiplier_alternates_whole_quanta(multiplier: float, expected: list[int]) -> None:
+    steps = 500
+    quanta = [candidate_quanta_at(generation * steps, steps, multiplier) for generation in range(4)]
+
+    assert quanta == expected
+    assert sum(quanta) / len(quanta) == pytest.approx(multiplier)
 
 
 def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:

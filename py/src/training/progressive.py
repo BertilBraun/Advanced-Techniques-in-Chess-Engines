@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
@@ -91,7 +92,7 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
     # model alone, so extra candidate quanta cost wall-clock rather than replay credits. A stage that
     # trains from scratch needs far more steps than the model it must overtake, and at one quantum
     # per generation it cannot close that in a useful time.
-    candidate_step_multiplier: int = Field(default=1, ge=1)
+    candidate_step_multiplier: float = Field(default=1.0, ge=1.0)
 
 
 class FixedModelSizingConfiguration(FrozenModel):
@@ -171,6 +172,17 @@ class PromotionLossComparison(FrozenModel):
     active_model_id: str
     active_loss_ema: ComparableLossEma
     candidate_loss_ema: ComparableLossEma
+
+
+def candidate_quanta_at(completed_optimizer_steps: int, steps_per_quantum: int, multiplier: float) -> int:
+    """How many quanta a candidate trains in the generation that follows these steps.
+
+    A quantum is indivisible, so a fractional multiplier alternates: at 1.5 the candidate trains one
+    quantum then two, averaging exactly 1.5. Deriving it from the candidate's own generation rather
+    than carrying a running remainder keeps it identical after a restart.
+    """
+    generation = completed_optimizer_steps // steps_per_quantum
+    return math.floor((generation + 1) * multiplier) - math.floor(generation * multiplier)
 
 
 class ProgressiveCandidateState(FrozenModel):
@@ -445,7 +457,11 @@ class ProgressiveTrainingStateStore:
         expected_quanta = (
             1
             if result.model_id == self.state.active_model_id
-            else self.configuration.promotion.candidate_step_multiplier
+            else candidate_quanta_at(
+                candidate.completed_optimizer_steps,
+                quantum_steps,
+                self.configuration.promotion.candidate_step_multiplier,
+            )
         )
         if result.completed_optimizer_steps != candidate.completed_optimizer_steps + quantum_steps * expected_quanta:
             raise ValueError('Progressive candidate result must advance its configured optimizer quanta.')
