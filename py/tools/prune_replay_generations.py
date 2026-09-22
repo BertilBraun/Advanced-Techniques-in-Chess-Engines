@@ -31,6 +31,10 @@ def main() -> None:
     # The configuration's save path is repository relative, so a run inspected from another
     # checkout has to name its store directly.
     parser.add_argument('--replay-path', type=Path)
+    # Self-play finishes asynchronously, so games from before the boundary keep arriving after it.
+    # Truncating a FIFO cannot skip them: removing every contaminated row also removes the clean
+    # rows appended after the first of them.
+    parser.add_argument('--accept-collateral', action='store_true')
     parser.add_argument('--apply', action='store_true')
     arguments = parser.parse_args()
 
@@ -50,10 +54,15 @@ def main() -> None:
         first = int(np.argmax(contaminated))
         # The store is a FIFO, so anything a model produced sits at the end. Pruning is only ever a
         # truncation of the newest rows; a hole in the middle would mean the window is not what we think.
-        if not contaminated[first:].all():
-            clean_after = int((~contaminated[first:]).sum())
-            raise SystemExit(f'refusing to prune: {clean_after} clean rows sit after the first contaminated row')
+        clean_after = int((~contaminated[first:]).sum())
+        if clean_after and not arguments.accept_collateral:
+            raise SystemExit(
+                f'refusing to prune: {clean_after} clean rows sit after the first contaminated row; '
+                'pass --accept-collateral to remove them too'
+            )
         removed = state.size - first
+        if clean_after:
+            print(f'collateral      : {clean_after} clean rows removed alongside the contaminated ones')
         print(f'would keep      : {first} rows (generations up to {int(generations[first - 1])})')
         print(f'would remove    : {removed} rows ({removed / state.size:.1%} of the window)')
         if arguments.apply:
