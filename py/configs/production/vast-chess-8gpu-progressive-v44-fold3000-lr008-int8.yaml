@@ -39,6 +39,10 @@ training:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v44-fold3000-lr008-int8.stop
   progressive_model_sizing:
     promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       candidate_catchup_learning_rate: 0.1
 
 evaluation:

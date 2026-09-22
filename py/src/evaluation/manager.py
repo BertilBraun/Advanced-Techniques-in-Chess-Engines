@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import Field, TypeAdapter
 from src.evaluation.configuration import (
+    ProgressiveCandidateEvaluationDefinition,
     StockfishAdaptiveNodesEvaluationDefinition,
     StockfishFixedNodesEvaluationDefinition,
 )
@@ -29,6 +30,7 @@ from src.evaluation.contracts import (
 )
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
+    CandidateMatchObservation,
     LadderRungObservation,
     PrimaryLadderEloObservation,
     fit_ladder_elo,
@@ -214,7 +216,11 @@ class EvaluationManager:
             self._save_state()
         return tuple(completed)
 
-    def schedule_due_jobs(self, checkpoint: CheckpointReference) -> tuple[EvaluationJob, ...]:
+    def schedule_due_jobs(
+        self,
+        checkpoint: CheckpointReference,
+        progressive_candidate: CheckpointReference | None = None,
+    ) -> tuple[EvaluationJob, ...]:
         self.start()
         elapsed_seconds = self.elapsed_seconds
         self._record_checkpoint_publication(checkpoint, elapsed_seconds)
@@ -231,6 +237,7 @@ class EvaluationManager:
                 self._state.scheduled_suites,
                 self._state.next_device_index,
                 self._state.adaptive_stockfish_rungs,
+                progressive_candidate,
             )
             scheduled_rungs = tuple(
                 ScheduledLadderRung(
@@ -278,6 +285,48 @@ class EvaluationManager:
                         elo=primary.elo,
                     )
                 )
+        return tuple(observations)
+
+    @property
+    def pending_candidate_checkpoints(self) -> tuple[CheckpointReference, ...]:
+        return tuple(
+            job.candidate
+            for job in self._state.pending_jobs
+            if isinstance(job.definition, ProgressiveCandidateEvaluationDefinition)
+        )
+
+    @property
+    def completed_candidate_matches(self) -> tuple[CandidateMatchObservation, ...]:
+        definition = next(
+            (
+                item
+                for item in self.configuration.definitions
+                if isinstance(item, ProgressiveCandidateEvaluationDefinition)
+            ),
+            None,
+        )
+        if definition is None:
+            return ()
+        observations: list[CandidateMatchObservation] = []
+        for suite in self._state.scheduled_suites:
+            job_id = ladder_job_id(
+                suite.boundary_seconds, definition.definition_id, suite.checkpoint.generation, None, 1
+            )
+            result_path = self.result_directory / f'{job_id}.json'
+            if not result_path.is_file():
+                continue
+            result = TypeAdapter(EvaluationResult).validate_json(result_path.read_text(encoding='utf-8'))
+            # A failed or cancelled match is absence of evidence, not a failing score: counting it
+            # as a loss would let a flaky evaluation reset a run of passes indefinitely.
+            if not isinstance(result, MatchEvaluationResult) or not result.games:
+                continue
+            observations.append(
+                CandidateMatchObservation(
+                    boundary_seconds=suite.boundary_seconds,
+                    score=result.aggregate.score,
+                    games=len(result.games),
+                )
+            )
         return tuple(observations)
 
     def close(self) -> None:

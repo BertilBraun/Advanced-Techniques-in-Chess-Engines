@@ -17,7 +17,10 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
   progressive_model_sizing:
     promotion:
-      maximum_relative_loss: 1.0
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       candidate_step_multiplier: 1.5
       # The active model's own schedule ended at generation 1000 and holds 0.01 forever. A catch-up
       # schedule that also ends at 0.01 surrenders the candidate's advantage exactly when it still
@@ -31,3 +34,92 @@ training:
         rounding: none
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v98-catchup-floor.stop
+
+evaluation:
+  # Lists replace wholesale, so this repeats the two ladder rungs the base configuration declares
+  # and adds the promotion match. It runs at the same cadence and search budget as the searched
+  # ladder: 100 games at 64 searches a move measured 339s on this node, well inside the timeout.
+  definitions:
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search: &searched_ladder_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-12x128-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-19x176-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-12x128-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-19x176-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: progressive_candidate
+    definition_id: progressive-candidate
+    search: *searched_ladder_search

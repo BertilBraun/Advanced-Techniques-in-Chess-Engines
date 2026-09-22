@@ -197,7 +197,7 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
     assert progressive.is_progressive
     assert progressive.candidate_start.kind == 'elo_plateau'
     assert progressive.candidate_start.minimum_worthwhile_gain_per_hour == 15.0
-    assert progressive.promotion.maximum_relative_loss == 1.005
+    assert progressive.promotion.candidate_match_gate.minimum_score == 0.48
     assert tuple(model.model_id for model in progressive.models) == (
         'chess-cnn-12x128-fromto',
         'chess-cnn-14x160-fromto',

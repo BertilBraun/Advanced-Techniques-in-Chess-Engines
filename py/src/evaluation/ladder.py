@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from math import isfinite
 from types import MappingProxyType
 
+from pydantic import Field
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
+from src.util.frozen_model import FrozenModel
 
 # Agreed Melonimarco SSDF-scale anchors for the Stockfish 13 fixed-node rungs
 # (chess-recovery-plan-20260820.md, section 0). Extend only with calibrated rungs.
@@ -45,6 +47,14 @@ _OUTCOME_SCORE = MappingProxyType(
 _MINIMUM_FIT_ELO = 0.0
 _MAXIMUM_FIT_ELO = 5000.0
 _BISECTION_ITERATIONS = 80
+
+
+class CandidateMatchObservation(FrozenModel):
+    """One completed candidate-versus-active match, as the promotion gate consumes it."""
+
+    boundary_seconds: int = Field(ge=0)
+    score: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    games: int = Field(gt=0)
 
 
 @dataclass(frozen=True)

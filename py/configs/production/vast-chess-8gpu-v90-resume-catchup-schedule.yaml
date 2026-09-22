@@ -14,6 +14,10 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
   progressive_model_sizing:
     promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       # The candidate has trained 246 generations at a flat 0.1 while the active model decayed to
       # 0.057, and its loss has stayed too noisy to come within the two per mille it needs. This
       # schedule is already past its end at 246, so the candidate steps straight down to 0.01.

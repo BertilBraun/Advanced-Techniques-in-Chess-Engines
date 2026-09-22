@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from src.evaluation.ladder import PrimaryLadderEloObservation
+from src.evaluation.ladder import CandidateMatchObservation, PrimaryLadderEloObservation
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
@@ -30,6 +30,7 @@ from src.training.progressive import (
     ELO_EMA_DECAY,
     ELO_PLATEAU_CONFIRMATION_OBSERVATIONS,
     ELO_PLATEAU_WINDOW_OBSERVATIONS,
+    CandidateMatchGateConfiguration,
     CompletedCandidateTraining,
     ElapsedCandidateStartConfiguration,
     EloPlateauCandidateStartConfiguration,
@@ -38,8 +39,8 @@ from src.training.progressive import (
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
+    PromotionConfiguration,
     StagedEloPlateauCandidateStartConfiguration,
-    TotalLossEmaPromotionConfiguration,
     candidate_quanta_at,
     retain_progressive_candidate_checkpoints,
 )
@@ -65,7 +66,7 @@ def _network(width: int) -> NetworkParams:
     )
 
 
-def _configuration(warmup_quanta: int = 2) -> ProgressiveModelSizingConfiguration:
+def _configuration(consecutive_evaluations: int = 2) -> ProgressiveModelSizingConfiguration:
     return ProgressiveModelSizingConfiguration(
         kind='progressive',
         models=(
@@ -77,10 +78,12 @@ def _configuration(warmup_quanta: int = 2) -> ProgressiveModelSizingConfiguratio
             kind='elo_plateau',
             minimum_worthwhile_gain_per_hour=5.0,
         ),
-        promotion=TotalLossEmaPromotionConfiguration(
-            decay=0.5,
-            warmup_quanta=warmup_quanta,
-            maximum_relative_loss=1.01,
+        promotion=PromotionConfiguration(
+            candidate_match_gate=CandidateMatchGateConfiguration(
+                definition_id='promotion-match',
+                minimum_score=0.48,
+                consecutive_evaluations=consecutive_evaluations,
+            ),
             candidate_catchup_learning_rate=0.005,
         ),
     )
@@ -97,8 +100,8 @@ def _elapsed_configuration() -> ProgressiveModelSizingConfiguration:
     )
 
 
-def _staged_elo_configuration(warmup_quanta: int = 1) -> ProgressiveModelSizingConfiguration:
-    return _configuration(warmup_quanta).validated_copy(
+def _staged_elo_configuration(consecutive_evaluations: int = 1) -> ProgressiveModelSizingConfiguration:
+    return _configuration(consecutive_evaluations).validated_copy(
         update={
             'candidate_start': StagedEloPlateauCandidateStartConfiguration(
                 kind='staged_elo_plateau',
@@ -152,7 +155,35 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
     return checkpoint_reference(tmp_path / 'models' / model_id, generation)
 
 
+def _complete_one_quantum(
+    store: ProgressiveTrainingStateStore,
+    replay: ReplayDescription,
+    tmp_path: Path,
+    quantum: int,
+) -> str:
+    source_steps = quantum * 4
+    pending = store.begin_quantum(0.0, replay, source_steps, 4)
+    for model_id in pending.required_model_ids:
+        store.record_candidate(
+            CompletedCandidateTraining(
+                model_id=model_id,
+                completed_optimizer_steps=source_steps + 4,
+                checkpoint=_checkpoint(tmp_path, model_id, quantum + 1),
+            )
+        )
+    return store.complete_quantum()
+
+
 LATCHING_OBSERVATIONS = ELO_PLATEAU_WINDOW_OBSERVATIONS + ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
+
+
+def _pass_gate(store: ProgressiveTrainingStateStore, count: int, score: float = 0.5) -> None:
+    store.observe_candidate_matches(
+        tuple(
+            CandidateMatchObservation(boundary_seconds=1200 * (index + 1), score=score, games=100)
+            for index in range(count)
+        )
+    )
 
 
 def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
@@ -181,10 +212,10 @@ def test_model_schedule_accepts_any_nonempty_model_tuple(model_count: int) -> No
             kind='elo_plateau',
             minimum_worthwhile_gain_per_hour=5.0,
         ),
-        promotion=TotalLossEmaPromotionConfiguration(
-            decay=0.9,
-            warmup_quanta=2,
-            maximum_relative_loss=1.01,
+        promotion=PromotionConfiguration(
+            candidate_match_gate=CandidateMatchGateConfiguration(
+                definition_id='promotion-match', minimum_score=0.48, consecutive_evaluations=2
+            ),
             candidate_catchup_learning_rate=0.004,
         ),
     )
@@ -262,10 +293,10 @@ def test_model_schedule_rejects_an_empty_model_tuple() -> None:
                 kind='elo_plateau',
                 minimum_worthwhile_gain_per_hour=5.0,
             ),
-            promotion=TotalLossEmaPromotionConfiguration(
-                decay=0.9,
-                warmup_quanta=2,
-                maximum_relative_loss=1.01,
+            promotion=PromotionConfiguration(
+                candidate_match_gate=CandidateMatchGateConfiguration(
+                    definition_id='promotion-match', minimum_score=0.48, consecutive_evaluations=2
+                ),
                 candidate_catchup_learning_rate=0.004,
             ),
         )
@@ -286,7 +317,7 @@ def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> No
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is None
     assert store.state.candidate_start.consecutive_below_threshold_observations == 0
     assert not store.state.candidate_start.latched
-    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 4
+    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 5
 
 
 def test_a_gain_above_the_threshold_does_not_start_a_candidate(tmp_path: Path) -> None:
@@ -422,7 +453,6 @@ def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_p
             model_id='small',
             completed_optimizer_steps=44,
             checkpoint=_checkpoint(tmp_path, 'small', 11),
-            comparable_total_loss=2.0,
         )
     )
 
@@ -430,7 +460,6 @@ def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_p
     resumed = restarted.begin_quantum(100_000.0, _replay(tmp_path), 40, 4)
 
     assert resumed.next_model_id == 'medium'
-    assert resumed.completed[0].comparable_total_loss == 2.0
     with pytest.raises(ValueError, match='replay batches changed'):
         restarted.begin_quantum(100_000.0, _replay(tmp_path, head=4), 40, 4)
 
@@ -450,7 +479,6 @@ def test_candidate_latch_takes_effect_at_the_next_quantum(tmp_path: Path) -> Non
             model_id='small',
             completed_optimizer_steps=4,
             checkpoint=_checkpoint(tmp_path, 'small', 1),
-            comparable_total_loss=1.0,
         )
     )
     store.complete_quantum()
@@ -458,50 +486,63 @@ def test_candidate_latch_takes_effect_at_the_next_quantum(tmp_path: Path) -> Non
     assert store.begin_quantum(0.0, replay, 4, 4).required_model_ids == ('small', 'medium')
 
 
-def test_promotion_requires_warmup_and_one_percent_comparable_ema(tmp_path: Path) -> None:
-    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(warmup_quanta=2))
+def test_promotion_requires_consecutive_passing_matches(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(consecutive_evaluations=2))
     _latch_candidate_start(store)
     replay = _replay(tmp_path)
 
-    for quantum, (active_loss, candidate_loss) in enumerate(((2.0, 2.01), (1.8, 1.815))):
-        source_steps = quantum * 4
-        store.begin_quantum(0.0, replay, source_steps, 4)
-        store.record_candidate(
-            CompletedCandidateTraining(
-                model_id='small',
-                completed_optimizer_steps=source_steps + 4,
-                checkpoint=_checkpoint(tmp_path, 'small', quantum + 1),
-                comparable_total_loss=active_loss,
-            )
-        )
-        store.record_candidate(
-            CompletedCandidateTraining(
-                model_id='medium',
-                completed_optimizer_steps=source_steps + 4,
-                checkpoint=_checkpoint(tmp_path, 'medium', quantum + 1),
-                comparable_total_loss=candidate_loss,
-            )
-        )
-        active_model_id = store.complete_quantum()
+    _pass_gate(store, 1)
+    assert _complete_one_quantum(store, replay, tmp_path, 0) == 'small'
 
-    assert active_model_id == 'medium'
+    _pass_gate(store, 2)
+    assert _complete_one_quantum(store, replay, tmp_path, 1) == 'medium'
+
+
+def test_a_failing_match_restarts_the_run_of_passes(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(consecutive_evaluations=2))
+    _latch_candidate_start(store)
+    replay = _replay(tmp_path)
+
+    store.observe_candidate_matches(
+        (
+            CandidateMatchObservation(boundary_seconds=1200, score=0.5, games=100),
+            CandidateMatchObservation(boundary_seconds=2400, score=0.4, games=100),
+            CandidateMatchObservation(boundary_seconds=3600, score=0.5, games=100),
+        )
+    )
+
+    assert store.state.match_gate is not None
+    assert store.state.match_gate.consecutive_passes == 1
+    assert _complete_one_quantum(store, replay, tmp_path, 0) == 'small'
+
+
+def test_a_match_at_the_threshold_counts_as_a_pass(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(consecutive_evaluations=1))
+    _latch_candidate_start(store)
+
+    _pass_gate(store, 1, score=0.48)
+
+    assert store.state.match_gate is not None
+    assert store.state.match_gate.consecutive_passes == 1
+
+
+def test_a_replayed_boundary_does_not_count_twice(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(consecutive_evaluations=2))
+    _latch_candidate_start(store)
+
+    _pass_gate(store, 1)
+    _pass_gate(store, 1)
+
+    assert store.state.match_gate is not None
+    assert store.state.match_gate.consecutive_passes == 1
 
 
 def test_later_candidate_is_not_skipped_after_first_promotion(tmp_path: Path) -> None:
-    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(warmup_quanta=1))
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(consecutive_evaluations=1))
     _latch_candidate_start(store)
     replay = _replay(tmp_path)
-    store.begin_quantum(0.0, replay, 0, 4)
-    for model_id in ('small', 'medium'):
-        store.record_candidate(
-            CompletedCandidateTraining(
-                model_id=model_id,
-                completed_optimizer_steps=4,
-                checkpoint=_checkpoint(tmp_path, model_id, 1),
-                comparable_total_loss=1.0,
-            )
-        )
-    assert store.complete_quantum() == 'medium'
+    _pass_gate(store, 1)
+    assert _complete_one_quantum(store, replay, tmp_path, 0) == 'medium'
 
     pending = store.begin_quantum(0.0, replay, 4, 4)
 
@@ -524,9 +565,9 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
                 model_id=model_id,
                 completed_optimizer_steps=4,
                 checkpoint=_checkpoint(tmp_path, model_id, 1),
-                comparable_total_loss=1.0,
             )
         )
+    _pass_gate(store, 1)
     assert store.complete_quantum() == 'medium'
     assert not store.state.candidate_start.latched
 
