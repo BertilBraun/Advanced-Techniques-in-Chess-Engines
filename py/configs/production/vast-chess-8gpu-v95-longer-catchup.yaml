@@ -16,6 +16,7 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
   progressive_model_sizing:
     promotion:
+      candidate_step_multiplier: 4
       candidate_catchup_learning_rate:
         kind: linear
         start_generation: 0
