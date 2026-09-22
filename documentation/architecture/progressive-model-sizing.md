@@ -30,8 +30,9 @@ supports extra or train-only models; see [SelfplayTraining.md](https://github.co
 
 This platform intentionally differs:
 
-- training is synchronous at the coordinator boundary, so every eligible model trains sequentially within one
-  quantum on the same immutable replay snapshot and deterministic sample identity;
+- training is synchronous at the coordinator boundary, so eligible models train sequentially within one global
+  boundary on the same immutable replay snapshot; the active model receives one optimizer quantum and a successor
+  may receive more according to its configured multiplier;
 - the coordinator waits for all required models before publishing the checkpoint and transitioning self-play;
 - the final staged Elo plateau policy persists one latch for the immediate successor and resets it after promotion;
 - promotion compares paired exponential moving averages built only from quanta seen by both the active model and its
@@ -58,8 +59,8 @@ The legacy `elo_plateau` candidate-start configuration contains one value beyond
 The final chess recipe instead uses `staged_elo_plateau`. It contains one ordered entry for every successor model,
 and each entry names that model and its positive gain-rate threshold. The configured stages are:
 
-- `chess-cnn-scaled-post-14x160-fromto-int8`: 15 Elo/hour;
-- `chess-cnn-scaled-post-19x176-fromto-int8`: 5 Elo/hour.
+- `chess-cnn-scaled-post-14x160-fromto-int8`: 50 Elo/hour;
+- `chess-cnn-scaled-post-19x176-fromto-int8`: 4 Elo/hour.
 
 The staged model IDs must exactly match the configured successor order. A stage can therefore neither apply the
 wrong threshold to a model nor silently omit a successor.
@@ -73,14 +74,16 @@ already been incorporated, the next corrected average is:
 previous_weight = 1 - 0.90^n
 current_weight = 1 - 0.90^(n + 1)
 ema_next = (0.90 * ema_previous * previous_weight + 0.10 * observed_ladder_elo) / current_weight
-gain_per_hour = (ema_next - ema_previous) / hours_between_boundaries
+gain_per_hour = (ema_current - ema_six_observations_ago) / hours_across_that_window
 ```
 
-The elapsed hours are the actual time between the two consecutive EMA boundaries. Failed boundaries add no Elo
-observation; duplicate results and results received out of order do not apply an observation twice. A gain at or
-above the current stage's threshold resets the consecutive-below-threshold count. Five consecutive gains strictly
-below the threshold latch candidate catch-up for the next complete quantum. Later observations continue updating the
-EMA and telemetry but cannot clear that stage's completed latch.
+The elapsed hours are the actual time between the oldest and newest EMA boundaries in the retained window. Failed
+boundaries add no Elo observation; duplicate results and results received out of order do not apply an observation
+twice. The runtime keeps seven corrected EMA samples so the oldest-to-current slope spans six observation intervals.
+It emits no gain rate until that complete window exists. A window gain at or above the current stage's threshold
+resets the consecutive-below-threshold count. Two consecutive complete-window gains strictly below the threshold
+latch candidate catch-up for the next complete quantum. Later observations continue updating the EMA and telemetry
+but cannot clear that stage's completed latch.
 
 After promotion, the staged policy targets the new active model's immediate successor, clears the latch and
 confirmation count, and starts a new stage. It seeds that stage at the latest observed raw Elo and its boundary, so
@@ -93,7 +96,9 @@ The promotion configuration explicitly owns:
 - EMA decay `d`, constrained to `0 < d < 1` and normally configured as `0.8`;
 - a positive number of paired warmup quanta;
 - the maximum candidate-to-active relative loss;
-- a positive catch-up learning rate for an eligible candidate that is not yet active.
+- a positive catch-up learning rate for an eligible candidate that is not yet active;
+- a candidate step multiplier of at least one, which controls how many complete optimizer quanta the successor trains
+  per global generation.
 
 The primary searched ladder is the highest configured project-model search budget, currently the
 `evaluation/ladder_elo_64` series also published as `evaluation/ladder_elo`. Policy-only and lower-search ladder
@@ -123,7 +128,12 @@ Under the elapsed alternative, every model whose configured start has passed tra
 
 Each eligible model owns one persistent `TrainerGroup`. Its DDP ranks remain resident across generations and close
 only at run shutdown. Newly eligible candidates start their trainer group once, so ordinary quantum transitions do
-not repeatedly pay process startup, checkpoint loading, CUDA-context creation, or compilation costs.
+not repeatedly pay process startup, checkpoint loading, CUDA-context creation, or compilation costs. The active model
+always trains one quantum per global generation. The final recipe's candidate multiplier is `1.5`: because a quantum
+is indivisible, `candidate_quanta_at` alternates one and two successor quanta according to the global generation
+index, averaging exactly 1.5. Those additional candidate quanta consume wall-clock training time but no additional
+replay credit. Repeated candidate quanta receive the same global replay-source optimizer step, so their deterministic
+loaders repeat the same batch sequence while the candidate's own optimizer progress advances.
 
 After a promotion, the superseded smaller model stops training and the staged plateau state resets for the new
 active model's immediate successor. That successor starts from scratch at model-local generation zero only after its
@@ -152,10 +162,10 @@ number of paired observations. It promotes when:
 candidate_ema <= active_ema * maximum_relative_loss
 ```
 
-The configuration chooses this tolerance. The final chess recipe uses `1.002`, so candidate loss may be at most
-0.2% above active loss after ten paired warmup quanta. Comparisons occur strictly in stage order. If the active model
+The configuration chooses this tolerance. The final chess recipe uses `1.0`, so candidate loss must be no greater
+than active loss after ten paired warmup observations. Comparisons occur strictly in stage order. If the active model
 changes, a later candidate's paired comparison resets so the candidate and new active EMA cover exactly the same
-quanta.
+shared global quanta.
 
 ## Persistence, publication, and recovery
 
@@ -207,11 +217,11 @@ candidate-start persistence without repeating an observation.
 
 Each model writes separate TensorBoard series below `progressive_models/<model-id>/`, including policy, WDL, total
 loss, gradient norm, local optimizer steps, and quantum duration. `progressive/active_model_index` records the
-published stage. Elo plateau starts require five consecutive evaluation observations below the current stage's gain
-threshold. Candidate-start state is persisted, so restart neither clears an in-progress confirmation count nor
-repeats an already applied boundary. Candidate-start telemetry records
+published stage. Elo plateau starts require two consecutive complete six-interval EMA windows below the current
+stage's gain threshold. Candidate-start state is persisted, so restart neither clears an in-progress confirmation
+count nor repeats an already applied boundary. Candidate-start telemetry records
 `progressive/candidate_start/ema_elo`, `instantaneous_ema_gain_per_hour`,
 `minimum_worthwhile_gain_per_hour`, `consecutive_below_threshold_observations`, and `latched` at elapsed evaluation
-boundaries. The Elo series uses the runtime's bias-corrected 0.90 EMA, and the gain rate is the change between
-consecutive corrected EMA values divided by the elapsed boundary interval.
+boundaries. The Elo series uses the runtime's bias-corrected 0.90 EMA, and the gain rate is the oldest-to-current
+change across the retained seven-sample window divided by the elapsed time across its six observation intervals.
 Evaluation and self-play series remain attached only to the globally published model generation.

@@ -67,20 +67,25 @@ publishes a refitted TensorRT engine. See
 ## Progressive sizing
 
 Only the active model trains initially. Candidate start is controlled by the searched Stockfish ladder and is
-stage-specific: 15 Elo/hour for 14×160 and 5 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
-decay `0.90`; five consecutive below-threshold observations are required before the immediate successor starts.
-After a promotion, the next stage begins a fresh plateau state seeded from the latest observed Elo rather than
-reusing the previous stage's latch.
+stage-specific: 50 Elo/hour for 14×160 and 4 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
+decay `0.90`. It retains seven EMA samples, measures gain across the six observation intervals between the oldest
+and newest samples, and requires two consecutive complete-window gains strictly below the threshold before the
+immediate successor starts. After a promotion, the next stage begins a fresh plateau state seeded from the latest
+observed Elo rather than reusing the previous stage's latch.
 
 Once eligible, the active model and its immediate successor train sequentially on the identical replay snapshot and
 deterministic sample identity. The successor starts from its own random initialization; no weights or optimizer
-moments transfer. Its catch-up learning rate follows its own local-generation schedule from `0.1` to `0.01` through
-200 local generations.
+moments transfer. The active model trains one optimizer quantum per global generation. The successor's configured
+step multiplier is `1.5`, implemented as alternating one and two complete quanta from the global generation index.
+When two successor quanta run, both use the same global replay-source step and therefore repeat the same
+deterministic batch sequence while the successor optimizer advances. Its catch-up learning rate follows its own
+local-generation schedule from `0.1` to `0.01` through 600 local generations.
 
 Promotion is loss-based, not match-based. Paired active/candidate total-loss EMAs use decay `0.8`; after ten shared
-quanta, the candidate promotes when its EMA is no more than `1.002` times the active model's EMA. Only one checkpoint
-is published for self-play and evaluation after the entire quantum. The implemented state machine and recovery
-record are in [`training/progressive.py`](../../py/src/training/progressive.py) and
+global observations, the candidate promotes when its EMA is no greater than the active model's EMA
+(`maximum_relative_loss: 1.0`). Only one checkpoint is published for self-play and evaluation after the entire
+global quantum. The implemented state machine and recovery record are in
+[`training/progressive.py`](../../py/src/training/progressive.py) and
 [`training/session.py`](../../py/src/training/session.py).
 
 ## Checkpoint publication and recovery
