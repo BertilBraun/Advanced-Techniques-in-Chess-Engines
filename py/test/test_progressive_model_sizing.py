@@ -841,6 +841,7 @@ class _CountingTrainerGroup:
     steps_per_quantum: int
     calls: list[int]
     model_path: Path
+    total_loss: float = 1.0
 
     def train_quantum(self, quantum: object) -> _CountingResult:
         source = quantum.model_progress.completed_optimizer_steps  # type: ignore[attr-defined]
@@ -849,14 +850,18 @@ class _CountingTrainerGroup:
         return _CountingResult(
             completed_optimizer_steps=completed,
             checkpoint=checkpoint_reference(self.model_path, completed // self.steps_per_quantum),
-            statistics=_CountingStatistics(),
+            statistics=_CountingStatistics(total_loss=self.total_loss),
         )
 
     def close(self) -> None:
         return None
 
 
-def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTrainingSession, list[int]]:
+def _multiplier_session(
+    tmp_path: Path,
+    multiplier: float,
+    candidate_loss: float = 1.0,
+) -> tuple[ProgressiveTrainingSession, list[int]]:
     loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     sizing = _configuration().validated_copy(
         update={
@@ -876,7 +881,8 @@ def _multiplier_session(tmp_path: Path, multiplier: int) -> tuple[ProgressiveTra
     steps = configuration.training.lifecycle.credit.optimizer_steps_per_quantum
 
     def factory(experiment: ExperimentConfiguration, game: GameImplementation, startup: TrainerStartup) -> TrainerGroup:
-        return cast(TrainerGroup, _CountingTrainerGroup(steps, calls, startup.save_path))
+        loss = candidate_loss if startup.save_path.name == 'medium' else 1.0
+        return cast(TrainerGroup, _CountingTrainerGroup(steps, calls, startup.save_path, loss))
 
     session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()), factory)
     return session, calls
@@ -908,11 +914,16 @@ def _train_required_models(session: ProgressiveTrainingSession, tmp_path: Path) 
     ),
 )
 def test_a_fractional_multiplier_alternates_whole_quanta(multiplier: float, expected: list[int]) -> None:
-    steps = 500
-    quanta = [candidate_quanta_at(generation * steps, steps, multiplier) for generation in range(4)]
+    quanta = [candidate_quanta_at(generation, multiplier) for generation in range(4)]
 
     assert quanta == expected
     assert sum(quanta) / len(quanta) == pytest.approx(multiplier)
+
+
+def test_a_fractional_multiplier_averages_out_over_a_long_run() -> None:
+    quanta = [candidate_quanta_at(generation, 1.5) for generation in range(600)]
+
+    assert sum(quanta) == 900
 
 
 def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
@@ -924,6 +935,36 @@ def test_candidate_step_multiplier_repeats_the_quantum(tmp_path: Path) -> None:
 
     # 'small' is active and trains once; 'medium' is the candidate and trains four times.
     assert calls == [0, 0, steps, steps * 2, steps * 3]
+    session.close()
+
+
+def test_a_fractional_multiplier_keeps_alternating_across_generations(tmp_path: Path) -> None:
+    # Indexing the multiplier by the candidate's own generation reached a fixed point at two quanta,
+    # because that index advanced by whatever the previous generation returned.
+    session, calls = _multiplier_session(tmp_path, 1.5, candidate_loss=2.0)
+    steps = session.optimizer_steps_per_quantum
+    _latch_candidate_start(session.state)
+    replay = _replay(tmp_path)
+    for model_id in ('small', 'medium'):
+        session.state.initialize_candidate(model_id, 0, checkpoint_reference(tmp_path / 'models' / model_id, 0))
+
+    advances: list[int] = []
+    for generation in range(4):
+        pending = session.state.begin_quantum(float(generation), replay, generation * steps, steps)
+        before = session.state.candidate('medium').completed_optimizer_steps
+        for model_id in pending.required_model_ids:
+            session._train_candidate(
+                model_id,
+                replay,
+                TrainingProgress(completed_optimizer_steps=generation * steps, optimizer_steps_per_generation=steps),
+                checkpoint_reference(tmp_path / 'models' / model_id, generation),
+            )
+        session.state.complete_quantum()
+        advances.append((session.state.candidate('medium').completed_optimizer_steps - before) // steps)
+
+    assert session.state.state.active_model_id == 'small'
+    assert advances == [1, 2, 1, 2]
+    assert session.state.candidate('small').completed_optimizer_steps == 4 * steps
     session.close()
 
 

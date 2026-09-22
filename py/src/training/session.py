@@ -266,8 +266,7 @@ class ProgressiveTrainingSession(TrainingSession):
             1
             if model_id == self.state.state.active_model_id
             else candidate_quanta_at(
-                candidate.completed_optimizer_steps,
-                self.optimizer_steps_per_quantum,
+                replay_source_progress.model_generation,
                 self.progressive_configuration.promotion.candidate_step_multiplier,
             )
         )

@@ -174,14 +174,14 @@ class PromotionLossComparison(FrozenModel):
     candidate_loss_ema: ComparableLossEma
 
 
-def candidate_quanta_at(completed_optimizer_steps: int, steps_per_quantum: int, multiplier: float) -> int:
-    """How many quanta a candidate trains in the generation that follows these steps.
+def candidate_quanta_at(generation: int, multiplier: float) -> int:
+    """How many quanta a candidate trains during the run's given generation.
 
     A quantum is indivisible, so a fractional multiplier alternates: at 1.5 the candidate trains one
-    quantum then two, averaging exactly 1.5. Deriving it from the candidate's own generation rather
-    than carrying a running remainder keeps it identical after a restart.
+    quantum then two, averaging exactly 1.5. The clock must be the run's generation, which advances
+    by one per call; reading the candidate's own generation makes the index advance by whatever this
+    returned and settle on a fixed point at the larger step count.
     """
-    generation = completed_optimizer_steps // steps_per_quantum
     return math.floor((generation + 1) * multiplier) - math.floor(generation * multiplier)
 
 
@@ -458,8 +458,7 @@ class ProgressiveTrainingStateStore:
             1
             if result.model_id == self.state.active_model_id
             else candidate_quanta_at(
-                candidate.completed_optimizer_steps,
-                quantum_steps,
+                pending.replay_batch.source_optimizer_steps // quantum_steps,
                 self.configuration.promotion.candidate_step_multiplier,
             )
         )
