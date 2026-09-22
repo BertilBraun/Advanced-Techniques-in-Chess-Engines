@@ -418,6 +418,17 @@ class ReplayStore:
         trailing = np.asarray(column[: state.size - first_span], dtype=np.float32)
         return np.concatenate((leading, trailing))
 
+    def logical_source_model_generations(self) -> npt.NDArray[np.uint32]:
+        """Read only the generation column across the live window, in logical order."""
+        column = self._column(ReplayColumnKey(ReplayColumnKind.SOURCE_MODEL_GENERATION))
+        state = self.state
+        first_span = min(state.size, state.maximum_capacity - state.head)
+        leading = np.asarray(column[state.head : state.head + first_span], dtype=np.uint32)
+        if first_span == state.size:
+            return leading.copy()
+        trailing = np.asarray(column[: state.size - first_span], dtype=np.uint32)
+        return np.concatenate((leading, trailing))
+
     def _eligibility_column(self, auxiliary_index: int) -> npt.NDArray[np.uint8]:
         key = ReplayColumnKey(ReplayColumnKind.AUXILIARY_ELIGIBLE, auxiliary_index)
         return np.asarray(self._column(key), dtype=np.uint8)

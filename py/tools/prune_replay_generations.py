@@ -39,7 +39,7 @@ def main() -> None:
     store = ReplayStore.open(replay_path, layout, writable=arguments.apply)
     try:
         state = store.state
-        generations = store.gather_logical(np.arange(state.size, dtype=np.int64)).source_model_generation
+        generations = store.logical_source_model_generations()
         contaminated = generations >= arguments.first_contaminated_generation
         print(f'window          : {state.size} rows, head {state.head}, appended {state.total_appended_rows}')
         print(f'generations     : {int(generations.min())} to {int(generations.max())}')
