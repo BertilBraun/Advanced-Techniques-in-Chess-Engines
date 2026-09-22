@@ -411,6 +411,12 @@ def run_probe(arguments: Arguments) -> DistillationMatchResult:
         raise ValueError('Distillation match requires a chess opening manifest.')
     if len(openings.openings) < arguments.opening_pair_count:
         raise ValueError('Opening manifest does not contain the requested number of opening pairs.')
+    # Without this the engines are built on device_id while the current device stays 0, and the
+    # first enqueue fails in Cask. The evaluation worker does the same before it constructs a game.
+    if experiment.training.topology.trainer.device_type == 'cuda':
+        import torch
+
+        torch.cuda.set_device(arguments.device_id)
     teacher = CheckpointReference.load_for_inference(arguments.teacher_run_state, arguments.teacher_generation)
     student = CheckpointReference.load_for_inference(arguments.student_run_state, arguments.student_generation)
     game = ChessImplementation(experiment)
