@@ -1,0 +1,33 @@
+extends: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml
+
+run:
+  run_name: vast-chess-8gpu-v98-catchup-floor
+  tensorboard_run_directory: vast-chess-8gpu-v98-catchup-floor
+  environment:
+    dependency_lock_sha256: a09c3c9697dbe690c874bac20ee8690a3904dd6b8bc8e6b5478c27d61ddd03aa
+  resume:
+    # The credit ledger overrides this on a restart that keeps the save path, but the coordinator
+    # still validates it first, so it must be a generation retention keeps: a multiple of six for
+    # the weights and of twenty for the inference artifact.
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_1020.json
+    generation: 1020
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  progressive_model_sizing:
+    promotion:
+      maximum_relative_loss: 1.0
+      candidate_step_multiplier: 1.5
+      # The active model's own schedule ended at generation 1000 and holds 0.01 forever. A catch-up
+      # schedule that also ends at 0.01 surrenders the candidate's advantage exactly when it still
+      # needs it, so this floors three times above the model it has to overtake.
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 600
+        start_value: 0.1
+        end_value: 0.03
+        rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v98-catchup-floor.stop
