@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 _COMMIT_REVISION = re.compile(r'^[0-9a-f]{40}$')
+_SHA256 = re.compile(r'^[0-9a-f]{64}$')
 _LATEST_REVISION = 'main'
 
 
@@ -15,6 +16,7 @@ class DeploymentConfiguration:
     hugging_face_repository_id: str
     hugging_face_revision: str
     inference_filename: str
+    inference_sha256: str
     allowed_origins: tuple[str, ...]
 
     @classmethod
@@ -22,6 +24,7 @@ class DeploymentConfiguration:
         repository_id = _required(environment, 'CHESS_MODEL_REPO_ID')
         revision = _required(environment, 'CHESS_MODEL_REVISION')
         inference_filename = _required(environment, 'CHESS_MODEL_INFERENCE_FILENAME')
+        inference_sha256 = _required(environment, 'CHESS_MODEL_SHA256')
         origins_text = _required(environment, 'CHESS_WEB_ALLOWED_ORIGINS')
 
         if '/' not in repository_id:
@@ -30,11 +33,13 @@ class DeploymentConfiguration:
             raise ValueError("CHESS_MODEL_REVISION must be 'main' or a full 40-character commit hash.")
         if not inference_filename.endswith(('.jit.pt', '.onnx')):
             raise ValueError('CHESS_MODEL_INFERENCE_FILENAME must name a .jit.pt or .onnx artifact.')
+        if _SHA256.fullmatch(inference_sha256) is None:
+            raise ValueError('CHESS_MODEL_SHA256 must be a lowercase SHA-256 digest.')
 
         origins = tuple(origin.strip().rstrip('/') for origin in origins_text.split(',') if origin.strip())
         if not origins or any(origin == '*' for origin in origins):
             raise ValueError('CHESS_WEB_ALLOWED_ORIGINS must contain explicit browser origins.')
-        return cls(repository_id, revision, inference_filename, origins)
+        return cls(repository_id, revision, inference_filename, inference_sha256, origins)
 
 
 class ArtifactDownloader(Protocol):

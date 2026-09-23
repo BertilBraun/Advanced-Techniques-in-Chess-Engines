@@ -14,6 +14,7 @@ def _environment() -> dict[str, str]:
         'CHESS_MODEL_REPO_ID': 'owner/chess-model',
         'CHESS_MODEL_REVISION': 'main',
         'CHESS_MODEL_INFERENCE_FILENAME': 'model.jit.pt',
+        'CHESS_MODEL_SHA256': '0' * 64,
         'CHESS_WEB_ALLOWED_ORIGINS': 'https://chess.example, http://localhost:5173/',
     }
 
@@ -67,6 +68,13 @@ def test_deployment_configuration_accepts_onnx_inference_artifact() -> None:
     environment['CHESS_MODEL_INFERENCE_FILENAME'] = 'model.int8.onnx'
     configuration = DeploymentConfiguration.from_environment(environment)
     assert configuration.inference_filename == 'model.int8.onnx'
+
+
+def test_deployment_configuration_rejects_invalid_model_digest() -> None:
+    environment = _environment()
+    environment['CHESS_MODEL_SHA256'] = 'not-a-sha256'
+    with pytest.raises(ValueError, match='CHESS_MODEL_SHA256'):
+        DeploymentConfiguration.from_environment(environment)
 
 
 def test_download_rejects_an_unresolved_revision() -> None:

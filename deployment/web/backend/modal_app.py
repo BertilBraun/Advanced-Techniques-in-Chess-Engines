@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import chess
@@ -10,7 +11,7 @@ from fastapi import FastAPI
 _REMOTE_ROOT = '/opt/chess'
 _TENSORRT_CACHE_ROOT = '/cache/tensorrt'
 _GPU_SINGLE_POSITION_WARMUPS = 2
-_GPU_WARMUP_SEARCHES = 4096
+_GPU_WARMUP_SEARCHES = 256
 _INFERENCE_BATCH_SIZE = 64
 _INPUT_CHANNELS = 52
 _BOARD_ROWS = 8
@@ -82,8 +83,8 @@ tensor_rt_cache = modal.Volume.from_name('chess-web-play-tensorrt-cache', create
 class ChessWebPlay:
     @modal.enter()
     def load_engine(self) -> None:
+        startup_started = time.perf_counter()
         import torch
-        from huggingface_hub import HfApi, hf_hub_download
         from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnalysis
         from src.games.chess.interactive.configuration import (
             InferenceTarget,
@@ -93,50 +94,64 @@ class ChessWebPlay:
         from src.games.chess.interactive.engine import InteractiveEngine
 
         from deployment.web.backend.api import create_app
-        from deployment.web.backend.artifacts import (
-            DeploymentConfiguration,
-            download_model_artifact,
-        )
+        from deployment.web.backend.artifacts import DeploymentConfiguration
         from deployment.web.backend.service import GameService
-        from deployment.web.backend.tensorrt_cache import prepare_cached_tensorrt_engine
-        from deployment.web.backend.tensorrt_runtime import (
-            build_and_verify_tensorrt_engine,
-            modal_runtime_identity,
+        from deployment.web.backend.tensorrt_cache import (
+            build_cached_tensorrt_engine,
+            create_tensorrt_cache_identity,
+            find_cached_tensorrt_engine,
         )
+        from deployment.web.backend.tensorrt_identity import modal_runtime_identity
 
         configuration = DeploymentConfiguration.from_environment(os.environ)
-        hugging_face_token = os.environ.get('HF_TOKEN')
-        model_information = HfApi().model_info(
-            repo_id=configuration.hugging_face_repository_id,
-            revision=configuration.hugging_face_revision,
-            token=hugging_face_token,
-        )
-        resolved_revision = model_information.sha
-        if resolved_revision is None:
-            raise ValueError('Hugging Face returned no resolved model revision.')
-        model_path = download_model_artifact(
-            configuration=configuration,
-            resolved_revision=resolved_revision,
-            token=hugging_face_token,
-            downloader=hf_hub_download,
-        )
         if not torch.cuda.is_available():
             raise RuntimeError('The GPU deployment cannot access CUDA.')
-        cached_engine = prepare_cached_tensorrt_engine(
-            source_path=model_path,
-            cache_root=Path(_TENSORRT_CACHE_ROOT),
+        cache_identity = create_tensorrt_cache_identity(
+            source_sha256=configuration.inference_sha256,
             runtime=modal_runtime_identity(),
-            build_engine=build_and_verify_tensorrt_engine,
             batch_size=_INFERENCE_BATCH_SIZE,
             channels=_INPUT_CHANNELS,
             rows=_BOARD_ROWS,
             columns=_BOARD_COLUMNS,
             builder_optimization_level=_TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
         )
-        if cached_engine.built:
+        cached_engine = find_cached_tensorrt_engine(Path(_TENSORRT_CACHE_ROOT), cache_identity)
+        if cached_engine is None:
+            from huggingface_hub import HfApi, hf_hub_download
+            from src.util.hashing import file_sha256
+
+            from deployment.web.backend.artifacts import download_model_artifact
+            from deployment.web.backend.tensorrt_runtime import build_and_verify_tensorrt_engine
+
+            hugging_face_token = os.environ.get('HF_TOKEN')
+            model_information = HfApi().model_info(
+                repo_id=configuration.hugging_face_repository_id,
+                revision=configuration.hugging_face_revision,
+                token=hugging_face_token,
+            )
+            resolved_revision = model_information.sha
+            if resolved_revision is None:
+                raise ValueError('Hugging Face returned no resolved model revision.')
+            model_path = download_model_artifact(
+                configuration=configuration,
+                resolved_revision=resolved_revision,
+                token=hugging_face_token,
+                downloader=hf_hub_download,
+            )
+            if file_sha256(model_path) != configuration.inference_sha256:
+                raise ValueError('The downloaded inference artifact does not match CHESS_MODEL_SHA256.')
+            cached_engine = build_cached_tensorrt_engine(
+                source_path=model_path,
+                cache_root=Path(_TENSORRT_CACHE_ROOT),
+                identity=cache_identity,
+                build_engine=build_and_verify_tensorrt_engine,
+            )
             tensor_rt_cache.commit()
         cache_status = 'built and cached' if cached_engine.built else 'loaded from cache'
-        print(f'Loading {cache_status} TensorRT engine on {torch.cuda.get_device_name(0)}.')
+        print(
+            f'Loading {cache_status} TensorRT engine on {torch.cuda.get_device_name(0)} '
+            f'after {time.perf_counter() - startup_started:.1f} seconds.'
+        )
         engine = InteractiveEngine(
             InteractiveEngineConfiguration(
                 model_path=str(cached_engine.path),
@@ -153,7 +168,8 @@ class ChessWebPlay:
         )
         print(
             f'Warmed TensorRT inference with {warmup_result.searches} searches '
-            f'in {warmup_result.elapsed_milliseconds} ms.'
+            f'in {warmup_result.elapsed_milliseconds} ms; startup completed in '
+            f'{time.perf_counter() - startup_started:.1f} seconds.'
         )
         self._web_application = create_app(GameService(engine), configuration.allowed_origins)
 

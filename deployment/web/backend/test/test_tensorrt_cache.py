@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from deployment.web.backend.tensorrt_cache import TensorRtRuntimeIdentity, prepare_cached_tensorrt_engine
+from src.util.hashing import file_sha256
+
+from deployment.web.backend.tensorrt_cache import (
+    TensorRtRuntimeIdentity,
+    create_tensorrt_cache_identity,
+    find_cached_tensorrt_engine,
+    prepare_cached_tensorrt_engine,
+)
 
 
 def _runtime() -> TensorRtRuntimeIdentity:
@@ -61,6 +68,51 @@ def test_reuses_valid_cached_engine(tmp_path: Path) -> None:
     assert second.built is False
     assert second.path == first.path
     assert builds == [first.path]
+
+
+def test_finds_cached_engine_from_pinned_source_digest(tmp_path: Path) -> None:
+    source_path = tmp_path / 'model.onnx'
+    source_path.write_bytes(b'model-one')
+
+    def build_engine(
+        source: Path,
+        output: Path,
+        batch_size: int,
+        channels: int,
+        rows: int,
+        columns: int,
+        optimization_level: int,
+    ) -> None:
+        del source, batch_size, channels, rows, columns, optimization_level
+        output.write_bytes(b'engine-one')
+
+    built = prepare_cached_tensorrt_engine(
+        source_path,
+        tmp_path / 'cache',
+        _runtime(),
+        build_engine,
+        64,
+        52,
+        8,
+        8,
+        3,
+    )
+    identity = create_tensorrt_cache_identity(
+        source_sha256=file_sha256(source_path),
+        runtime=_runtime(),
+        batch_size=64,
+        channels=52,
+        rows=8,
+        columns=8,
+        builder_optimization_level=3,
+    )
+    source_path.unlink()
+
+    cached = find_cached_tensorrt_engine(tmp_path / 'cache', identity)
+
+    assert cached is not None
+    assert cached.built is False
+    assert cached.path == built.path
 
 
 def test_rebuilds_tampered_cached_engine(tmp_path: Path) -> None:

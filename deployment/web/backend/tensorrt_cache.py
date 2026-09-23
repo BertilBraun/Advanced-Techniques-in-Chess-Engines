@@ -57,8 +57,31 @@ def prepare_cached_tensorrt_engine(
     columns: int,
     builder_optimization_level: int,
 ) -> CachedTensorRtEngine:
-    source_sha256 = file_sha256(source_path)
-    identity = TensorRtEngineCacheIdentity(
+    identity = create_tensorrt_cache_identity(
+        source_sha256=file_sha256(source_path),
+        runtime=runtime,
+        batch_size=batch_size,
+        channels=channels,
+        rows=rows,
+        columns=columns,
+        builder_optimization_level=builder_optimization_level,
+    )
+    cached_engine = find_cached_tensorrt_engine(cache_root, identity)
+    if cached_engine is not None:
+        return cached_engine
+    return build_cached_tensorrt_engine(source_path, cache_root, identity, build_engine)
+
+
+def create_tensorrt_cache_identity(
+    source_sha256: str,
+    runtime: TensorRtRuntimeIdentity,
+    batch_size: int,
+    channels: int,
+    rows: int,
+    columns: int,
+    builder_optimization_level: int,
+) -> TensorRtEngineCacheIdentity:
+    return TensorRtEngineCacheIdentity(
         source_sha256=source_sha256,
         batch_size=batch_size,
         channels=channels,
@@ -67,6 +90,12 @@ def prepare_cached_tensorrt_engine(
         builder_optimization_level=builder_optimization_level,
         runtime=runtime,
     )
+
+
+def find_cached_tensorrt_engine(
+    cache_root: Path,
+    identity: TensorRtEngineCacheIdentity,
+) -> CachedTensorRtEngine | None:
     cache_key = hashlib.sha256(identity.model_dump_json().encode('utf-8')).hexdigest()
     cache_directory = cache_root / cache_key
     engine_path = cache_directory / 'model.engine'
@@ -74,16 +103,29 @@ def prepare_cached_tensorrt_engine(
 
     if _valid_cached_engine(engine_path, metadata_path, identity):
         return CachedTensorRtEngine(path=engine_path, built=False)
+    return None
+
+
+def build_cached_tensorrt_engine(
+    source_path: Path,
+    cache_root: Path,
+    identity: TensorRtEngineCacheIdentity,
+    build_engine: TensorRtEngineBuilder,
+) -> CachedTensorRtEngine:
+    cache_key = hashlib.sha256(identity.model_dump_json().encode('utf-8')).hexdigest()
+    cache_directory = cache_root / cache_key
+    engine_path = cache_directory / 'model.engine'
+    metadata_path = cache_directory / 'metadata.json'
 
     cache_directory.mkdir(parents=True, exist_ok=True)
     build_engine(
         source_path,
         engine_path,
-        batch_size,
-        channels,
-        rows,
-        columns,
-        builder_optimization_level,
+        identity.batch_size,
+        identity.channels,
+        identity.rows,
+        identity.columns,
+        identity.builder_optimization_level,
     )
     metadata = TensorRtEngineCacheMetadata(identity=identity, engine_sha256=file_sha256(engine_path))
     write_text_atomically(metadata_path, metadata.model_dump_json(indent=2) + '\n')
