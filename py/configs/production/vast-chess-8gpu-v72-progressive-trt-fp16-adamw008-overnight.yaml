@@ -37,9 +37,10 @@ training:
       kind: elapsed
       start_days: [0.04]
     promotion:
-      decay: 0.8
-      warmup_quanta: 10
-      maximum_relative_loss: 1.005
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       candidate_catchup_learning_rate: 0.004
   limits:
     maximum_wall_time_seconds: null

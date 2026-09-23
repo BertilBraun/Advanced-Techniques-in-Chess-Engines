@@ -31,6 +31,9 @@ from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.implementation import GameImplementation
 from src.self_play.completed_game import TerminationReason
 from src.self_play.native_search import NativeSelfPlaySearch
+from src.util.log import log
+
+PROGRESS_INTERVAL_SECONDS = 60.0
 
 PositionT = TypeVar('PositionT')
 NativeSearchT = TypeVar('NativeSearchT', bound=NativeSelfPlaySearch)
@@ -366,6 +369,7 @@ def run_concurrent_matches(
     bootstrap_samples: int,
     device_type: Literal['cpu', 'cuda'],
     candidate_selector: MatchActionSelector[PositionT] | None = None,
+    progress_interval_seconds: float = PROGRESS_INTERVAL_SECONDS,
 ) -> tuple[MatchEvaluationResult, ...]:
     """One shared candidate selector plays every group, so a single inference batch spans all of them."""
     if not groups:
@@ -389,6 +393,8 @@ def run_concurrent_matches(
         )
         for group in groups
     ]
+    plies = 0
+    reported_at = started_at
     while any(state.active for state in states):
         partitioned = tuple(_partition_turns(game.state, state.active) for state in states)
         candidate_turns = tuple(turns for turns, _ in partitioned)
@@ -425,6 +431,21 @@ def run_concurrent_matches(
             state.completed.extend(newly_completed)
             if newly_completed:
                 state.finished_at = time.monotonic()
+        plies += 1
+        now = time.monotonic()
+        # A match at a large search budget runs for hours inside this loop; without a heartbeat there
+        # is no way to tell a slow evaluation from a hung one.
+        if progress_interval_seconds > 0 and now - reported_at >= progress_interval_seconds:
+            reported_at = now
+            done = sum(len(state.completed) for state in states)
+            total = sum(len(state.completed) + len(state.active) for state in states)
+            elapsed = now - started_at
+            rate = done / elapsed if elapsed > 0 else 0.0
+            remaining = f'{(total - done) / rate / 60:.0f} min' if rate > 0 else 'unknown'
+            log(
+                f'Match progress: {done}/{total} games, {plies} plies, '
+                f'{elapsed / 60:.1f} min elapsed, {remaining} remaining.'
+            )
     results: list[MatchEvaluationResult] = []
     for state in states:
         ordered = tuple(sorted(state.completed, key=lambda result: result.game_index))

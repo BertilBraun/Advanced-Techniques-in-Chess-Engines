@@ -645,6 +645,12 @@ def _run_concurrent_shard_rungs(request: _ShardRequest, context: _ShardContext) 
 
 
 def _run_shard(request: _ShardRequest) -> tuple[GauntletShardResult, ...]:
+    # Each shard owns one GPU, but a pool worker starts on device 0: without this the engine is
+    # built on device_id while the current device is still 0, and the first enqueue fails in Cask.
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.set_device(request.device_id)
     context = _shard_context(request)
     if isinstance(request.model_search_budget, TimedModelSearchBudget):
         return _run_timed_shard_rungs(request, context)
@@ -913,8 +919,10 @@ def parse_arguments() -> Arguments:
         or (arguments.match_random_seed is not None and arguments.match_random_seed < 0)
     ):
         raise ValueError('Checkpoint generation, match seed, and device IDs must be nonnegative.')
-    if not arguments.devices or len(set(arguments.devices)) != len(arguments.devices):
-        raise ValueError('Gauntlet devices must be nonempty and unique.')
+    # A device may repeat: one shard per GPU leaves the GPU idle while its single Stockfish replies,
+    # and the opponent is one process per shard, so several shards on a GPU is how the CPU fills.
+    if not arguments.devices:
+        raise ValueError('Gauntlet devices must be nonempty.')
     if arguments.output_directory.exists():
         raise ValueError(f'Gauntlet output directory already exists: {arguments.output_directory}')
     _search_configuration(arguments.model_search_budget, TorchScriptInferenceBackend())

@@ -89,7 +89,7 @@ STUDENT_ARGUMENTS = Arguments(
     evaluate_every=200,
     checkpoint_every=0,
     distil_auxiliary_heads=(),
-    device_id=0,
+    device_ids=(0,),
     random_seed=1,
     generation=0,
 )

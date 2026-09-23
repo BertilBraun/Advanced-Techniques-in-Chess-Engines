@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.evaluation.ladder import PrimaryLadderEloObservation
+from src.evaluation.ladder import CandidateMatchObservation, PrimaryLadderEloObservation
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
 from src.replay.description import ReplayDescription
@@ -81,6 +81,16 @@ class TrainingSession(ABC):
         return None
 
     def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
+        return None
+
+    @property
+    def promotion_candidate_checkpoint(self) -> CheckpointReference | None:
+        return None
+
+    def observe_candidate_matches(self, observations: tuple[CandidateMatchObservation, ...]) -> None:
+        return None
+
+    def pin_candidate_checkpoints(self, checkpoints: tuple[CheckpointReference, ...]) -> None:
         return None
 
     @abstractmethod
@@ -173,6 +183,7 @@ class ProgressiveTrainingSession(TrainingSession):
             progressive_configuration,
         )
         self.trainers: dict[str, TrainerGroup] = {}
+        self._pinned_candidate_checkpoints: tuple[CheckpointReference, ...] = ()
         match self.state.state.candidate_start:
             case (EloPlateauCandidateStartState() | StagedEloPlateauCandidateStartState()) as candidate_start:
                 self._record_candidate_start_state(candidate_start)
@@ -216,7 +227,7 @@ class ProgressiveTrainingSession(TrainingSession):
             self.run_path,
         )
         self.state.complete_quantum()
-        retain_progressive_candidate_checkpoints(self.run_path, self.state.state)
+        retain_progressive_candidate_checkpoints(self.run_path, self.state.state, self._pinned_candidate_checkpoints)
         return ProgressiveTrainingSessionResult(
             publication=TrainingPublication(
                 completed_optimizer_steps=pending.target_global_optimizer_steps,
@@ -226,6 +237,36 @@ class ProgressiveTrainingSession(TrainingSession):
             active_model_index=self._model_index(active_model_id),
             model_results=tuple(model_results),
         )
+
+    def pin_candidate_checkpoints(self, checkpoints: tuple[CheckpointReference, ...]) -> None:
+        self._pinned_candidate_checkpoints = checkpoints
+
+    @property
+    def promotion_candidate_checkpoint(self) -> CheckpointReference | None:
+        successor = self.progressive_configuration.successor(self.state.state.active_model_id)
+        if successor is None:
+            return None
+        return self.state.candidate(successor.model_id).checkpoint
+
+    def observe_candidate_matches(self, observations: tuple[CandidateMatchObservation, ...]) -> None:
+        gate = self.state.observe_candidate_matches(observations)
+        if gate is None or not gate.recent_observations:
+            return None
+        latest = gate.recent_observations[-1]
+        log_scalar('promotion/candidate_match_score', latest.score, latest.boundary_seconds)
+        log_scalar('promotion/candidate_match_games', latest.games, latest.boundary_seconds)
+        log_scalar('promotion/consecutive_passes', gate.consecutive_passes, latest.boundary_seconds)
+        log_scalar(
+            'promotion/required_passes',
+            self.progressive_configuration.promotion.candidate_match_gate.consecutive_evaluations,
+            latest.boundary_seconds,
+        )
+        log_scalar(
+            'promotion/minimum_score',
+            self.progressive_configuration.promotion.candidate_match_gate.minimum_score,
+            latest.boundary_seconds,
+        )
+        return None
 
     def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
         for update in self.state.observe_primary_ladder_elos(observations):
@@ -291,7 +332,6 @@ class ProgressiveTrainingSession(TrainingSession):
                 model_id=model_id,
                 completed_optimizer_steps=result.completed_optimizer_steps,
                 checkpoint=result.checkpoint,
-                comparable_total_loss=result.statistics.total_loss,
             )
         )
         return ModelTrainingResult(model_id=model_id, result=result)

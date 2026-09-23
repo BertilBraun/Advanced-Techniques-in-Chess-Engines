@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 import src.training.coordinator as coordinator_module
-from src.evaluation.ladder import PrimaryLadderEloObservation
+from src.evaluation.ladder import CandidateMatchObservation, PrimaryLadderEloObservation
 from src.replay.manager import ReplayIngestion
 from src.self_play.protocol import (
     RunningSelfPlayState,
@@ -92,13 +92,25 @@ class _EvaluationManager:
     def completed_primary_ladder_elos(self) -> tuple[PrimaryLadderEloObservation, ...]:
         return ()
 
+    @property
+    def completed_candidate_matches(self) -> tuple[CandidateMatchObservation, ...]:
+        return ()
+
+    @property
+    def pending_candidate_checkpoints(self) -> tuple[CheckpointReference, ...]:
+        return ()
+
     def start(self) -> None:
         pass
 
     def collect_completed_jobs(self) -> None:
         pass
 
-    def schedule_due_jobs(self, checkpoint: CheckpointReference) -> None:
+    def schedule_due_jobs(
+        self,
+        checkpoint: CheckpointReference,
+        progressive_candidate: CheckpointReference | None = None,
+    ) -> None:
         del checkpoint
 
     def close(self) -> None:
@@ -175,6 +187,16 @@ class _TrainingSession:
 
     def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
         del observations
+
+    def observe_candidate_matches(self, observations: tuple[CandidateMatchObservation, ...]) -> None:
+        del observations
+
+    def pin_candidate_checkpoints(self, checkpoints: tuple[CheckpointReference, ...]) -> None:
+        del checkpoints
+
+    @property
+    def promotion_candidate_checkpoint(self) -> CheckpointReference | None:
+        return None
 
     def close(self) -> None:
         pass

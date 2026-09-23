@@ -188,6 +188,18 @@ class PreviousCheckpointEvaluationDefinition(PairedMatchEvaluationDefinition):
     search: EvaluationSearchConfiguration
 
 
+class ProgressiveCandidateEvaluationDefinition(PairedMatchEvaluationDefinition):
+    """Plays the progressive candidate against the active model, to gate its promotion.
+
+    The candidate is not a published checkpoint, so this is the one definition whose candidate is
+    not the boundary's own model; it is skipped entirely while no candidate is training.
+    """
+
+    kind: Literal['progressive_candidate']
+    definition_id: str = Field(min_length=1)
+    search: EvaluationSearchConfiguration
+
+
 class ReferenceCheckpointEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['reference_checkpoint']
     definition_id: str = Field(min_length=1)
@@ -248,6 +260,7 @@ EvaluationDefinition: TypeAlias = Annotated[
     | RandomOpponentEvaluationDefinition
     | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
+    | ProgressiveCandidateEvaluationDefinition
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | StockfishFixedNodesEvaluationDefinition
@@ -260,6 +273,7 @@ MatchEvaluationDefinition: TypeAlias = Annotated[
     RandomOpponentEvaluationDefinition
     | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
+    | ProgressiveCandidateEvaluationDefinition
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | StockfishFixedNodesEvaluationDefinition

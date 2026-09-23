@@ -32,6 +32,10 @@ training:
       kind: elapsed
       start_days: [0.02, 0.05]
     promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       candidate_catchup_learning_rate: 0.1
   limits:
     maximum_cost: null

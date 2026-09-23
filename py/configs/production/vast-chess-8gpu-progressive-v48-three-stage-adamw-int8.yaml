@@ -73,9 +73,10 @@ training:
       - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
         minimum_worthwhile_gain_per_hour: 3.0
     promotion:
-      decay: 0.8
-      warmup_quanta: 10
-      maximum_relative_loss: 1.002
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
       candidate_catchup_learning_rate: 0.004
 
 chess:

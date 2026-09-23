@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
-from src.evaluation.ladder import PrimaryLadderEloObservation
+from src.evaluation.ladder import CandidateMatchObservation, PrimaryLadderEloObservation
 from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration
@@ -81,10 +81,20 @@ CandidateStartConfiguration: TypeAlias = Annotated[
 ]
 
 
-class TotalLossEmaPromotionConfiguration(FrozenModel):
-    decay: float = Field(gt=0.0, lt=1.0, allow_inf_nan=False)
-    warmup_quanta: int = Field(gt=0)
-    maximum_relative_loss: float = Field(default=1.01, ge=1.0, allow_inf_nan=False)
+class CandidateMatchGateConfiguration(FrozenModel):
+    """What the candidate must prove over the board before it replaces the active model.
+
+    Training loss cannot decide this: a candidate trained at a step multiplier sees each replay
+    sample more often than the model it must overtake, so its loss is lower at equal strength.
+    """
+
+    definition_id: str = Field(min_length=1)
+    minimum_score: float = Field(gt=0.0, le=1.0, allow_inf_nan=False)
+    consecutive_evaluations: int = Field(gt=0)
+
+
+class PromotionConfiguration(FrozenModel):
+    candidate_match_gate: CandidateMatchGateConfiguration
     # A schedule here runs on the candidate's own clock: its generation zero is the quantum it began
     # training, not the run's. A bare number is still accepted and stays constant, as before.
     candidate_catchup_learning_rate: FloatGenerationSchedule
@@ -112,7 +122,7 @@ class ProgressiveModelSizingConfiguration(FrozenModel):
     kind: Literal['progressive']
     models: tuple[ProgressiveModelDefinition, ...] = Field(min_length=2)
     candidate_start: CandidateStartConfiguration
-    promotion: TotalLossEmaPromotionConfiguration
+    promotion: PromotionConfiguration
 
     @model_validator(mode='after')
     def validate_models(self) -> ProgressiveModelSizingConfiguration:
@@ -155,25 +165,6 @@ ModelSizingConfiguration: TypeAlias = Annotated[
 ]
 
 
-class ComparableLossEma(FrozenModel):
-    value: float = Field(ge=0.0, allow_inf_nan=False)
-    observations: int = Field(gt=0)
-
-    def update(self, loss: float, decay: float) -> ComparableLossEma:
-        if loss < 0.0:
-            raise ValueError('Comparable training loss cannot be negative.')
-        return ComparableLossEma(
-            value=decay * self.value + (1.0 - decay) * loss,
-            observations=self.observations + 1,
-        )
-
-
-class PromotionLossComparison(FrozenModel):
-    active_model_id: str
-    active_loss_ema: ComparableLossEma
-    candidate_loss_ema: ComparableLossEma
-
-
 def candidate_quanta_at(generation: int, multiplier: float) -> int:
     """How many quanta a candidate trains during the run's given generation.
 
@@ -189,8 +180,6 @@ class ProgressiveCandidateState(FrozenModel):
     model_id: str
     completed_optimizer_steps: int = Field(default=0, ge=0)
     checkpoint: CheckpointReference | None = None
-    training_loss_ema: ComparableLossEma | None = None
-    promotion_comparison: PromotionLossComparison | None = None
 
 
 class EloEmaSample(FrozenModel):
@@ -271,7 +260,6 @@ class CompletedCandidateTraining(FrozenModel):
     model_id: str
     completed_optimizer_steps: int = Field(gt=0)
     checkpoint: CheckpointReference
-    comparable_total_loss: float = Field(ge=0.0, allow_inf_nan=False)
 
 
 class PendingProgressiveQuantum(FrozenModel):
@@ -294,12 +282,21 @@ class PendingProgressiveQuantum(FrozenModel):
         return self.required_model_ids[len(self.completed)]
 
 
+class CandidateMatchGateState(FrozenModel):
+    active_model_id: str
+    candidate_model_id: str
+    consecutive_passes: int = Field(default=0, ge=0)
+    latest_boundary_seconds: int = Field(default=0, ge=0)
+    recent_observations: tuple[CandidateMatchObservation, ...] = ()
+
+
 class ProgressiveTrainingState(FrozenModel):
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     active_model_id: str
     candidates: tuple[ProgressiveCandidateState, ...]
     candidate_start: CandidateStartState
     pending_quantum: PendingProgressiveQuantum | None = None
+    match_gate: CandidateMatchGateState | None = None
 
 
 class ProgressiveTrainingStateStore:
@@ -472,17 +469,53 @@ class ProgressiveTrainingStateStore:
         self.state = self.state.validated_copy(update={'pending_quantum': pending})
         self.save()
 
+    def observe_candidate_matches(
+        self,
+        observations: tuple[CandidateMatchObservation, ...],
+    ) -> CandidateMatchGateState | None:
+        successor = self.configuration.successor(self.state.active_model_id)
+        if successor is None:
+            return None
+        gate = self.state.match_gate
+        if gate is None or gate.active_model_id != self.state.active_model_id:
+            gate = CandidateMatchGateState(
+                active_model_id=self.state.active_model_id,
+                candidate_model_id=successor.model_id,
+            )
+        minimum_score = self.configuration.promotion.candidate_match_gate.minimum_score
+        for observation in sorted(observations, key=lambda item: item.boundary_seconds):
+            if observation.boundary_seconds <= gate.latest_boundary_seconds:
+                continue
+            # A run of passes must be unbroken: one failure is evidence the candidate is not there
+            # yet, and starting again is what keeps a lucky pair of results from promoting it.
+            passes = gate.consecutive_passes + 1 if observation.score >= minimum_score else 0
+            gate = gate.validated_copy(
+                update={
+                    'consecutive_passes': passes,
+                    'latest_boundary_seconds': observation.boundary_seconds,
+                    'recent_observations': (*gate.recent_observations, observation)[
+                        -self.configuration.promotion.candidate_match_gate.consecutive_evaluations :
+                    ],
+                }
+            )
+        if gate == self.state.match_gate:
+            return gate
+        self.state = self.state.validated_copy(update={'match_gate': gate})
+        self.save()
+        return gate
+
     def complete_quantum(self) -> str:
         pending = self.state.pending_quantum
         if pending is None or pending.next_model_id is not None:
             raise ValueError('Every required progressive model must finish before completing the quantum.')
         candidates = self._completed_candidate_states(pending)
-        active_model_id = self._promoted_model_id(candidates)
+        active_model_id = self._promoted_model_id()
         candidate_start = self._candidate_start_after_promotion(active_model_id)
         self.state = ProgressiveTrainingState(
             active_model_id=active_model_id,
             candidates=candidates,
             candidate_start=candidate_start,
+            match_gate=None if active_model_id != self.state.active_model_id else self.state.match_gate,
         )
         self.save()
         return active_model_id
@@ -491,7 +524,7 @@ class ProgressiveTrainingStateStore:
         pending = self.state.pending_quantum
         if pending is None or pending.next_model_id is not None:
             raise ValueError('Every required progressive model must finish before selecting publication.')
-        return self._promoted_model_id(self._completed_candidate_states(pending))
+        return self._promoted_model_id()
 
     def completed_result(self, model_id: str) -> CompletedCandidateTraining:
         pending = self.state.pending_quantum
@@ -513,80 +546,33 @@ class ProgressiveTrainingStateStore:
         pending: PendingProgressiveQuantum,
     ) -> tuple[ProgressiveCandidateState, ...]:
         results = {result.model_id: result for result in pending.completed}
-        candidates: list[ProgressiveCandidateState] = []
-        for candidate in self.state.candidates:
-            result = results.get(candidate.model_id)
-            if result is None:
-                candidates.append(candidate)
-                continue
-            ema = candidate.training_loss_ema
-            updated_ema = (
-                ComparableLossEma(value=result.comparable_total_loss, observations=1)
-                if ema is None
-                else ema.update(result.comparable_total_loss, self.configuration.promotion.decay)
-            )
-            candidates.append(
-                candidate.validated_copy(
-                    update={
-                        'completed_optimizer_steps': result.completed_optimizer_steps,
-                        'checkpoint': result.checkpoint,
-                        'training_loss_ema': updated_ema,
-                    }
-                )
-            )
-        completed_candidates = tuple(candidates)
-        successor = self.configuration.successor(self.state.active_model_id)
-        if successor is None or successor.model_id not in results:
-            return completed_candidates
-        active_loss = results[self.state.active_model_id].comparable_total_loss
-        candidate_loss = results[successor.model_id].comparable_total_loss
-        successor_state = next(item for item in completed_candidates if item.model_id == successor.model_id)
-        comparison = successor_state.promotion_comparison
-        if comparison is None or comparison.active_model_id != self.state.active_model_id:
-            comparison = PromotionLossComparison(
-                active_model_id=self.state.active_model_id,
-                active_loss_ema=ComparableLossEma(value=active_loss, observations=1),
-                candidate_loss_ema=ComparableLossEma(value=candidate_loss, observations=1),
-            )
-        else:
-            comparison = comparison.validated_copy(
+        return tuple(
+            candidate
+            if candidate.model_id not in results
+            else candidate.validated_copy(
                 update={
-                    'active_loss_ema': comparison.active_loss_ema.update(
-                        active_loss,
-                        self.configuration.promotion.decay,
-                    ),
-                    'candidate_loss_ema': comparison.candidate_loss_ema.update(
-                        candidate_loss,
-                        self.configuration.promotion.decay,
-                    ),
+                    'completed_optimizer_steps': results[candidate.model_id].completed_optimizer_steps,
+                    'checkpoint': results[candidate.model_id].checkpoint,
                 }
             )
-        return tuple(
-            item.validated_copy(update={'promotion_comparison': comparison})
-            if item.model_id == successor.model_id
-            else item
-            for item in completed_candidates
+            for candidate in self.state.candidates
         )
 
     def save(self) -> None:
         write_text_atomically(self.path, self.state.model_dump_json(indent=2) + '\n')
 
-    def _promoted_model_id(self, candidates: tuple[ProgressiveCandidateState, ...]) -> str:
+    def _promoted_model_id(self) -> str:
         successor = self.configuration.successor(self.state.active_model_id)
         if successor is None:
             return self.state.active_model_id
-        by_id = {candidate.model_id: candidate for candidate in candidates}
-        candidate = by_id[successor.model_id]
-        comparison = candidate.promotion_comparison
-        warmup = self.configuration.promotion.warmup_quanta
-        if comparison is None or comparison.candidate_loss_ema.observations < warmup:
+        gate = self.state.match_gate
+        if gate is None or gate.active_model_id != self.state.active_model_id:
             return self.state.active_model_id
-        if (
-            comparison.candidate_loss_ema.value
-            <= comparison.active_loss_ema.value * self.configuration.promotion.maximum_relative_loss
-        ):
-            return successor.model_id
-        return self.state.active_model_id
+        if gate.candidate_model_id != successor.model_id:
+            return self.state.active_model_id
+        if gate.consecutive_passes < self.configuration.promotion.candidate_match_gate.consecutive_evaluations:
+            return self.state.active_model_id
+        return successor.model_id
 
     def _validate_state(self, state: ProgressiveTrainingState) -> None:
         expected_ids = tuple(model.model_id for model in self.configuration.models)
@@ -696,7 +682,11 @@ class ProgressiveTrainingStateStore:
                 raise ValueError('Persisted candidate-start policy does not match configuration.')
 
 
-def retain_progressive_candidate_checkpoints(run_path: Path, state: ProgressiveTrainingState) -> None:
+def retain_progressive_candidate_checkpoints(
+    run_path: Path,
+    state: ProgressiveTrainingState,
+    pinned: tuple[CheckpointReference, ...] = (),
+) -> None:
     models_path = run_path / 'models'
     if not models_path.is_dir():
         return
@@ -707,6 +697,10 @@ def retain_progressive_candidate_checkpoints(run_path: Path, state: ProgressiveT
     if state.pending_quantum is not None:
         for completed in state.pending_quantum.completed:
             retained_paths.update(_checkpoint_paths(completed.checkpoint))
+    # A promotion match runs in another process against a candidate checkpoint the next generation
+    # would otherwise delete underneath it.
+    for checkpoint in pinned:
+        retained_paths.update(_checkpoint_paths(checkpoint))
     for model_path in models_path.iterdir():
         if not model_path.is_dir():
             continue

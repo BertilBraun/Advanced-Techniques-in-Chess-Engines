@@ -13,6 +13,7 @@ from src.evaluation.configuration import (
     PairedMatchEvaluationDefinition,
     PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
+    ProgressiveCandidateEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
     StockfishAdaptiveNodesEvaluationDefinition,
@@ -165,8 +166,26 @@ def _job_for_definition(
     context: _EvaluationJobContext,
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
     adaptive_nodes: int | None,
+    progressive_candidate: CheckpointReference | None,
 ) -> EvaluationJob | None:
     match definition:
+        case ProgressiveCandidateEvaluationDefinition():
+            if progressive_candidate is None:
+                return None
+            # The sides are swapped against every other definition: the boundary's own model is the
+            # opponent here, because the thing being measured is the candidate that would replace it.
+            return MatchEvaluationJob(
+                kind='match',
+                job_id=context.job_id,
+                definition=definition,
+                boundary_seconds=context.boundary_seconds,
+                candidate=progressive_candidate,
+                opponent=CheckpointOpponent(kind='checkpoint', checkpoint=suite.checkpoint),
+                device_id=context.device_id,
+                deadline_seconds=context.deadline_seconds,
+                random_seed=context.random_seed,
+                result_path=context.result_path,
+            )
         case FixedDatasetEvaluationDefinition():
             return FixedDatasetEvaluationJob(
                 kind='fixed_dataset',
@@ -247,6 +266,7 @@ def jobs_for_suite(
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     next_device_index: int,
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
+    progressive_candidate: CheckpointReference | None = None,
 ) -> tuple[tuple[EvaluationJob, ...], int]:
     jobs: list[EvaluationJob] = []
     configuration = experiment.evaluation
@@ -290,6 +310,7 @@ def jobs_for_suite(
                 context,
                 adaptive_stockfish_rungs,
                 adaptive_nodes,
+                progressive_candidate,
             )
             if job is None:
                 continue
@@ -315,7 +336,8 @@ def required_checkpoint_generations(
         suite.checkpoint.generation for suite in recent_suites
     }
     for job in pending_jobs:
-        required.add(job.candidate.generation)
+        if not isinstance(getattr(job, 'definition', None), ProgressiveCandidateEvaluationDefinition):
+            required.add(job.candidate.generation)
         match job:
             case MatchEvaluationJob(opponent=CheckpointOpponent(checkpoint=checkpoint)):
                 required.add(checkpoint.generation)

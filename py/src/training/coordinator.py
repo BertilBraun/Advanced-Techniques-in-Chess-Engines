@@ -136,15 +136,24 @@ class Coordinator:
                 if self.final_stop_reason is not None:
                     break
                 if not self.ledger.has_quantum_credits:
-                    self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
+                    self.evaluation_manager.schedule_due_jobs(
+                        self.ledger.state.active_checkpoint,
+                        self.training_session.promotion_candidate_checkpoint,
+                    )
                     time.sleep(IDLE_WAIT_SECONDS)
                     continue
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
-                    self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
+                    self.evaluation_manager.schedule_due_jobs(
+                        self.ledger.state.active_checkpoint,
+                        self.training_session.promotion_candidate_checkpoint,
+                    )
                     time.sleep(IDLE_WAIT_SECONDS)
                     continue
                 self._train_quantum(self_play_started=True)
-                self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
+                self.evaluation_manager.schedule_due_jobs(
+                    self.ledger.state.active_checkpoint,
+                    self.training_session.promotion_candidate_checkpoint,
+                )
         finally:
             self.evaluation_manager.close()
             self.self_play_group.close()
@@ -173,6 +182,8 @@ class Coordinator:
     def _collect_completed_evaluations(self) -> None:
         self.evaluation_manager.collect_completed_jobs()
         self.training_session.observe_primary_ladder_elos(self.evaluation_manager.completed_primary_ladder_elos)
+        self.training_session.observe_candidate_matches(self.evaluation_manager.completed_candidate_matches)
+        self.training_session.pin_candidate_checkpoints(self.evaluation_manager.pending_candidate_checkpoints)
 
     def _supervise_self_play(self) -> None:
         supervision = self.self_play_group.supervise(

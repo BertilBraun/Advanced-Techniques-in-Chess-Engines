@@ -1,0 +1,62 @@
+extends: ../production/vast-chess-8gpu-v99-grown-promotion.yaml
+
+# Evaluates the final model on its float TorchScript export: the policy-only path loads
+# TorchScript, and the published inference artifact is INT8 ONNX. Not a training configuration; nothing starts from this.
+run:
+  run_name: chess-policy-eval
+  tensorboard_run_directory: chess-policy-eval
+
+training:
+  # The student is its own architecture; the progressive list would not identify it.
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.2672612419124244
+          activation_cap: 6.0
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: torchscript
+
+evaluation:
+  definitions:
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [1000, 2000, 3000, 5000, 10000, 20000, 50000, 100000]
+    initial_nodes: 10000
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: torchscript
