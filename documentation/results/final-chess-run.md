@@ -1,8 +1,7 @@
 # Final chess run
 
-> **Status: training complete; terminal teacher matrix complete; evidence capture partially pending.** The selected model
-> and all ten teacher evaluation rows are now known. Three result directories were produced after the local evidence
-> pull and must be re-fetched before publication. A longer distilled-student experiment remains in progress.
+> **Status: training and evaluation complete; result evidence captured.** The selected teacher, all ten headline-matrix
+> rows, the parallel-search sweep, and both student experiments are checksum-covered by the local evidence bundles.
 
 The complete readable recipe remains
 [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). The compact evidence index is
@@ -14,14 +13,15 @@ in Git.
 
 The reported checkpoint is a **14-block, 160-channel scaled-post-activation convolutional network** with global
 context conditioning and a chess from-to attention policy head. It has **6,315,378 parameters** and was evaluated
-through its pre-fold **INT8 QAT TensorRT** deployment artifact.
+through its pre-fold **INT8 QAT TensorRT** deployment artifact for searched play. Policy-only evaluation used the
+matching float TorchScript export because it does not invoke the native search service.
 
 | Search budget per move | Headline benchmark Elo | 95% CI | Gain over previous budget |
 | ---: | ---: | ---: | ---: |
-| Policy only | **1,658** | [1,597, 1,717] | -- |
-| 100 | **2,456** | [2,393, 2,518] | +798 |
-| 1,000 | **2,925** | [2,875, 2,974] | +469 |
-| 10,000 | **3,114** | [3,063, 3,166] | +189 |
+| Policy only | **1,658** | [1,608, 1,710] | -- |
+| 100 | **2,456** | [2,400, 2,512] | +798 |
+| 1,000 | **2,925** | [2,875, 2,977] | +469 |
+| 10,000 | **3,114** | [3,065, 3,163] | +189 |
 | 100,000 | **3,251** | [3,206, 3,297] | +137 |
 
 This is protocol-specific benchmark Elo calibrated against the fixed-node Stockfish 13 anchor curve. It is not a
@@ -44,7 +44,8 @@ ONNX, and TensorRT artifact set. A later, larger model reached parity but did no
 | Completed optimizer steps in checkpoint QAT state | 408,500 |
 | Training presentations at configured global batch 2,048 | 836,608,000 |
 | Training precision | bfloat16 with pre-fold INT8 QAT |
-| Evaluation deployment | TensorRT INT8, batch 64 |
+| Searched evaluation deployment | TensorRT INT8, batch 64 |
+| Policy-only evaluation deployment | Float TorchScript, SHA-256 `1cb9fe4b23c91e4162097c7425b397516bb28dd2560cbb066ec8422548961816` |
 | Model SHA-256 | `c92a363b041a18d0ef93b852ac1c6d58716ae9a22b4e62d543de297c4ec5f904` |
 | INT8 ONNX SHA-256 | `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` |
 | TensorRT engine SHA-256 | `357652b119b4e4570127587bf0a04757ece6c01dd03abe3a0a905254249d84a5` |
@@ -90,16 +91,16 @@ distortion. Both rungs are retained below.
 
 | Model searches | Parallel searches | Opponent nodes (anchor Elo) | W/D/L | Score | Model Elo (95% CI) | Evidence status |
 | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Policy only | 1 | 1,000 (1,700) | 32/24/44 | **0.440** | **1,658 [1,597, 1,717]** | Complete; awaiting re-fetch |
-| Policy only | 1 | 2,000 (1,890) | 16/22/62 | 0.270 | 1,717 [1,645, 1,778] | Complete; awaiting re-fetch |
-| 100 | 1 | 5,000 (2,220) | 51/28/21 | 0.650 | 2,328 [2,271, 2,391] | Captured and checksum-covered |
-| 100 | 1 | 10,000 (2,470) | 39/18/43 | **0.480** | **2,456 [2,393, 2,518]** | Captured and checksum-covered |
-| 1,000 | 1 | 20,000 (2,700) | 47/40/13 | 0.670 | 2,823 [2,772, 2,880] | Captured and checksum-covered |
-| 1,000 | 1 | 50,000 (2,960) | 21/48/31 | **0.450** | **2,925 [2,875, 2,974]** | Captured and checksum-covered |
-| 10,000 | 4 | 50,000 (2,960) | 45/40/15 | 0.650 | 3,068 [3,016, 3,124] | Captured and checksum-covered |
-| 10,000 | 4 | 100,000 (3,100) | 30/44/26 | **0.520** | **3,114 [3,063, 3,166]** | Captured and checksum-covered |
-| 100,000 | 16 | 100,000 (3,100) | 51/38/11 | 0.700 | 3,247 [3,195, 3,306] | Captured and checksum-covered |
-| 100,000 | 16 | 200,000 (3,230) | 25/56/19 | **0.530** | **3,251 [3,206, 3,297]** | Complete; awaiting re-fetch |
+| Policy only | -- | 1,000 (1,700) | 32/24/44 | **0.440** | **1,658 [1,608, 1,710]** | Checksum-covered |
+| Policy only | -- | 2,000 (1,890) | 16/22/62 | 0.270 | 1,717 [1,638, 1,790] | Checksum-covered |
+| 100 | 1 | 5,000 (2,220) | 51/28/21 | 0.650 | 2,328 [2,276, 2,384] | Checksum-covered |
+| 100 | 1 | 10,000 (2,470) | 39/18/43 | **0.480** | **2,456 [2,400, 2,512]** | Checksum-covered |
+| 1,000 | 1 | 20,000 (2,700) | 47/40/13 | 0.670 | 2,823 [2,774, 2,873] | Checksum-covered |
+| 1,000 | 1 | 50,000 (2,960) | 21/48/31 | **0.450** | **2,925 [2,875, 2,977]** | Checksum-covered |
+| 10,000 | 4 | 50,000 (2,960) | 45/40/15 | 0.650 | 3,068 [3,023, 3,120] | Checksum-covered |
+| 10,000 | 4 | 100,000 (3,100) | 30/44/26 | **0.520** | **3,114 [3,065, 3,163]** | Checksum-covered |
+| 100,000 | 16 | 100,000 (3,100) | 51/38/11 | 0.700 | 3,247 [3,192, 3,305] | Checksum-covered |
+| 100,000 | 16 | 200,000 (3,230) | 25/56/19 | **0.530** | **3,251 [3,206, 3,297]** | Checksum-covered |
 
 The two 100,000-search estimates agree within four Elo despite using independent opponent anchors. That agreement is
 evidence that the anchor curve remains locally consistent at the top of the measured range; it is not a general
@@ -124,28 +125,36 @@ the two. A separate 100-search comparison found a much larger **235-Elo** penalt
 
 ## Distilled student: separate, not part of the teacher result
 
-The completed first student is a 6-block, 64-channel convolutional model with a key-size-64 from-to attention head:
-**470,295 parameters**, or **13.4x fewer** than the teacher. It trained for 36,621 steps (approximately 7.5 epochs)
-on the 20-million-row replay buffer in bfloat16 without QAT and was evaluated through TorchScript. At 10,000
-searches it scored 0.475 against a 20,000-node opponent, corresponding to **2,683 Elo [2,626, 2,738]**. Against the
-10,000-node rung it scored 0.670, corresponding to 2,593 Elo [2,534, 2,660]. These result directories await re-fetch.
+Both students use the same 6-block, 64-channel convolutional architecture with a key-size-64 from-to attention head:
+**470,295 parameters**, or **13.4x fewer parameters** than the teacher. They trained on the same frozen 20-million-row
+replay snapshot in bfloat16 without QAT and were evaluated through TorchScript with four parallel searches.
 
-A second student run targeting 110,000 steps (approximately 23 epochs) and its queued evaluation were **still in
-progress** at the evidence cutoff. Its early held-out loss crossed above training loss by step 6,000 (1.9893 versus
-1.9800), so its outcome must be reported separately once complete; no strength conclusion is drawn from that partial
-signal.
+| Training | Student searches | Opponent nodes | W/D/L | Score | Model Elo (95% CI) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 36,621 steps / 7.500 epochs | 10,000 | 10,000 | 55/24/21 | 0.670 | 2,593 [2,533, 2,666] |
+| 36,621 steps / 7.500 epochs | 10,000 | 20,000 | 31/33/36 | **0.475** | **2,683 [2,637, 2,731]** |
+| 110,000 steps / 22.528 epochs | 10,000 | 20,000 | 35/29/36 | **0.495** | **2,697 [2,640, 2,753]** |
+| 110,000 steps / 22.528 epochs | 100,000 | 20,000 | 59/28/13 | 0.730 | 2,873 [2,819, 2,935] |
+
+Tripling the training moved the matched 10,000-search estimate by only **14 Elo**, far inside the overlapping
+confidence intervals. The longer run ended with policy loss 1.8613 on the training split and 1.8815 on held-out data;
+the roughly 0.020 gap had been flat since about step 60,000. This supports rapid capacity saturation for this student
+and dataset, not a claim of catastrophic memorisation.
+
+The 100,000-search student point is **unbracketed**: it beat the 20,000-node opponent decisively, while the planned
+50,000-node match was deliberately skipped and recorded by a `SKIPPED` marker. It is therefore a lower anchor-based
+estimate rather than a headline comparable in robustness to the teacher's two-rung 100,000-search result. Elo is an
+interval scale, so the student and teacher ratings must not be compared as a percentage or ratio.
 
 ## Publication gate still open
 
 Before the result moves into the root README, complete these items:
 
-- re-fetch and checksum all evaluation result directories created after the current evidence pull;
 - reconcile total self-play games, accepted positions, replay occupancy, and resume-safe training counters;
 - distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
 - preserve the generated cross-campaign figure and its trimmed machine-readable input alongside the final report;
 - generate the loss, learning-rate, throughput, replay, quantization-fidelity, and transition figures from the
   checksum-covered archives;
-- freeze the longer-student result separately if it completes.
 
 ## Cross-campaign figure
 

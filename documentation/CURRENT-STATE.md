@@ -8,15 +8,15 @@ The final chess training lineage is complete. The selected model is a 14-block, 
 with global context conditioning and a chess from-to attention policy head. It has 6,315,378 parameters and is
 reported through its INT8 QAT TensorRT deployment artifact.
 
-The terminal teacher evaluation matrix is also complete. The model reached **3,114 benchmark Elo [3,063, 3,166]**
+The terminal teacher evaluation matrix is also complete. The model reached **3,114 benchmark Elo [3,065, 3,163]**
 at 10,000 searches and **3,251 [3,206, 3,297]** at 100,000 searches. These are protocol-specific ratings against
 fixed-node Stockfish 13 anchors, not FIDE ratings or ratings from an unrestricted engine list. See the
 [final result record](results/final-chess-run.md) for the complete matrix, confidence intervals, search parallelism,
 selection rationale, training trajectory, student result, and limitations.
 
-Three completed evaluation directories were created after the current local archive pull and still need to be
-re-fetched and checksummed. A longer student experiment was still running at the evidence cutoff. Until those items
-and the final figures are frozen, the root README intentionally retains the previous public result.
+The tail evidence archive now checksum-covers every reported teacher and student result. Both distilled-student
+training runs and their scheduled matches are complete. Remaining publication work concerns archive-derived volume
+and cost accounting, the non-headline figures, and report prose rather than missing strength results.
 
 ## Final recipe and exact reproduction
 
@@ -51,17 +51,15 @@ and validated before it is presented as a self-contained reproduction snapshot.
 | Claim | Status | Evidence or remaining gate |
 | --- | --- | --- |
 | Selected checkpoint and deployment hashes | **Verified** | [Compact evidence index](evidence/final-chess-20260923/README.md) |
-| Teacher evaluation matrix | **Complete** | Ten 100-game rows in the [result record](results/final-chess-run.md); three directories await re-fetch |
-| 100,000-search headline: 3,251 [3,206, 3,297] | **Complete** | Second deep anchor agrees within four Elo; result directory awaits re-fetch |
+| Teacher evaluation matrix | **Verified** | Ten 100-game rows and the parallelism sweep are checksum-covered in the [evidence index](evidence/final-chess-20260923/README.md) |
+| 100,000-search headline: 3,251 [3,206, 3,297] | **Verified** | Second deep anchor agrees within four Elo; both result manifests are captured |
 | Accepted-lineage trajectory | **Publication curve complete** | Final recipe: 180 observations through 2.5 days, endpoint 2,372.2, peak 2,407.6; later experiments excluded by scope |
-| First distilled student | **Complete; evidence pending** | 470,295 parameters and 2,683 [2,626, 2,738] at 10,000 searches; directories await re-fetch |
-| Longer distilled student | **Pending** | Training and queued evaluation were active at the evidence cutoff |
+| First distilled student | **Verified** | 36,621 steps (7.500 replay epochs); 2,683 [2,637, 2,731] at 10,000 searches |
+| Longer distilled student | **Verified** | 110,000 steps (22.528 replay epochs); 2,697 [2,640, 2,753] at 10,000 searches and an unbracketed 2,873 [2,819, 2,935] at 100,000 |
 | $43.20 training figure | **Narrow derived measure** | 60 accepted-lineage hours at $0.72/h; not total spend |
 
 ## Publication work still open
 
-- Re-fetch and checksum the result directories created after the current evidence pull.
-- Freeze the longer-student result separately if it completes.
 - Reconcile total games, admitted positions, replay occupancy, discarded compute, and actual end-to-end spend.
 - Generate the remaining training-dynamics and deployment-fidelity figures; the cross-campaign ladder figure is
   complete.

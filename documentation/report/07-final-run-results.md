@@ -1,8 +1,7 @@
 # 7. Final training and evaluation results
 
-> **Evidence state.** Teacher training and the ten-row terminal evaluation matrix are complete. Seven matrix rows are
-> checksum-covered by the current local archive; the policy-only rows and deepest second anchor were produced after
-> that pull and await re-fetch. A longer student experiment remains in progress. The quantitative authority is the
+> **Evidence state.** Teacher training, the ten-row terminal matrix, the parallel-search sweep, and both distilled
+> student experiments are complete and checksum-covered. The quantitative authority is the
 > [final-run result record](../results/final-chess-run.md), backed by the
 > [compact evidence index](../evidence/final-chess-20260923/README.md).
 
@@ -10,8 +9,9 @@
 
 The strongest fully retained checkpoint is a **6.32-million-parameter, 14-block, 160-channel convolutional model**
 with scaled post-activation residual blocks, global context conditioning, and a chess from-to attention policy head.
-It was trained with quantization-aware training and evaluated through its INT8 TensorRT artifact. This distinction is
-important: the reported strength belongs to the deployed numerical path, not a more accurate float surrogate.
+It was trained with quantization-aware training. Searched results use its INT8 TensorRT artifact; policy-only results
+use the corresponding float TorchScript export because no native search service is involved. The inference path is
+therefore stated with each result rather than silently treating unlike backends as identical.
 
 The ladder's strongest region spans several nearby checkpoints rather than a single isolated spike. Generation 1026
 was the last checkpoint in that region for which the full model, optimizer, QAT, ONNX, and TensorRT set had been
@@ -67,10 +67,10 @@ The terminal protocol used 100 games per row from 50 colour-swapped opening pair
 
 | Search budget | Headline score and anchor | Benchmark Elo (95% CI) | Increment |
 | ---: | --- | ---: | ---: |
-| Policy only | 0.440 vs 1,000 nodes | **1,658 [1,597, 1,717]** | -- |
-| 100 | 0.480 vs 10,000 nodes | **2,456 [2,393, 2,518]** | +798 |
-| 1,000 | 0.450 vs 50,000 nodes | **2,925 [2,875, 2,974]** | +469 |
-| 10,000 | 0.520 vs 100,000 nodes | **3,114 [3,063, 3,166]** | +189 |
+| Policy only | 0.440 vs 1,000 nodes | **1,658 [1,608, 1,710]** | -- |
+| 100 | 0.480 vs 10,000 nodes | **2,456 [2,400, 2,512]** | +798 |
+| 1,000 | 0.450 vs 50,000 nodes | **2,925 [2,875, 2,977]** | +469 |
+| 10,000 | 0.520 vs 100,000 nodes | **3,114 [3,065, 3,163]** | +189 |
 | 100,000 | 0.530 vs 200,000 nodes | **3,251 [3,206, 3,297]** | +137 |
 
 Search therefore adds 1,593 benchmark Elo from policy-only play to the deepest measured condition, with diminishing
@@ -103,15 +103,21 @@ parallelism cannot be changed silently across a compute curve.
 
 ## What the student establishes—and what it does not
 
-The completed first distilled model has **470,295 parameters**, 13.4 times fewer than the teacher. At 10,000
-searches it reached **2,683 Elo [2,626, 2,738]** against its closest anchor. The teacher reaches 3,114 under the same
-nominal search count, although the inference backends differ: the student used bfloat16-trained TorchScript while the
-teacher used INT8 TensorRT. The result demonstrates substantial compression, but it is not a controlled
-architecture-only comparison.
+Both completed students have **470,295 parameters**, 13.4 times fewer parameters than the teacher. They differ only
+in training duration on the same 20-million-row replay snapshot. At 10,000 searches against the same 20,000-node
+anchor, the 36,621-step student scored 31/33/36 for **2,683 Elo [2,637, 2,731]**; the 110,000-step student scored
+35/29/36 for **2,697 [2,640, 2,753]**. Tripling training from exactly 7.500 to 22.528 replay epochs therefore moved
+the point estimate by 14 Elo, well inside the confidence intervals.
 
-A longer student run and its queued matches were unfinished at the cutoff. Held-out loss had crossed above training
-loss early in that run, but the gap alone cannot establish memorisation or strength regression. Its evaluation must
-be added as a separate experiment rather than replacing the completed first student.
+The longer student's training/held-out policy losses ended at 1.8613/1.8815, a roughly 0.020 gap that was flat from
+about step 60,000. Combined with the match, this suggests that the small architecture had saturated on this dataset;
+it does not demonstrate a memorisation collapse.
+
+At 100,000 searches the longer student scored 59/28/13 against the 20,000-node anchor, corresponding to **2,873 Elo
+[2,819, 2,935]**. The planned 50,000-node bracket was skipped, so this remains an unbracketed lower anchor-based
+estimate. The student used TorchScript and the teacher INT8 TensorRT, further preventing a clean architecture-only
+comparison. Elo is an interval scale: parameter compression can be expressed as 13.4x, but ratings cannot be
+meaningfully expressed as one model having a percentage of another model's Elo.
 
 ## Figures still required
 
@@ -123,5 +129,5 @@ The numerical result is ready; the visual account is not. Publication still requ
 4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
 5. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
 
-The root README should remain unchanged until the post-pull result directories are fetched, the result tables are
-checksum-complete, and the headline figures are generated from committed compact inputs.
+The root README can now use the checksum-complete result tables and generated headline ladder figure. Remaining
+figures and accounting should still distinguish what is complete from what awaits archive-derived reconciliation.

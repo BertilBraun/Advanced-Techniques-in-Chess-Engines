@@ -7,7 +7,7 @@ that were inspected for this documentation pass.
 The compact tables intentionally expose evidence status rather than making every supplied value look equally frozen:
 
 - [`evaluation-results.csv`](evaluation-results.csv) contains the teacher matrix and parallel-search sweep;
-- [`student-results.csv`](student-results.csv) separates the completed first student from the unfinished longer run;
+- [`student-results.csv`](student-results.csv) records both completed student experiments and their four matches;
 - [`training-summary.csv`](training-summary.csv) distinguishes archive-backed checkpoint facts, derived values, and
   report-scoped ladder facts; and
 - [`ladder-elo-export.json`](ladder-elo-export.json) is the delivered cross-campaign ladder input, SHA-256
@@ -25,11 +25,29 @@ The compact tables intentionally expose evidence status rather than making every
 | `evidence-tensorboard.tgz` | 143,576,346 | `72936c566026c3065cc07c9ce5d234a89dcb4cefd0efd035cea0db9e44e1c910` |
 | `evidence-logs.tgz` | 2,813,105 | `7af5705a92a7bfbaabe5016e9830c68a8b80cd9feaa8d1a84985435c705f8f82` |
 | `evidence-provenance.tgz` | 3,172,422 | `06a6e071fa41c840407e498b130e868e3aa68620d942450625d6aefe8474ffd7` |
+| `evidence-tail.tgz` | 33,719,313 | `06e8807fc9ba5b9e0b7250d1b895f1580ceeaa88d0e92cadacec6d0ee0365779` |
 
-The archive pull predates several evaluations reported in the operator recap. Those completed results are retained in
-[`evaluation-results.csv`](evaluation-results.csv) with `awaiting_refetch` status. They are usable as reported results,
-but publication remains gated on fetching their result directories and checking their manifests and checksums. The
-second, longer student training and its queued evaluations were still running and are not reported as completed.
+The tail archive closes the earlier capture gap. It contains all 14 rows in `evaluation-results.csv`, all four rows
+in `student-results.csv`, both student checkpoint manifests and inference weights, and the float TorchScript export
+used for policy-only evaluation. The archive contains 25 evaluation directories: 18 have a `result.json`, six are
+unsuccessful or superseded attempts without a result, and one deliberately skipped match has a `SKIPPED` marker.
+Every result-table row is now marked `captured_tail`.
+
+### Recap corrections made during archive audit
+
+- The 10,000-search teacher rows used four parallel searches, not sixteen.
+- Four-way parallelism delivered about 5.3x operational speedup for a 19-Elo cost; the roughly 14x figure belongs to
+  sixteen-way parallelism and its 45-Elo cost.
+- The longer student saw 22.528 complete replay epochs, not 23 exactly.
+- The two superseded student gauntlets failed because the evaluation configuration matched more than one model, not
+  because their checkpoint manifest was absent.
+- The tail archive contains 18 completed `result.json` files, not 22; the remaining evaluation directories are
+  unsuccessful, superseded, incomplete, or deliberately skipped.
+- Elo is an interval scale, so no student-to-teacher Elo percentage is reported.
+
+Confidence bounds in the CSVs are obtained by transforming each result manifest's stored paired-bootstrap score
+interval through the same anchor-Elo formula as the point estimate, then rounding to the nearest Elo. This differs
+from several intervals in the operator recap; the manifest-derived values are authoritative here.
 
 The source export deliberately remains untrimmed. For publication, the final lineage ends at its exact 2.5-day
 observation: 180 points, terminal Elo 2,372.2, peak Elo 2,407.6. Later capacity and training experiments did not
@@ -65,15 +83,19 @@ Each opening was played once from each colour. Ratings use the established fixed
 model budget the headline is the opponent rung whose score was closest to 0.500; both rungs remain in the CSV so the
 easy-rung bias is visible.
 
+Policy-only matches used the float TorchScript export with inference SHA-256
+`1cb9fe4b23c91e4162097c7425b397516bb28dd2560cbb066ec8422548961816`. Every searched teacher match used the INT8
+TensorRT path derived from ONNX SHA-256 `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658`.
+
 The terminal curve mixes search parallelism: one parallel search at 100 and 1,000 searches, four at 10,000, and 16
 at 100,000. Consequently it is a measured operating curve, not a pure comparison of search budget with parallelism
 held constant. The separate 1,000-search sweep quantifies this confound.
 
-The archived result manifests directly verify eleven matches. Their evaluation source revisions are
+The archived result manifests directly verify 18 completed matches: 14 teacher rows and four student rows. Their
+evaluation source revisions include
 `ea80f09919290c613011893797413268673cbe0e` for the two 10,000-search matches and
 `51a7843722f4d477cb63f4f6d5a76a3b25c07f17` for the later captured sweep. Exact internal run identifiers remain
-provenance metadata and are not
-reader-facing labels.
+provenance metadata and are not reader-facing labels.
 
 ## Cost boundary
 
@@ -83,9 +105,6 @@ distillation, terminal evaluation, and other project compute. Actual end-to-end 
 
 ## Required follow-up
 
-- Re-fetch the final evaluation directory and checksum the policy-only, 100,000-versus-200,000, and student result
-  directories created after the evidence pull.
-- Record the completed longer-student result separately; do not overwrite the first student experiment.
 - Reconcile final games, admitted positions, replay occupancy, discarded work, stage time, and actual total spend
   from the provenance and logs archives.
 - Generate the remaining training-dynamics figures; the cross-campaign ladder figure and publication input are now
