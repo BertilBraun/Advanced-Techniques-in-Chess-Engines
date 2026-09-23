@@ -5,15 +5,14 @@ repository-native: claims link to the benchmark, analysis, configuration, or fro
 Chess is the research result. Go 7x7 and 9x9 appear only where they explain the shared platform or an early design
 decision.
 
-> **Reconstruction in progress.** The existing chapters are evidence-bearing drafts, but they are not yet ready for
-> project-owner review. Their chronological organization, internal run labels, compact evidence codes, and uneven
-> treatment of major investigations are being replaced by a topic-first report. Review the
-> [source-dossier method](source-notes/README.md), [topic inventory](source-notes/topic-inventory.md), and
-> [restructure plan](source-notes/report-restructure.md) before relying on the current reader path.
+> **Writing pass ready.** The topic-first source dossiers and final strength evidence are complete enough to begin the
+> narrative rewrite. The chapters remain evidence-bearing drafts rather than final prose. Use the
+> [owner review guide](source-notes/owner-review-guide.md) for the small set of decisions that need project-owner
+> judgment; the full dossiers are not an owner review assignment.
 
-The report is being reconstructed while the final chess training lineage remains active. Terminal strength, cost,
-and training-volume fields remain deliberately centralized in [Final-run results](07-final-run-results.md). No live
-dashboard value or placeholder elsewhere in this report should be interpreted as a result.
+The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength, cost,
+and training-volume fields remain centralized in [Final-run results](07-final-run-results.md). Cost and volume claims
+that still require archive reconciliation remain explicitly marked rather than inferred from live dashboards.
 
 ## Reader path
 
@@ -38,9 +37,9 @@ dashboard value or placeholder elsewhere in this report should be interpreted as
 
 | Area | Status | Authority |
 | --- | --- | --- |
-| Problem, system, methods, and investigations | Reconstruction required before review | [Source dossiers](source-notes/README.md) |
+| Problem, system, methods, and investigations | Topic-first narrative rewrite ready | [Source dossiers](source-notes/README.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
-| Exact run identity and terminal result | Pending archive and evaluation | [Chapter 7](07-final-run-results.md) |
+| Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 7](07-final-run-results.md) |
 | External bibliography | Working list | [Bibliography](bibliography.md); entries marked “verify” need publication-pass checks |
 | Research-question and artifact coverage | Audited | [Coverage matrix](coverage-matrix.md) |
 | Final publication workflow | Planned | [Publication plan](publication-plan.md) |

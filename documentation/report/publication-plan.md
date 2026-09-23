@@ -16,7 +16,7 @@ the quantitative placeholder chapter; it does not contain provisional result val
 | Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |
 | Replay/restart/auxiliary choices improved strength | Isolated online-learning or playing-strength ablation, if any | “Retained in the final bundle” |
 | Resignation was safe and useful | Threshold history, continuation outcomes, false-nonloss bound, saved work | “Calibrated with continuation auditing” |
-| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Selected artifact is frozen; post-pull matches still require checksum capture |
+| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Reported strength matches are frozen; accounting and public-model identity remain open |
 
 ## Required headline tables
 
