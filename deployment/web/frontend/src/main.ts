@@ -190,7 +190,7 @@ root.innerHTML = `
           </tbody>
         </table>
       </div>
-      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Bracketed intervals are 95% paired-match estimates from 100 opening-paired games and are conditional on the fixed anchors.</p>
+      <p class="perspective-note">Stockfish-13 node anchors follow <a href="https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/" target="_blank" rel="noreferrer">Marco Meloni’s fixed-node study</a> and its SSDF-based calibration. These are ladder ratings, not FIDE or online ratings. Bracketed intervals are 95% paired-match estimates from 100 opening-paired games and are conditional on the fixed anchors.</p>
     </section>
 
   </main>

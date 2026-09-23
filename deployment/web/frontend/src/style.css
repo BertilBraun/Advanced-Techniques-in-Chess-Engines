@@ -101,6 +101,7 @@ legend, .time-control label { margin-bottom: 9px; color: var(--muted); font-size
 .run-summary-panel { margin-top: 17px; }
 .empty-state { padding: 34px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12px; }
 .perspective-note { color: var(--muted); font-size: 10px; margin: -8px 0 12px; }
+.perspective-note a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 2px; }
 .wdl { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); background: var(--paper); }
 .wdl div { padding: 14px; }
 .wdl div + div { border-left: 1px solid var(--line); }
