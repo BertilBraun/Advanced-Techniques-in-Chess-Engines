@@ -1,0 +1,76 @@
+extends: vast-chess-8gpu-v98-catchup-floor.yaml
+
+# Tests both remaining ceiling candidates at once on the medium model: the learning-rate floor and
+# self-play label quality. Their time constants differ, so the trace still separates them - an early
+# dip and recovery is the learning rate, a late slow climb is the labels.
+run:
+  run_name: vast-chess-8gpu-v100-floor-002-visits-1600
+  tensorboard_run_directory: vast-chess-8gpu-v100-floor-002-visits-1600
+  resume:
+    # The last root checkpoint that still carries the 14x160: 1086 onwards is the promoted 19x176.
+    # 1080 is a multiple of six and of twenty, so retention kept both the weights and the engine.
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_1080.json
+    generation: 1080
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  trainer:
+    # Both model sizes sat on the 0.01 floor for 130+ generations while the ladder was flat and the
+    # training loss still fell. This run only ever trains past generation 1080, so a constant states
+    # the doubled floor without restating a decay that is already behind it.
+    learning_rate:
+      kind: staged
+      stages:
+      - {start_generation: 0, value: 0.02}
+  progressive_model_sizing:
+    # Lists replace wholesale: dropping the 19x176 leaves the 14x160 as the last configured stage,
+    # so it has no successor, no candidate can start and the promotion gate stays quiet.
+    models:
+    - model_id: chess-cnn-scaled-post-12x128-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 12
+        hidden_size: 128
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2886751345948129, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    - model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2672612419124244, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
+        minimum_worthwhile_gain_per_hour: 50.0
+  limits:
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    # The replay buffer is at its 20M cap and stops growing, and retention keeps every sixth
+    # checkpoint, so the night adds a couple of gigabytes to a disk that is otherwise static.
+    minimum_free_disk_gib: 1.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v100-floor-002-visits-1600.stop
+
+chess:
+  self_play:
+    search:
+      # Doubling the visits roughly halves the generation rate. That is the price of testing whether
+      # 800-visit labels, rather than the optimiser, are what the ladder has been sitting against.
+      baseline_visits:
+        kind: staged
+        stages:
+        - {start_generation: 0, value: 300}
+        - {start_generation: 10, value: 400}
+        - {start_generation: 50, value: 500}
+        - {start_generation: 90, value: 600}
+        - {start_generation: 1000, value: 800}
+        - {start_generation: 1080, value: 1600}
