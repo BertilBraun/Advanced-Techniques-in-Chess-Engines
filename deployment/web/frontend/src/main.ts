@@ -44,7 +44,7 @@ if (!root) throw new Error("App container is missing.");
 
 const baselineRunRows: readonly BaselineRunRow[] = [
   { duration: "Policy only", elo: "1,658 [1,597–1,717]", evidence: "32/24/44 vs Stockfish 13 at 1k nodes" },
-  { duration: "64 searches", elo: "2,372", evidence: "Checkpoint-1026 online three-rung ladder" },
+  { duration: "100 searches", elo: "2,456 [2,393–2,518]", evidence: "39/18/43 vs Stockfish 13 at 10k nodes" },
   { duration: "1,000 searches", elo: "2,925 [2,875–2,974]", evidence: "21/48/31 vs Stockfish 13 at 50k nodes" },
   { duration: "10,000 searches", elo: "3,114 [3,063–3,166]", evidence: "30/44/26 vs Stockfish 13 at 100k nodes" },
   { duration: "100,000 searches", elo: "3,251 [3,206–3,297]", evidence: "25/56/19 vs Stockfish 13 at 200k nodes" },
@@ -190,7 +190,7 @@ root.innerHTML = `
           </tbody>
         </table>
       </div>
-      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Bracketed intervals are 95% paired-match estimates from 100 opening-paired games and are conditional on the fixed anchors. The 64-search row is the online three-rung ladder estimate at checkpoint 1026 and has no retained bootstrap interval.</p>
+      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Bracketed intervals are 95% paired-match estimates from 100 opening-paired games and are conditional on the fixed anchors.</p>
     </section>
 
   </main>
