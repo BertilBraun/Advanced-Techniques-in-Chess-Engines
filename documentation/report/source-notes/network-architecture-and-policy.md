@@ -150,6 +150,9 @@ into publication text.
 
 - The implementation and seeded frozen-replay bake-off are preserved in Git, but the result JSON named by the chosen
   configuration was not committed under `documentation/benchmarks`.
+- The owner remembers a broader set of roughly ten policy-head comparisons but does not know of a surviving external
+  result bundle. That recollection establishes that the design space was broader than one comparison; it does not
+  recover scores or justify a reconstructed table.
 - The configuration decision records the rank-96 four-channel form as tying the 483k-parameter baseline while using
   about 207k parameters. This is useful historical evidence, but it is not equivalent to a preserved raw report.
 - A later controlled policy study measured the unbottlenecked dense head as a strong but slower-learning baseline.
@@ -210,6 +213,10 @@ into publication text.
 - Failed online attention attempts using the direct-plane system plateaued at roughly 650 ladder Elo, but those
   attempts also had broken generation-zero priors and replay-ingestion starvation. They are incident evidence, not a
   clean policy-representation ablation.
+- The owner remembers a plane-policy model—described from memory as a 96-plane head—also training in self-play after
+  the early failures, learning more slowly, and underperforming enough to be discarded quickly. The recovered
+  implementation and action layout use 76 planes, and no matching result artifact has been identified, so the report
+  must preserve both the qualitative recollection and the unresolved plane-count/artifact identity.
 
 ### Decision rationale
 
@@ -218,6 +225,8 @@ into publication text.
 - The repaired 76-plane head remained technically viable, but the project did not complete a clean long online
   comparison that isolated it. The later from-to head supplied stronger controlled learning evidence while retaining
   the canonical 1,880-action contract, so the plane family was superseded rather than conclusively rejected.
+- Owner recollection explains why it was superseded quickly in practice, but cannot upgrade the missing online
+  comparison into a quantitative rejection.
 
 ### Pitfalls
 
@@ -590,6 +599,9 @@ into publication text.
 - Global pooling was motivated by KataGo's strong external ablation and was incorporated into later successful
   screens. The repository has no clean chess one-variable Elo or held-out-loss comparison against disabled context or
   squeeze-excitation.
+- The owner remembers a direct comparison in which global pooling trained faster but did not finish at a clearly
+  different performance level. Because the result artifact has not been located, this is qualitative design history,
+  not a numerical convergence-rate or strength claim.
 - Retention is therefore a motivated bundle decision, not a project-measured standalone strength claim.
 - Squeeze-excitation should be described as implemented and historically used, not as a rejected chess alternative;
   no adequate direct chess comparison was found.
@@ -611,34 +623,33 @@ into publication text.
 
 ### Question
 
-- Should policy and value use one representation, partially split late blocks, or separate trunks?
+- How was representation shared between policy and value, and was separation ever investigated?
 
 ### Approaches and mechanisms
 
 - Every located production and controlled network computes one shared trunk feature tensor, then applies independent
   policy, WDL, and auxiliary heads.
-- Partially separated late blocks and additional value capacity were listed as candidate experiments.
+- No split-trunk design belonged to the experimental program. Any backlog mention was unpursued speculation, not a
+  planned or completed investigation.
 - No implemented split-trunk module, configuration, benchmark artifact, or controlled result was found in the current
   tree or the Git history paths searched for this dossier.
-- The project owner remembers a policy/value split-trunk or transformer trunk-sharing experiment. That memory
-  conflicts with the repository evidence currently located. It is an unresolved source-discovery gap, not evidence
-  that the experiment did not happen.
+- The owner confirms that the project always shared the trunk and never seriously considered a separate policy/value
+  trunk. The earlier “trunk-sharing experiment” recollection was a misclassification of policy-head capacity work.
+  At one point, a large dense primary policy head plus a second policy-shaped auxiliary consumed much of a roughly
+  half-million-parameter model; that was an oversized-head architecture mistake, not trunk separation.
 
 ### Decision rationale
 
-- Full sharing is retained in the documented recipe because it is the implemented, efficient baseline—not because
-  the currently recovered evidence proves it stronger than partial sharing.
-- Publication prose must not claim either that split trunks were tested or that they were never tested until the
-  owner's recalled experiment is resolved. Attention models in the recovered controlled study shared their entire
-  trunk, and that study did not contain a sharing-versus-splitting treatment.
+- Full sharing is an invariant of the implemented research program, not the winner of an ablation. Publication prose
+  should describe the shared trunk directly and should not invent a split-trunk investigation.
+- Attention models in the recovered controlled study also shared their entire trunk. Their policy-head comparisons do
+  not constitute a sharing-versus-splitting treatment.
 
 ### Pitfalls and unresolved evidence
 
 - A shared trunk makes head losses interact. Per-loss gradient-norm instrumentation measures how objectives pull on
   the common representation, but it is not a split-trunk ablation.
 - Separate value capacity remains a reasonable untested hypothesis if value learning becomes limiting.
-- Required follow-up: obtain a branch name, commit, configuration, run directory, TensorBoard tag, benchmark artifact,
-  or approximate implementation phrase from the owner, then repeat the history search and amend this dossier.
 
 ### Sources
 
@@ -896,10 +907,11 @@ into publication text.
 - Convolutional and pure attention trunks were both implemented. The controlled evidence attributes most of the
   apparent attention gain to the policy head and generated attention bias; the remaining gain did not justify the
   throughput and memory cost. A hybrid trunk was not tested.
-- Full policy/value trunk sharing is an implemented default, not the winner of a sharing ablation.
-- Global pooling is retained but lacks a project-local isolated chess strength measurement.
-- The small WDL head beat a wider alternative on cost/benefit in a short proxy, but scalar-versus-WDL and
-  shared-versus-split questions lack isolated strength evidence.
+- Full policy/value trunk sharing is an implemented invariant, not the winner of a sharing ablation.
+- Global pooling is retained; owner recollection says it learned faster without a clear final-strength difference,
+  but no artifact supports a quantitative isolated claim.
+- The small WDL head beat a wider alternative on cost/benefit in a short proxy, but scalar-versus-WDL lacks isolated
+  strength evidence; trunk splitting was not part of the experimental program.
 - The current 52-plane representation is precisely specified and symmetry-tested, but its expansion over the older
   input was not strength-ablated.
 - Progressive sizing is a durable, recoverable controller with current start and promotion semantics verified
@@ -912,11 +924,10 @@ into publication text.
 ## Gaps that need either user memory or recovered evidence
 
 - The raw JSON and complete result table from the seven-way dense policy-head bake-off.
-- The owner's recalled policy/value split-trunk experiment. A branch, artifact, configuration, log tag, or code phrase
-  is required to reconcile it with the current tree and history search, which found only shared trunks and proposals.
 - Any implemented CNN/attention hybrid beyond the pure attention family.
-- A completed, clean comparison of the repaired 76-plane head against dense or from-to at convergence.
-- A one-variable chess ablation for global pooling versus squeeze-excitation or no context.
+- The artifact identity behind the owner's recollected online plane-head underperformance, including whether “96
+  planes” refers to a distinct historical layout or a misremembered 76-plane implementation.
+- The artifact behind the owner's recollected global-pooling comparison.
 - A controlled scalar-value-versus-WDL experiment.
 - A long online ablation for the from-to head, next-policy auxiliary, global pooling, or the exact progressive ladder.
 - Final archived identity and precision of the large TensorRT deployment artifact.

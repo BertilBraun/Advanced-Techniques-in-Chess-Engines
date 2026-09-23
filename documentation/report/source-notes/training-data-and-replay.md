@@ -824,6 +824,9 @@ the two discounts interchangeable.
 
 - Overfit studies verified that the multi-head objective can learn its supplied targets. Replay forensics measured
   remaining-length censoring in real stores. These establish wiring and trainability, not an independent Elo gain.
+- The owner confirms that completed runs used broader auxiliary-head bundles. Most were later disabled during a period
+  with several simultaneous training problems to remove plausible sources of instability. This was precautionary
+  simplification, not a planned auxiliary-head ablation, and no exact run/result bundle is currently identified.
 - Trajectory-level materialization is retained because future-dependent labels cannot be constructed correctly from
   isolated rows at training time.
 
@@ -833,6 +836,8 @@ the two discounts interchangeable.
   therefore depends on data-generation semantics.
 - Auxiliary weights `0.15` and `0.1` were not isolated in a long online ablation, and gradient interaction with the
   shared trunk remains unquantified.
+- Neither their removal nor the later retention of next-policy and remaining-length proves that an auxiliary head
+  helped or harmed playing strength. Report the debugging rationale without assigning a causal result.
 - The final archive should report eligibility by target, termination reason, game phase, and model stage.
 
 ### Sources

@@ -6,9 +6,9 @@ pitfalls, and remaining unknowns. It does not merely mean that a benchmark is li
 
 The check marks below were re-audited against the current tree, the experiment ledgers, the benchmark-coverage
 ledger, the final configuration, relevant implementation paths, Git history, and the six preserved release tags.
-Unchecked items now fall into only two classes: a genuine project-owner-memory question or evidence that can exist
-only after the active training campaign is frozen. They gate the affected claim, not review of the completed
-dossiers. The audit and exact boundary are recorded in [the completeness audit](completeness-audit.md).
+The owner-memory questions are resolved. The two unchecked items are terminal figure/accounting work; they gate those
+publication claims, not narrative writing from the completed dossiers. The audit and exact boundary are recorded in
+[the completeness audit](completeness-audit.md).
 
 ## Search and target generation
 
@@ -30,7 +30,7 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
 ## Model architecture and representations
 
 - [x] Every policy representation and head, including dense, plane-based, and from-to/action-attention variants
-- [ ] Policy/value trunk sharing and split-trunk experiments
+- [x] Policy/value trunk sharing; owner confirms split trunks were neither tested nor a serious design path
 - [x] Convolutional, attention, and hybrid trunks
 - [x] Residual-block variants and activation placement
 - [x] Global-context and pooling mechanisms

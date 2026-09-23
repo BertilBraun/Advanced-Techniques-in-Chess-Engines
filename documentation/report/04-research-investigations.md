@@ -67,9 +67,10 @@ attention trunk: applying the head to the existing CNN recovered most of the qua
 The [attention viability study](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md) documents its
 shortened training horizon, single-seed limitation, and inherited dataset defects.
 
-The final recipe retains convolutional trunks, global context pooling, and the from-to head. Full attention and
-transformer trunk sharing were investigated but not promoted. The report does not convert supervised cross-entropy
-gaps into final-run Elo without online match evidence.
+The final recipe retains a convolutional trunk, global context pooling, and the from-to head. Full attention trunks
+were investigated but not promoted. Policy and value always branched from one shared trunk; there was no split-trunk
+experiment. The report does not convert supervised cross-entropy gaps into final-run Elo without online match
+evidence.
 
 ## Progressive model sizing
 
@@ -128,9 +129,11 @@ fallback while documenting its limits.
 ## Auxiliary targets
 
 Many auxiliary heads were proposed over the project: next policy, remaining game length, legal moves, future search
-value, irreversible progress, and search correction. Small fixed-batch studies established that the wiring trained
-and motivated reduced weights, but there was no budget for multi-day ablation of every head. The adaptive-budget
-head and search-correction paths were removed with their consumers.
+value, irreversible progress, and search correction. Broader auxiliary bundles also appeared in completed runs, but
+most were disabled during a period with several simultaneous training failures to eliminate possible causes. That
+was precautionary simplification, not a controlled finding that auxiliary learning was harmful. Small fixed-batch
+studies established that the wiring trained and motivated reduced weights; no multi-day ablation isolated each head.
+The adaptive-budget head and search-correction paths were removed with their consumers.
 
 The final recipe retains only next-policy supervision at weight 0.15 and remaining-game-length regression at weight
 0.1. They are training-only. Their inclusion is a recipe choice supported by diagnostics and prior work, not a

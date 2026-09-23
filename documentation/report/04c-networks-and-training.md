@@ -23,13 +23,16 @@ attention family was not selected. Hybrid CNN/transformer trunks remained propos
 
 The from-to head replaced a large dense projection with structured origin/destination scoring. On the unchanged
 12x128 CNN it captured most of the held-out-policy improvement for a small forward-throughput cost and became the
-final head. An earlier low-rank dense-head bake-off was not preserved as a tracked benchmark; its exact numbers
-should not appear as equivalent evidence.
+final head. The owner remembers roughly ten policy-head comparisons, including a plane head that trained more slowly
+and underperformed in self-play, but their complete result bundle is not known. The preserved plane implementation
+uses 76 planes while the recollection says 96, so that online result remains qualitative. An earlier low-rank
+dense-head bake-off was likewise not preserved as a tracked benchmark; missing exact numbers must not be recreated.
 
-Global-pooling context every second block is retained and externally motivated but lacks a one-variable chess
-ablation. The policy and value heads share the convolutional trunk; a partially split late trunk was discussed but
-not tested. A 32-channel value head received a short matched frozen-replay probe and did not justify its added cost,
-so the final value head stays at two channels.
+Global-pooling context every second block is retained and externally motivated. The owner remembers a comparison in
+which it learned faster but did not finish at clearly different strength; without the missing artifact, this remains
+qualitative rather than a one-variable Elo result. Policy and value always share the convolutional trunk. A
+32-channel value head received a short matched frozen-replay probe and did not justify its added cost, so the final
+value head stays at two channels.
 
 ## Quantization-friendly residual blocks
 
@@ -74,8 +77,10 @@ short-run rankings should not be treated causally.
 
 The final model trains next-policy at weight 0.15 and normalized remaining game length at weight 0.1. Both heads are
 removed from inference. Fixed-batch overfit and replay audits establish gradients, eligibility, symmetry, and
-censoring. No long matched online ablation isolates either head. Other proposed heads—future action, uncertainty,
-root Q, material, survival, king safety, control maps, and search correction—were not final experiments.
+censoring. No long matched online ablation isolates either head. Broader auxiliary bundles ran historically, then
+were removed precautionarily while debugging unrelated or interacting failures; that history is not an ablation.
+Other proposed heads—future action, uncertainty, root Q, material, survival, king safety, control maps, and search
+correction—were not retained in the final recipe.
 
 ## AdamW, SGD, and learning-rate evidence
 

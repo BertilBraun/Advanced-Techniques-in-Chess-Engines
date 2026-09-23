@@ -6,12 +6,11 @@ All substantive dossiers are now **ready for project-owner factual review**. The
 visible subjects have been added and checked against their direct sources. The owner is no longer being asked to
 rediscover material that the repository already records.
 
-This does not mean the eventual prose is finished or that every retained setting has causal evidence. One disputed
-experiment still requires project-owner memory or a recovered artifact, and several historical conclusions retain
-explicit provenance limits. The final training recap now resolves the reported checkpoint and the progressive-sizing
-outcome; the teacher evaluation table is integrated, while several post-pull result directories, the final figures,
-and full cost accounting remain open. Check marks in the [topic inventory](topic-inventory.md) record the result of
-this re-audit.
+This does not mean the eventual prose is finished or that every retained setting has causal evidence. The owner-memory
+questions are resolved, but several answers remain qualitative because their raw artifacts are not known. The final
+training recap and checksum-covered tail resolve the checkpoint, progressive-sizing outcome, teacher matrix, and both
+student experiments. Remaining work is narrative writing, non-headline figures, accounting, and publication QA.
+Check marks in the [topic inventory](topic-inventory.md) record the result of this re-audit.
 
 ## Sources checked
 
@@ -37,10 +36,10 @@ labels.
 | Dossier | Readiness | Audit result |
 | --- | --- | --- |
 | Search and inference | Ready for owner factual review | Fixed/mixed budgets, heuristic stopping, predicted allocation, learned stopping, MCTS mechanics, parallelism, graph search, both cache investigations, `torch.compile`, TorchScript, CUDA graphs, TensorRT, and metric boundaries have substantive entries. |
-| Network architecture and policy | Ready for owner factual review | Input representation and symmetry, all policy families, progressive sizing, function-preserving growth, distillation, trunks, context, value heads, auxiliaries, quantization, and initialization have substantive entries. The remembered split-trunk experiment remains an explicit owner-memory question rather than an invented result. |
+| Network architecture and policy | Owner factual review complete | Input representation and symmetry, all policy families, progressive sizing, function-preserving growth, distillation, trunks, context, value heads, auxiliaries, quantization, and initialization have substantive entries. Missing policy-head/context artifacts remain explicit rather than reconstructed. |
 | Training, data, and replay | Ready for owner factual review | Progressive candidate training, the rejected loss gate, match-based promotion, candidate scheduling defects, root-value blending, publication cadence, replay, starts, resignation, cuts, auxiliaries, reanalysis, overlap, storage, and optimizer screens are covered with evidence boundaries. |
 | Runtime architecture and current-system figure | Ready for owner factual review | The selected interaction graph is separated from a new investigation dossier covering pipes, queues, clients, fine-grained coroutines, native ownership, direct slots, topology, CUDA graph constraints, and interactive latency. Current progressive semantics were rechecked against code and configuration. |
-| Evaluation and pitfalls | Ready for current owner factual review | Protocol and failure studies are strong. The explicitly marked terminal-results fields, cross-campaign comparability audit, final curves, cost, and reproducibility identity must wait for the preserved final archive. |
+| Evaluation and pitfalls | Ready for narrative writing | Protocol and failure studies, terminal strength evidence, cross-campaign comparability, and final curves are integrated. Full cost and volume accounting remain open. |
 
 ## Repository-visible blockers closed in the follow-up pass
 
@@ -77,16 +76,12 @@ labels.
 
 ## Contradictions and evidence-boundary corrections
 
-### Policy/value trunk sharing requires owner evidence
+### Policy/value trunk sharing was not an experiment
 
-The project owner recalls an experiment on transformer policy/value trunk sharing. Current code, configuration,
-benchmark records, experiment ledgers, and searched Git history show fully shared trunks and proposals for partial
-separation, but no implemented split-trunk module or controlled sharing comparison. The dossier currently says so.
-This is a direct conflict between repository evidence and project memory, not a reason to erase the recollection.
-
-Required resolution: obtain a branch, commit, deleted artifact, configuration, or a precise description of what was
-changed. Until then, the report may say only that full sharing is the implemented baseline and splitting was proposed;
-it must not say either that a split-trunk experiment failed or that sharing won.
+The owner confirms the repository-visible pattern: every model shared the policy/value trunk, and a split trunk was
+never a serious project design. The remembered “sharing” issue concerned oversized policy heads—sometimes two
+action-sized heads consuming much of a small model—not separate trunks. The report should state shared-trunk design
+as an invariant and must not invent a sharing ablation or claim that sharing beat a split alternative.
 
 ### Dense-head bake-off has incomplete provenance
 
@@ -95,12 +90,14 @@ the selected configuration is absent from the benchmark archive. The recorded ra
 decision evidence, not a publication-grade quantitative result. The policy-head inventory is nevertheless complete
 because the missing artifact and its consequence are explicit.
 
-### Plane policy heads were not cleanly rejected
+### Plane policy heads have qualitative online history but no recovered clean comparison
 
 The structured mapping was validated, and both gathered and direct-plane forms were implemented. The online failures
-also changed initialization, trunk, runtime, ingestion, and action ABI. The dossier correctly classifies the repaired
-plane family as underdetermined/superseded. Any later prose saying the from-to head beat the plane head in a clean
-online comparison would exceed the evidence.
+also changed initialization, trunk, runtime, ingestion, and action ABI. The owner remembers a later plane head
+training through self-play, learning more slowly, and underperforming, but recalls 96 planes where the preserved
+implementation uses 76 and does not know the artifact location. The dossier therefore classifies the family as
+qualitatively superseded, not quantitatively rejected. Any prose saying the from-to head beat it in a clean online
+comparison would exceed the evidence.
 
 ### Threshold stopping was audited, not strength-tested
 
@@ -131,8 +128,10 @@ implemented; the current system overlaps selected self-play actors with synchron
 
 Next-policy and remaining-length are retained. Future-search-value, irreversible-progress, and legal-move layouts are
 implemented in the typed training stack but are not part of the retained recipe and lack independent strength
-evidence. Material, king-safety, uncertainty, control-map, and similar heads are proposals only. “Implemented target
-layout,” “trained in a completed experiment,” and “retained” must not be treated as synonyms.
+evidence. The owner confirms that broader auxiliary bundles appeared in completed runs and were removed
+precautionarily during a period of multi-cause instability, not by a deliberate ablation. Material, king-safety,
+uncertainty, control-map, and similar heads are proposals only. “Implemented target layout,” “trained in a completed
+experiment,” and “retained” must not be treated as synonyms.
 
 ### Retained configuration is not an ablation table
 
@@ -156,13 +155,11 @@ parity, but the larger continuation then stayed flat. The reported checkpoint re
 evidence that capacity was not binding under the tested learning-rate floor, search targets, and replay stream; it
 is not evidence that larger networks are generally ineffective.
 
-### Standalone promotion configuration needs one repair
+### Standalone promotion configuration repair is complete
 
-The current standalone final YAML configures a match gate with definition ID `progressive-candidate`, but its
-evaluation-definition list contains no `progressive_candidate` entry. The campaign continuation configuration does
-contain that paired-match definition. Because configuration loading does not cross-check the reference, the
-standalone YAML loads but could never accumulate promotion evidence. Correct the final YAML before presenting it as
-an executable reproduction recipe.
+The final YAML now includes the `progressive_candidate` evaluation referenced by its promotion gate and loads as a
+self-contained configuration. Exact historical reproduction still requires the frozen resolved configuration and
+source revision rather than whichever future revision the living file reaches.
 
 ## Nonblocking scope choices found outside the original inventory
 
@@ -172,32 +169,21 @@ now covered. The following are project-owner scope choices rather than missing r
 - **Go platform work.** A 7x7 baseline and KataGo evaluation integration exist. Decide whether the report is about
   the chess campaign on a multi-game platform or about the complete repository. If chess-focused, state the scope and
   use Go only where it supplies a transfer comparison.
-- **Historical pretraining.** An older self-play pretraining path and result note exist. Determine whether it belongs
-  to the final research story or only historical background; it has not been synthesized in a dossier.
+- **Historical pretraining.** Exclude it from the report. The claimed campaign trained from scratch through self-play.
+  Rare checkpoint-resumed late-stage parameter ablations are diagnostic continuations, not pretraining.
 - **Model refresh and interactive serving.** The runtime dossier now covers them. The owner can still choose whether
   they appear as enabling infrastructure or as full systems results in the publication.
 - **Mixed-precision training.** BF16 is part of the retained trainer and inference recipe, but the dossier has no
   self-contained precision investigation. Add it to the systems section if the historical tests support a decision;
   otherwise describe it only as configured method.
 
-## Questions that genuinely require project-owner memory
+## Owner-memory questions resolved
 
-These are the remaining questions the repository audit cannot answer safely:
-
-1. What exactly was changed in the recalled transformer policy/value trunk-sharing experiment? Which branch,
-   checkpoint, or approximate date could locate it, and did it split the trunk or merely compare head gradients or
-   capacity?
-2. Is there an uncommitted or external result bundle for the seven-way dense policy-head bake-off?
-3. Was the repaired 76-plane policy head ever trained to convergence or compared online after its initialization and
-   ingestion defects were fixed?
-4. Was global-pooling context ever compared directly with squeeze-excitation or no context in chess, outside the
-   bundled architecture changes?
-5. Should historical self-play pretraining and the paused Go work be part of the paper's claimed experimental scope?
-6. Were any of the future-search-value, irreversible-progress, or legal-move auxiliary heads used in a completed
-   production run whose evidence is not committed?
-
-These questions are suitable for owner review. No known repository-visible subject remains for the owner to
-rediscover before that review.
+The owner confirms that trunks were always shared; broader policy-head comparisons, a slower underperforming plane
+head, a faster-learning global-pooling comparison, and completed auxiliary-head runs existed, although several raw
+result bundles are not currently known. Those memories are recorded as qualitative decision history rather than
+quantitative evidence. Historical pretraining is out of report scope. The remaining owner pass concerns causal and
+editorial wording, not recovery of these facts.
 
 ## Remaining result-integration work
 

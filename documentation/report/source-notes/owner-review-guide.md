@@ -9,36 +9,38 @@ the evidence boundary instead of inventing a conclusion.
 
 ## Minimum useful pass
 
-For the next review, read only **Priority 1** below: six short questions whose answers cannot be recovered reliably
-from repository evidence. That is the only owner-memory pass currently required.
-
-After the remaining result directories are fetched, a second short pass can cover the eight one-paragraph causal
-summaries in Priority 2. Priority 3 and the final-result decisions are editorial choices and may wait for the report
-outline; they are not prerequisites for continuing the evidence work. You do not need to open any linked dossier
-unless a summary looks wrong.
+The **Priority 1** owner-memory pass is complete. The answers and their evidence limits are recorded below. The next
+useful review is the eight short causal summaries in Priority 2. Priority 3 and the final-result decisions are
+editorial choices and may wait for the report outline. You do not need to open any linked dossier unless a summary
+looks wrong.
 
 ## Priority 1 — facts only the project owner can recover
 
-These are the only questions currently blocking the factual map.
+These questions are resolved as owner recollection where repository artifacts are unavailable. Such recollections
+may explain a decision, but they do not support quantitative claims.
 
-1. **Policy/value trunk sharing.** Do you remember what actually changed in the sharing experiment: separate final
-   blocks, fully separate trunks, gradient isolation, or only a proposed design? Any approximate date, branch, config,
-   or code phrase would help locate it. Without that, the report will say only that full sharing is implemented and a
-   split was proposed. [Context](network-architecture-and-policy.md#policyvalue-trunk-sharing)
-2. **Dense policy-head comparison.** Is the missing seven-way result bundle stored outside the repository? If not, may
-   we report only the historically recorded qualitative selection of the rank-96, four-channel reduction, without a
-   quantitative table? [Context](network-architecture-and-policy.md#dense-reduced-action-policy-heads)
-3. **Structured plane policy.** Was the repaired 76-plane head ever trained to convergence or compared online after
-   its initialization and ingestion defects were fixed? If not, we will call it *underdetermined/superseded*, not
-   rejected. [Context](network-architecture-and-policy.md#structured-76-plane-policy-heads)
-4. **Global context.** Was global pooling ever compared directly against squeeze-excitation or no global context in
-   chess? If not, it remains a motivated retained component without isolated strength evidence.
-   [Context](network-architecture-and-policy.md#global-context-in-convolutional-trunks)
-5. **Auxiliary heads.** Were future-search value, irreversible-progress, or legal-move heads used in any completed
-   production training whose evidence is not committed? The repository proves that their target layouts exist, but
-   not that they contributed to a completed result. [Context](training-data-and-replay.md#auxiliary-target-materialization-and-eligibility)
-6. **Historical pretraining.** Was the older self-play pretraining effort important enough to the research conclusions
-   to include, or should it remain historical background?
+1. **Policy/value trunk sharing:** the project always used a shared trunk and did not run or seriously plan a
+   split-trunk treatment. Periods where policy heads dominated the parameter count were head-capacity mistakes, not
+   trunk separation. [Context](network-architecture-and-policy.md#policyvalue-trunk-sharing)
+2. **Dense policy-head comparison:** the owner remembers roughly ten policy-head comparisons, but does not know where
+   the result bundle is. Use the preserved qualitative selection and the controlled comparisons that remain; do not
+   reconstruct a numerical table from memory.
+   [Context](network-architecture-and-policy.md#dense-reduced-action-policy-heads)
+3. **Structured plane policy:** the owner remembers the plane head—recalled as “96-plane,” while the recovered
+   implementation uses 76 planes—training in self-play, taking longer, and underperforming. No result artifact is
+   currently known. Report this only as a recollected reason for rapid supersession, with the plane-count ambiguity
+   visible; retain the preserved supervised measurements as the quantitative evidence.
+   [Context](network-architecture-and-policy.md#structured-76-plane-policy-heads)
+4. **Global context:** the owner remembers a comparison in which global pooling learned faster, while eventual
+   performance was not clearly different. No result artifact is currently known. Treat this as qualitative design
+   history, not an isolated Elo effect. [Context](network-architecture-and-policy.md#global-context-in-convolutional-trunks)
+5. **Auxiliary heads:** multiple auxiliary heads were used in completed runs, then broadly disabled while debugging a
+   period with many interacting failures. This was precautionary de-risking, not an intentional ablation or evidence
+   that the heads were harmful. Exact run evidence is not currently known.
+   [Context](training-data-and-replay.md#auxiliary-target-materialization-and-eligibility)
+6. **Historical pretraining:** exclude it. The reported learning campaign trained from scratch through self-play.
+   Rare late-stage parameter ablations resumed a strong checkpoint, but those are diagnostic continuations rather
+   than pretraining or part of the main training claim.
 
 ## Priority 2 — consequential interpretations to spot-check
 
@@ -131,5 +133,5 @@ The canonical configuration issue is resolved: its progressive-candidate gate no
 definition and the file loads successfully. Exact historical reproduction still requires the resolved configuration,
 source revision, and artifact hashes frozen in the evidence record.
 
-After the questions above are answered, the next useful owner pass is a short narrative outline and selected figures,
-not the underlying 5,000 lines of source notes.
+After the remaining causal and editorial choices above are answered, the next useful owner pass is a short narrative
+outline and selected figures, not the underlying 5,000 lines of source notes.
