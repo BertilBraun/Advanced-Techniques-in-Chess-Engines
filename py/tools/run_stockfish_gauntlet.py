@@ -645,6 +645,12 @@ def _run_concurrent_shard_rungs(request: _ShardRequest, context: _ShardContext) 
 
 
 def _run_shard(request: _ShardRequest) -> tuple[GauntletShardResult, ...]:
+    # Each shard owns one GPU, but a pool worker starts on device 0: without this the engine is
+    # built on device_id while the current device is still 0, and the first enqueue fails in Cask.
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.set_device(request.device_id)
     context = _shard_context(request)
     if isinstance(request.model_search_budget, TimedModelSearchBudget):
         return _run_timed_shard_rungs(request, context)
