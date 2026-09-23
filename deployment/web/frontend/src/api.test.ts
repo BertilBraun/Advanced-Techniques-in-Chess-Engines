@@ -16,23 +16,26 @@ describe("normalizeApiBaseUrl", () => {
 
 describe("ChessApi", () => {
   it("sends complete history with a human move", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          state: {
-            starting_fen: "fen",
-            moves_uci: ["e2e4", "e7e5"],
-            fen: "next",
-            side_to_move: "white",
-            game_over: false,
-            result: null,
-          },
-          engine_move_uci: "e7e5",
-          analysis: null,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            state: {
+              starting_fen: "fen",
+              moves_uci: ["e2e4", "e7e5"],
+              fen: "next",
+              side_to_move: "white",
+              game_over: false,
+              result: null,
+            },
+            engine_move_uci: "e7e5",
+            analysis: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const api = new ChessApi("https://api.example.test");
@@ -43,8 +46,12 @@ describe("ChessApi", () => {
       analysis: { type: "timed_mcts", seconds: 12 },
     });
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]).toEqual([
+      "https://api.example.test/api/ready",
+      { method: "GET" },
+    ]);
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
       starting_fen: "fen",
       moves_uci: ["e2e4"],
@@ -56,12 +63,15 @@ describe("ChessApi", () => {
   it("surfaces FastAPI error details", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ detail: "Illegal move." }), {
-          status: 422,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ detail: "Illegal move." }), {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
     );
     await expect(new ChessApi("").createGame("fen", [])).rejects.toEqual(
       new ApiError("Illegal move."),

@@ -45,10 +45,16 @@ async function fetchApi(url: string, init: RequestInit): Promise<Response> {
 export class ChessApi {
   public constructor(private readonly baseUrl: string) {}
 
+  private async wakeEngine(): Promise<void> {
+    const response = await fetchApi(`${this.baseUrl}/api/ready`, { method: "GET" });
+    if (!response.ok) await parseResponse<never>(response);
+  }
+
   public async createGame(
     startingFen: string,
     movesUci: readonly string[],
   ): Promise<CreateGameResponse> {
+    await this.wakeEngine();
     const response = await fetchApi(`${this.baseUrl}/api/games`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,6 +67,7 @@ export class ChessApi {
     gameToken: string,
     request: PlayTurnRequest,
   ): Promise<PlayTurnResponse> {
+    await this.wakeEngine();
     const response = await fetchApi(
       `${this.baseUrl}/api/games/${encodeURIComponent(gameToken)}/turns`,
       {

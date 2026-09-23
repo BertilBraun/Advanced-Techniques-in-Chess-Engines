@@ -72,6 +72,17 @@ class FakeEngine:
         return FakeGame(board)
 
 
+def test_ready_supports_a_simple_cross_origin_wakeup() -> None:
+    engine = FakeEngine()
+    client = TestClient(create_app(GameService(engine), ['https://chess.example']))
+
+    response = client.get('/api/ready', headers={'Origin': 'https://chess.example'})
+
+    assert response.status_code == 204
+    assert response.headers['access-control-allow-origin'] == 'https://chess.example'
+    assert engine.creations == 0
+
+
 def test_turn_uses_complete_history_and_returns_authoritative_moves() -> None:
     engine = FakeEngine()
     client = TestClient(create_app(GameService(engine), ['https://chess.example']))

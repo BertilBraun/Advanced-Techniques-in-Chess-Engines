@@ -23,9 +23,13 @@ def create_app(service: GameService, allowed_origins: Sequence[str]) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(allowed_origins),
         allow_credentials=False,
-        allow_methods=['POST', 'DELETE'],
+        allow_methods=['GET', 'POST', 'DELETE'],
         allow_headers=['Content-Type'],
     )
+
+    @app.get('/api/ready', status_code=status.HTTP_204_NO_CONTENT)
+    def ready() -> Response:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.post(
         '/api/games',
