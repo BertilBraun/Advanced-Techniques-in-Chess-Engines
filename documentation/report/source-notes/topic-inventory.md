@@ -40,10 +40,12 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
 - [x] Progressive model sizing, failed loss-based promotion, match gating, and function-preserving growth
 - [x] Auxiliary policy and remaining-length heads
 - [x] Distillation and smaller deployment models
+- [x] Terminal student saturation under extended passes over one fixed replay buffer
 
 ## Training, replay, and curriculum
 
 - [x] Optimizers, learning-rate schedules, warmup, clipping, and weight decay
+- [x] Causal bounds on optimizer, replay-regime, objective, and quantized-serving explanations of the terminal gain
 - [x] Initialization, calibration, and deterministic seeding failures
 - [x] Replay capacity growth and the difference between capacity, freshness, and unique data
 - [x] Replay reuse and presentation-credit accounting
@@ -99,6 +101,8 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
 - [ ] Final training curves, learning-rate curves, replay statistics, and systems telemetry (terminal summary exists;
   archive-derived figures remain)
 - [x] Cross-generation progress figure using descriptive checkpoint/campaign labels rather than internal run identifiers
+- [x] Matched-estimator plateau comparison, including transfer uncertainty and policy/search decomposition
+- [x] Adaptive-rung transitions as a source of false terminal improvement
 - [ ] Cost, hardware, runtime, and reproducibility accounting
 
 ## Reader-facing incident studies

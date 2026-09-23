@@ -56,6 +56,16 @@ does not change the stored rows or their sampling probabilities.
 - An earlier fixed-teacher study favored AdamW with cosine decay over both flatter AdamW schedules and an untuned SGD
   schedule. The SGD arm was additionally confounded by an architecture transition and an untuned peak, so it cannot
   support a general rejection of SGD.
+- The terminal retrospective supplies short online corroboration for the retained high-rate Nesterov choice, but not
+  a long causal estimate. A roughly one-hour high-rate Nesterov arm was about 95 Elo ahead of its AdamW control; two
+  lower-rate Nesterov arms were 137 and 198 Elo behind the high-rate arm at 40 and 60 minutes. A later campaign using
+  the predecessor recipe was about 150 Elo ahead of the mature baseline after 8–12 hours under the same single-rung
+  protocol. These comparisons make learning-rate magnitude and optimizer family plausible contributors, but every
+  direct arm was short and the longer comparison changed a bundle rather than one variable.
+- The final model reached the predecessor's terminal policy/WDL training losses in about 40% as many generations.
+  That is consistent with faster fitting under the changed training recipe. It is not an optimizer-only result:
+  replay reuse, replay capacity, policy-loss weight, quantization-aware training, and publication cadence also
+  differed, while generation count itself changes meaning when reuse changes.
 
 ### Decision rationale
 
@@ -75,6 +85,10 @@ does not change the stored rows or their sampling probabilities.
   did not isolate the best clip norm for the retained objective with auxiliary heads.
 - The exact retained SGD schedule has no one-variable online counterfactual. Final reporting must present it as the
   training recipe, not as a universally optimal optimizer result.
+- The matched-estimator terminal advantage cannot be allocated to SGD. Only about 30 Elo of the roughly 74-Elo
+  cross-campaign gap appeared in the one-expansion policy instrument; the remaining approximately 44 Elo appeared
+  with 64-search tree use and has no isolated explanation. An optimizer hypothesis should therefore be presented as
+  the best-supported contributor, not a complete decomposition.
 - Dynamic loss balancing, gradient accumulation, EMA/SWA, cosine decay for the retained recipe, and alternative
   optimizers remain proposals rather than completed investigations.
 
@@ -89,6 +103,8 @@ does not change the stored rows or their sampling probabilities.
 - [Post-fold learning-rate sweep](../../benchmarks/chess-sgd-postfold-lr-rtx4070s-20260914/README.md)
 - [Fixed-teacher optimizer and schedule study](../../benchmarks/chess-attention-viability-rtx3060-20260827/README.md)
 - [Historical training optimizations](../../history/optimizations/training.md)
+- Local terminal retrospective and TensorBoard evidence: `C:\Users\berti\Downloads\RECAP.md` and
+  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz` (pending a committed derivation)
 
 ## Progressive candidate training and promotion
 
@@ -309,6 +325,11 @@ does not change the stored rows or their sampling probabilities.
 - The preserved decision record says ratios four and 6.25 matched at every shared evaluation boundary while their
   update rates differed by the ratio, suggesting an update-count/freshness cancellation over that short horizon. A
   ratio-eight arm was launched to widen the separation.
+- The terminal retrospective confirms that ratios four, 6.25, and eight remained matched at every shared boundary
+  in the available controls, but all arms ended within 90 minutes. The completed campaign used ratio four and twice
+  the replay capacity of the predecessor, so it exposed roughly twice as many fresh positions per optimizer step;
+  because ratio and capacity moved together and no long control exists, neither setting receives causal credit for
+  the final matched-estimator gain.
 - The raw curves and complete result bundle for those three short controls are not preserved under the benchmark
   directory. The conclusion therefore has weaker provenance than the checked-in replay and training benchmarks.
 - The retained ratio is four. That is a deliberate fresh-data bias, but the repository has no long matched online
@@ -331,6 +352,8 @@ does not change the stored rows or their sampling probabilities.
   learner.
 - The final archive needs fresh rows per second, quanta per hour, replay age, and effective unique presentations.
 - The short matched controls need raw recovery before their numerical curves can be publication claims.
+- “More fresh data per step” is a mechanistic description of the configured ratio, not evidence that the changed
+  replay regime improved Elo. The terminal comparison also changed optimizer, objective weight, and inference path.
 
 ### Sources
 
@@ -339,6 +362,7 @@ does not change the stored rows or their sampling probabilities.
 - [Credit and snapshot description](../../system/replay-and-data.md)
 - [Training dynamics with empirical ratio and admitted-data rate](../../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)
 - [Preserved short-control decision record](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/713d3439)
+- [Matched-estimator and causal-bound source note](evaluation-and-pitfalls.md#retrospective-matched-estimator-audit)
 
 ## Model-publication cadence and target freshness
 

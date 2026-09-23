@@ -772,6 +772,14 @@ Native TensorRT FP16 reached about 1.86 times the TorchScript BF16 search rate i
 TensorRT INT8 added about 1.31 times over its FP16 denominator in the measured quantization-oriented model. These
 ratios combine runtime, precision, and sometimes architecture, so the denominator must always be named.
 
+The terminal retrospective adds an eight-hour online boundary check. Matched campaigns differing in quantization
+and engine templates ended at generations 324 versus 331 and 40.6 versus 41.3 million training presentations; the
+INT8/QAT arm was marginally behind. Its trainer processed about 16,933 samples/s versus 19,029 for the FP16 arm,
+because fake-quantization work slowed optimization. Their single-rung ladder estimates, 1,800 and 1,786 Elo, do not
+resolve a strength difference. The control spent almost all of its time on the smallest network stage, where INT8
+has the least inference advantage, so it is a bounded negative result rather than proof that INT8 cannot help a
+larger actor workload.
+
 Naive full-trunk post-training INT8 was fast but semantically invalid: policy and value outputs changed
 catastrophically. Calibration sweeps, partial early-block quantization, SmoothQuant, weight-only routes, and FP8 did
 not meet the joint fidelity/speed gate. The successful route changed the trainable architecture to bounded scaled
@@ -791,6 +799,12 @@ throughput path. `torch.compile` was rejected specifically for search inference 
 TorchScript control, not because compilation never helped PyTorch. INT8 was retained only after model architecture,
 training, export, refit, and semantic validation were designed together.
 
+The end-to-end control sharpens the causal language: the completed campaign's roughly 1.9-fold production advantage
+over its predecessor cannot be attributed to FP16-to-INT8 conversion. The directly measured INT8-versus-FP16 online
+pair showed no generation or presentation-rate win. The supported systems account is that moving from TorchScript
+to TensorRT supplied the large runtime gain, while INT8 remained a stage- and workload-dependent microbenchmark
+gain whose QAT trainer cost could cancel it end to end.
+
 ### Pitfalls
 
 - Comparing `torch.compile` with eager mode does not answer whether it beats fused TorchScript.
@@ -809,6 +823,8 @@ training, export, refit, and semantic validation were designed together.
   need to be frozen from the terminal archive.
 - Final telemetry must show how often TensorRT, FP16 fallback, and bootstrap TorchScript actually ran.
 - End-to-end Elo benefit comes only from the final learning curve; backend throughput alone cannot establish it.
+- The online INT8/FP16 control changed quantization state and engine templates together. It bounds the combined
+  deployment choice; it does not isolate individual kernels, QAT regularization, or template construction.
 
 ### Sources
 
@@ -822,6 +838,9 @@ training, export, refit, and semantic validation were designed together.
 - [TensorRT template failure investigation](../../benchmarks/int8-template-staleness-rtx4070super-20260921/README.md)
 - [Current inference boundary](../../system/inference-and-evaluation.md)
 - [Native inference pipeline](../../../cpp/src/search/InferencePipeline.hpp)
+- Local terminal retrospective and TensorBoard evidence: `C:\Users\berti\Downloads\RECAP.md` and
+  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz` (pending a committed comparison
+  table)
 
 ## Cross-cutting lessons for the report
 

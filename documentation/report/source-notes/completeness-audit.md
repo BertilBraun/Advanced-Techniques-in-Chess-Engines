@@ -26,6 +26,8 @@ This pass compared all files in this directory with:
 - all six preserved tags: the initial release, the pre-runtime-rework snapshot, the completed baseline snapshot, the
   rejected graph-search investigation, the declined inference-cache investigation, and the final adaptive-stopping
   investigation.
+- the 2026-09-23 terminal retrospective, deterministic 13-series ladder export, checksum-verified terminal
+  TensorBoard archive, and terminal student logs/result files.
 
 Internal tag, run, and checkpoint names are provenance only. They are intentionally not used below as explanatory
 labels.
@@ -50,7 +52,9 @@ labels.
   Elo-per-hour thresholds, six-interval window, two start confirmations, 1.5 candidate multiplier, and the
   match-based promotion gate. They also preserve why unequal candidate training invalidated the former loss gate.
 - **Distillation:** raw teacher-output imitation and frozen-replay compression are separate investigations, with
-  equal-search, equal-time, and arithmetic equal-compute claims kept distinct.
+  equal-search, equal-time, and arithmetic equal-compute claims kept distinct. The terminal 20-million-row replay
+  student adds a bounded saturation result: tripling training from roughly 7.5 to 23 epochs moved the matched
+  10,000-search central estimate only 14 Elo, inside the match uncertainty, while held-out loss had flattened.
 - **Value targets:** replay outcome discount, optimizer-time root-value blending, and search-backup discount are now
   separate mechanisms with the target equation and evidence limits recorded.
 - **Publication cadence:** the historical 100-step negative decision, retained 500-step boundary, refresh versus
@@ -61,6 +65,15 @@ labels.
   direct-slot, actor/process/worker, CUDA-graph, and interactive-service investigations.
 - **Service rate versus latency:** saturated self-play/evaluation capacity and single-tree interactive response time
   now have distinct mechanisms, metrics, and preserved measurements.
+- **Cross-campaign estimator matching:** the report-source audit now replaces the misleading roughly 102-Elo
+  single-rung comparison with a +74.1-Elo three-rung-equivalent plateau comparison and labels the approximately
+  ±15-Elo transfer allowance as sensitivity rather than a game-bootstrap interval.
+- **Adaptive-rung artifact:** the previous baseline's terminal-looking rise is traced to one threshold-crossing
+  outlier followed by a 5,000-to-10,000-node rung transition. Flat policy-only and fixed-dataset controls prevent it
+  from being cited as continued learning.
+- **Causal allocation:** the matched gap decomposes descriptively into about +30 Elo in the one-expansion policy
+  instrument and a further +44 with 64-search tree use. Optimizer evidence remains short, replay-ratio controls remain
+  short and unresolved, and the online INT8/FP16 control showed no end-to-end rate win.
 
 ## Contradictions and evidence-boundary corrections
 
@@ -128,6 +141,13 @@ weights, resignation parameters, search constants, and much of the final bundle 
 comparisons. The dossiers generally state this correctly. Publication prose must preserve those qualifications and
 must not retroactively allocate the terminal run's total gain among individual settings.
 
+The terminal retrospective narrows but does not remove this limitation. High-rate Nesterov SGD is the strongest
+single-contributor hypothesis, yet no one-variable optimizer comparison ran longer than 2.5 hours. Replay ratio and
+capacity moved together in the completed campaign, scaled post-activation blocks and the policy-loss weight lack
+isolated strength tests, and the matched INT8/FP16 online pair does not explain the campaign's TensorRT-over-
+TorchScript throughput difference. The +30/+44 policy/search decomposition is an outcome decomposition, not a
+feature attribution.
+
 ### Capacity conclusion is bounded
 
 The independently initialized larger candidate was promoted by an invalid loss comparison and remained far weaker
@@ -186,10 +206,11 @@ and archived artifact locations. The following work remains before publication:
 
 - reconcile the final policy-only, fixed-search, moderate/deep-search, and very-deep-search results with their raw
   result files and uncertainty calculations;
+- commit the matched-estimator conversion, adaptive-rung event audit, and their exact machine-readable derivation;
 - freeze the exact serving-artifact identities and re-fetch evaluation outputs produced after the evidence pull;
 - extract complete optimizer volume, admitted data, effective replay reuse, and systems telemetry from the archive;
 - loss, learning-rate, Elo, replay-age, resignation, cut, throughput, and resource curves;
-- the remaining shared-protocol audit; and
+- remaining shared-protocol checks outside the completed plateau comparison; and
 - render the largest model's TensorRT/QAT recovery and fidelity history without implying it is the reported model.
 
 These pending results do not block factual review of any source dossier. They do block final evaluation, abstract,

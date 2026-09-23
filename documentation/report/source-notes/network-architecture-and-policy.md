@@ -733,10 +733,30 @@ into publication text.
 - The student was published as a usable compact artifact. It is a successful compression result, but it did not
   replace direct training or become part of the final self-play recipe.
 
+### Terminal replay-compression saturation check
+
+- A later 6-by-64 student with 470,295 parameters was trained on the terminal 20-million-row replay buffer without
+  QAT and evaluated through TorchScript. It is 13.4 times smaller than the 6,315,378-parameter reported teacher.
+- One training ended at 36,621 optimizer steps, roughly 7.5 epochs; a second continued to 110,000 steps, roughly 23
+  epochs, with the same batch size and learning rate. Their authoritative identities are the inference-model hashes
+  in the result files because both were staged through the same evaluation directory.
+- At 10,000 searches against the same 20,000-node opponent, the shorter training scored 0.475 (31/33/36), or 2,683
+  conditional benchmark Elo, and the longer training scored 0.495 (35/29/36), or 2,697 Elo. The central difference
+  is 14 Elo, far inside the paired-match intervals; tripling optimization did not produce a measurable playing gain.
+- The training proxy agrees with saturation under this fixed capacity and replay buffer. The policy gap above floor
+  improved from 0.5413 to 0.5183, but the long run's held-out policy loss settled near 1.8815 versus training loss
+  1.8613 and was nearly flat after about 60,000 steps. This is a bounded saturation result, not proof that all small
+  students saturate after one-digit epochs or that more/diverse data could not help.
+- The longer student reached 2,873 conditional Elo at 100,000 searches against the 20,000-node opponent, but the
+  0.730 score is unbracketed because the planned stronger-opponent match was skipped. It is a lower-bound-style
+  point, not a calibrated deep-search headline.
+
 ### Decision rationale
 
 - Both programs establish that compact students can recover substantial teacher behavior and that more data matters
   more than a small architectural sweep when the student is data-bound.
+- The terminal saturation check adds a stopping lesson: once held-out loss and playing strength stop responding,
+  simply tripling passes over one fixed buffer is not supported as an effective compression strategy.
 - They also reject the simple deployment thesis that a much smaller model plus proportionally more search will
   necessarily match the teacher. The realizable search multiplier was far below the parameter or MAC ratio, and the
   deficit tended to grow with search depth.
@@ -756,8 +776,9 @@ into publication text.
 - The replay-compression student saw only the final retained ten-million-row window, while the teacher learned from
   the much larger stream that had already been evicted. The result is not a capacity upper bound for that student.
 - Only the selected replay-compression seed received matches. Match intervals omit training-seed variance.
-- Neither program measured the compact student's absolute Stockfish Elo or performance at the intended deep-search
-  budgets. The equal-MAC parity result must not be described as practical equal-time parity.
+- The two earlier programs did not measure the compact student's absolute Stockfish Elo at the intended deep-search
+  budgets. The later terminal student did, but its deepest point is unbracketed. The earlier equal-MAC parity result
+  must not be described as practical equal-time parity.
 
 ### Sources
 
@@ -765,6 +786,11 @@ into publication text.
 - [Replay-target compression benchmark](../../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md)
 - [Published compact student artifacts](../../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/model/)
 - [Distillation implementation tests](../../../py/test/test_distillation.py)
+- Local checksum-verified terminal student evidence:
+  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tail.tgz`, especially
+  `distilled-student-36k.log`, `distilled-student.log`, `final-evaluation/student2-vs-20k/result.json`, and
+  `final-evaluation/long-student-s10k-vs-20k/result.json`
+- Final retrospective supplied on 2026-09-23: `C:\Users\berti\Downloads\RECAP.md`
 
 ## Quantization-driven residual architecture
 

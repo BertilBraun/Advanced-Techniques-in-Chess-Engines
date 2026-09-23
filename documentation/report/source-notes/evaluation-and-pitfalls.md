@@ -253,6 +253,57 @@ must carry the final absolute-strength claim.
 - [Progressive-sizing measurement semantics](../../architecture/progressive-model-sizing.md)
 - [Final result and figure landing page](../../results/final-chess-run.md)
 
+### Retrospective matched-estimator audit
+
+The completed campaign exposed a comparison error that peak-based or same-tag plots conceal. The previous four-day
+baseline logged only the single-rung fit under its generic ladder tag. The final campaign logged a three-rung
+bracketed fit under that tag and retained a separate single-rung series. Comparing those generic tags directly would
+therefore compare different estimators.
+
+The retrospective used plateau windows rather than peaks and transferred the estimator difference only where both
+fits were logged on the same 5,000-node rung. Across 35 such boundaries, the single-rung fit averaged 2.7 Elo below
+the three-rung fit, with standard deviation 23.7. Applying that measured conversion to the previous plateau gives
+2,283.9 Elo on the three-rung estimator; the final plateau averages 2,358.0, for a matched-estimator difference of
+**+74.1 Elo**. The stated **approximately ±15 Elo** is a transfer/sensitivity allowance for the conversion, not a
+game-level bootstrap confidence interval. It must be labeled as such.
+
+The apparent alternative of roughly +102 Elo comes from comparing both campaigns' single-rung plateaus. That is
+not the preferred result: during the final plateau the single-rung fit averaged 30.6 Elo above its own three-rung
+fit, whereas earlier on the same 10,000-node rung it averaged 6.9 Elo below. A one-rung estimate changes bias as the
+candidate's score moves away from 0.5. The publication-safe conclusion is therefore “about +74 Elo under a matched
+three-rung estimator,” with the derivation and transfer uncertainty retained; neither raw peak difference nor the
+larger single-rung number should be the headline comparison.
+
+The same audit gives a descriptive, not causal, decomposition. With model shape and evaluation search settings held
+the same, the one-expansion policy instrument improved from an estimated 1,689.0 to 1,719.3 Elo (**+30.3**), while
+the 64-search estimate improved by 74.1 Elo. The residual **about +44 Elo** appears only after tree search. This says
+that policy-only improvement does not account for the full matched gap; it does not identify which training change
+caused the search-side residual, and it does not isolate the value head from policy/search interaction.
+
+### Retrospective adaptive-rung failure
+
+The previous baseline's terminal-looking uptick was an evaluation-state transition, not supported evidence of
+continued learning. A single 100-game result at 3.938 active days scored 0.725 against the 5,000-node opponent,
+roughly 3.4 standard deviations above the preceding 44-point plateau. That crossed the configured 0.70 advance
+threshold. The next five estimates were therefore fitted against the 10,000-node anchor, 250 anchor Elo higher,
+despite candidate scores of only 0.29–0.39; the final 0.285 score had already triggered retreat.
+
+Two controls did not show the step: the policy-only ladder remained on its original rung, and fixed-dataset policy
+accuracy stayed within 0.442–0.471 across the same boundaries. Descriptive EMA smoothing reduces the whole event to
+roughly 20 Elo. This is sufficient to reject the narrative that the baseline was demonstrably rising at shutdown.
+It is not sufficient to claim the underlying network changed by exactly zero. Every apparent ladder discontinuity
+must therefore be checked against rung transitions before it is interpreted as learning.
+
+### Retrospective sources and archive status
+
+- Delivered deterministic export: `C:\Users\berti\Downloads\ladder-elo-export.json` (13 series, with stitched and
+  raw seconds retained for the final lineage).
+- Local checksum-verified TensorBoard archive:
+  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz`.
+- Final retrospective supplied on 2026-09-23: `C:\Users\berti\Downloads\RECAP.md`.
+- The matched-estimator calculation and rung-event audit are not yet committed as a standalone machine-readable
+  derivation. Publication should preserve the calculation inputs and script rather than cite this dossier alone.
+
 ## Transferable failure study: late-game target poisoning
 
 ### Failure
