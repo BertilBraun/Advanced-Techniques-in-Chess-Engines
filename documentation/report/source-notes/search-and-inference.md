@@ -838,9 +838,8 @@ gain whose QAT trainer cost could cancel it end to end.
 - [TensorRT template failure investigation](../../benchmarks/int8-template-staleness-rtx4070super-20260921/README.md)
 - [Current inference boundary](../../system/inference-and-evaluation.md)
 - [Native inference pipeline](../../../cpp/src/search/InferencePipeline.hpp)
-- Local terminal retrospective and TensorBoard evidence: `C:\Users\berti\Downloads\RECAP.md` and
-  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz` (pending a committed comparison
-  table)
+- [Final evidence index](../../evidence/final-chess-20260923/README.md), including the checksum-covered TensorBoard
+  archive (pending a committed end-to-end comparison table)
 
 ## Cross-cutting lessons for the report
 

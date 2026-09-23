@@ -26,16 +26,24 @@ and training experiments that did not improve the accepted result and are exclud
 presented as continued final-model training.
 
 The previous four-day baseline is cut at exactly **3.0 days**, retaining 143 clean observations and ending at
-2,265.4 Elo. Later points from its noisy terminal evaluation interval are excluded. Under those declared boundaries,
-the final recipe ends **106.8 Elo higher in half a day less training**, and **348.2 Elo above the early baseline's
-terminal observation**.
+2,265.4 Elo. Later points from its noisy terminal evaluation interval are excluded. The two plotted endpoints differ
+by 106.8 Elo, and the final endpoint is 348.2 Elo above the early baseline's terminal observation. These are
+descriptions of the trimmed curves, not valid cross-campaign strength estimates, because the previous baseline used a
+single-rung fit while the final campaign's generic ladder series used a three-rung bracketed fit.
+
+A retrospective plateau comparison on the same three-rung estimator places the previous baseline at 2,283.9 Elo
+and the final recipe at 2,358.0 Elo: **+74.1 Elo**, with an approximately **±15 Elo transfer/sensitivity allowance**.
+The allowance reflects uncertainty in transferring the estimator correction; it is not a game-level bootstrap
+confidence interval. The report therefore uses **about +74 Elo under a matched estimator** as the cross-campaign
+headline and does not compare raw peaks.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
 Figure 7.1: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
 training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The tracked
 [publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) records those rules and retains
-the source-series identities; internal run labels do not appear in the figure.
+the source-series identities; internal run labels do not appear in the figure. The figure is descriptive; the +74.1
+Elo claim comes from the matched-estimator plateau audit rather than from subtracting its displayed endpoints.
 
 That stitched curve is not the entire compute history. It deliberately excludes two reverted branches while retaining
 their raw time in the source export:

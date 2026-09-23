@@ -41,10 +41,9 @@ measurement. The [experiment ledger](experiments/README.md) and
 [technical-report source notes](report/source-notes/README.md) separate retained engineering choices, measured
 improvements, rejected techniques, and underdetermined experiments.
 
-One reproducibility issue remains open: the living configuration references a progressive-candidate match gate but
-currently lacks its corresponding evaluation definition. The completed run used that match-gated workflow, which is
-documented in [progressive model sizing](architecture/progressive-model-sizing.md). The configuration must be repaired
-and validated before it is presented as a self-contained reproduction snapshot.
+The living configuration includes the progressive-candidate match evaluation used by its promotion gate. It loads as
+a self-contained configuration; publication must still pin the exact resolved configuration and source revision used
+for the reported checkpoint rather than treating future edits to the living recipe as historical provenance.
 
 ## Verified result summary
 
@@ -54,6 +53,7 @@ and validated before it is presented as a self-contained reproduction snapshot.
 | Teacher evaluation matrix | **Verified** | Ten 100-game rows and the parallelism sweep are checksum-covered in the [evidence index](evidence/final-chess-20260923/README.md) |
 | 100,000-search headline: 3,251 [3,206, 3,297] | **Verified** | Second deep anchor agrees within four Elo; both result manifests are captured |
 | Accepted-lineage trajectory | **Publication curve complete** | Final recipe: 180 observations through 2.5 days, endpoint 2,372.2, peak 2,407.6; later experiments excluded by scope |
+| Cross-campaign improvement | **Retrospective calculation complete** | About +74 Elo on a matched three-rung estimator, with approximately ±15 transfer sensitivity; preserve a standalone derivation before publication |
 | First distilled student | **Verified** | 36,621 steps (7.500 replay epochs); 2,683 [2,637, 2,731] at 10,000 searches |
 | Longer distilled student | **Verified** | 110,000 steps (22.528 replay epochs); 2,697 [2,640, 2,753] at 10,000 searches and an unbracketed 2,873 [2,819, 2,935] at 100,000 |
 | $43.20 training figure | **Narrow derived measure** | 60 accepted-lineage hours at $0.72/h; not total spend |
@@ -61,11 +61,12 @@ and validated before it is presented as a self-contained reproduction snapshot.
 ## Publication work still open
 
 - Reconcile total games, admitted positions, replay occupancy, discarded compute, and actual end-to-end spend.
+- Preserve the matched-estimator plateau calculation as a standalone machine-readable derivation.
 - Generate the remaining training-dynamics and deployment-fidelity figures; the cross-campaign ladder figure is
   complete.
-- Repair and validate the missing progressive-candidate evaluation definition in the living configuration.
-- Replace the previous public result in the root README once the evidence and figures above are frozen.
-- Complete the narrative technical report and add explicit code and model licenses.
+- Verify that the public download and deployed model match the reported checkpoint and artifact hashes.
+- Replace the previous public result in the root README; the strength evidence and headline figure are frozen.
+- Complete the narrative technical report and choose explicit code and model/data licenses.
 
 ## Reader path
 

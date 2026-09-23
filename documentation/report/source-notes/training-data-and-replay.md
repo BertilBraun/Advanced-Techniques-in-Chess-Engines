@@ -103,8 +103,8 @@ does not change the stored rows or their sampling probabilities.
 - [Post-fold learning-rate sweep](../../benchmarks/chess-sgd-postfold-lr-rtx4070s-20260914/README.md)
 - [Fixed-teacher optimizer and schedule study](../../benchmarks/chess-attention-viability-rtx3060-20260827/README.md)
 - [Historical training optimizations](../../history/optimizations/training.md)
-- Local terminal retrospective and TensorBoard evidence: `C:\Users\berti\Downloads\RECAP.md` and
-  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz` (pending a committed derivation)
+- [Final evidence index](../../evidence/final-chess-20260923/README.md), including the checksum-covered TensorBoard
+  archive (pending a committed causal-comparison derivation)
 
 ## Progressive candidate training and promotion
 

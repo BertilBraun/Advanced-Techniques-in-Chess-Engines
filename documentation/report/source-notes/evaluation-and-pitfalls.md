@@ -296,11 +296,11 @@ must therefore be checked against rung transitions before it is interpreted as l
 
 ### Retrospective sources and archive status
 
-- Delivered deterministic export: `C:\Users\berti\Downloads\ladder-elo-export.json` (13 series, with stitched and
-  raw seconds retained for the final lineage).
-- Local checksum-verified TensorBoard archive:
-  `C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz`.
-- Final retrospective supplied on 2026-09-23: `C:\Users\berti\Downloads\RECAP.md`.
+- The [compact final evidence index](../../evidence/final-chess-20260923/README.md) records the checksum-covered
+  TensorBoard bundle and the committed 13-series ladder export, including stitched and raw seconds for the final
+  lineage.
+- The operator retrospective supplied on 2026-09-23 was checked against those archives where the underlying result
+  manifests were available.
 - The matched-estimator calculation and rung-event audit are not yet committed as a standalone machine-readable
   derivation. Publication should preserve the calculation inputs and script rather than cite this dossier alone.
 

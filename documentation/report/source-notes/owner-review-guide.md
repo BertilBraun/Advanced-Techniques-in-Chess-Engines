@@ -114,9 +114,10 @@ results become headline prose:
    an effective/stitched time may appear separately but must not be called cost.
 4. **Reported model:** approve treating the strongest retained medium-sized checkpoint as the reported model, while
    presenting the later function-preserving larger model as a negative capacity result rather than “the final model.”
-5. **Student result:** approve describing the student as 13.4 times smaller and 431 Elo below the teacher at 10,000
-   searches. Avoid “86% of teacher Elo,” because Elo has no meaningful ratio origin. The longer student run should
-   remain pending until its held-out behavior and matches finish.
+5. **Student result:** approve describing the student as 13.4 times smaller and 417 Elo below the teacher at 10,000
+   searches after the longer run. Avoid “86% of teacher Elo,” because Elo has no meaningful ratio origin. Tripling
+   training improved the matched point estimate by only 14 Elo, inside the overlapping intervals; describe this as
+   saturation for this student, replay snapshot, and schedule rather than a universal small-model limit.
 6. **Easy-rung explanation:** is the claim that the shallower anchor gap is caused by draws against weak opposition a
    confirmed diagnosis, or only the leading explanation? If it was not separately tested, the report should call it
    an interpretation.
@@ -126,10 +127,9 @@ results become headline prose:
 You do not need to check source paths, benchmark transcription, input-plane enumeration, process ownership, replay
 schema, configuration constants, or the full evidence ledgers. You also do not need to review final prose yet.
 
-One repository issue is also explicitly **not** an owner-review question: the canonical configuration currently
-references the progressive-candidate match gate but appears to lack the corresponding evaluation definition after a
-merge. That must be resolved by a code/configuration audit before the final reproducibility snapshot; it does not
-require you to reconstruct the intended behavior from memory.
+The canonical configuration issue is resolved: its progressive-candidate gate now has the corresponding evaluation
+definition and the file loads successfully. Exact historical reproduction still requires the resolved configuration,
+source revision, and artifact hashes frozen in the evidence record.
 
 After the questions above are answered, the next useful owner pass is a short narrative outline and selected figures,
 not the underlying 5,000 lines of source notes.

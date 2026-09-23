@@ -58,8 +58,15 @@ The checkpoint manifest and archive-level hashes are listed in the
 The report-scoped stitched ladder contains **180 observations through exactly 2.5 effective days**, rising from
 798 to **2,372.2** at the cutoff and peaking at **2,407.6**. Later observations belong to experiments that did not
 improve the accepted result and are retained only in the untrimmed source evidence. The comparison trims the previous
-four-day baseline at exactly 3.0 days, before its noisy terminal interval, where it ends at 2,265.4 Elo. On those
-declared boundaries, the final recipe ends 106.8 Elo higher with half a day less training.
+four-day baseline at exactly 3.0 days, before its noisy terminal interval, where it ends at 2,265.4 Elo. Those plotted
+endpoints differ by 106.8 Elo, but they must not be used as the cross-campaign strength estimate: the historical curve
+used a single-rung fit while the final curve used a three-rung bracketed fit.
+
+The estimator-matched retrospective compares plateau windows on the three-rung estimator. It places the previous
+baseline at 2,283.9 Elo and the final recipe at 2,358.0 Elo, a gain of **74.1 Elo**, with an approximately **±15 Elo
+transfer/sensitivity allowance**. That allowance is not a game-level confidence interval. The defensible public
+summary is therefore **about +74 Elo under a matched estimator**, not the endpoint difference or either curve's
+single highest observation.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
@@ -146,20 +153,22 @@ The 100,000-search student point is **unbracketed**: it beat the 20,000-node opp
 estimate rather than a headline comparable in robustness to the teacher's two-rung 100,000-search result. Elo is an
 interval scale, so the student and teacher ratings must not be compared as a percentage or ratio.
 
-## Publication gate still open
+## Publication work still open
 
-Before the result moves into the root README, complete these items:
+The verified result and headline ladder figure are ready for the root README. The full report and release still need:
 
 - reconcile total self-play games, accepted positions, replay occupancy, and resume-safe training counters;
 - distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
-- preserve the generated cross-campaign figure and its trimmed machine-readable input alongside the final report;
 - generate the loss, learning-rate, throughput, replay, quantization-fidelity, and transition figures from the
   checksum-covered archives;
+- verify that the downloadable public model matches the reported checkpoint and deployment-artifact hashes;
+- choose and publish the code and model/data licenses.
 
 ## Cross-campaign figure
 
-The report figure compares the matched 64-search ladder over effective training time for five descriptively labelled
-campaigns: the early baseline, first major architecture revision, previous four-day baseline, quantized successor,
-and final recipe. Internal identifiers remain only in the provenance data. Curves use the project's established
+The report figure compares the available 64-search ladder series over effective training time for five descriptively
+labelled campaigns: the early baseline, first major architecture revision, previous four-day baseline, quantized
+successor, and final recipe. Internal identifiers remain only in the provenance data. Curves use the project's established
 bias-corrected 0.95 exponential moving average. The root README can reuse this SVG when the remaining publication
-gate closes.
+gate closes. The figure shows descriptive trajectories; the **+74.1 Elo** comparison above comes from the separate
+matched-estimator plateau audit and must remain the quantitative cross-campaign headline.
