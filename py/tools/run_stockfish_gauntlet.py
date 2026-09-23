@@ -919,8 +919,10 @@ def parse_arguments() -> Arguments:
         or (arguments.match_random_seed is not None and arguments.match_random_seed < 0)
     ):
         raise ValueError('Checkpoint generation, match seed, and device IDs must be nonnegative.')
-    if not arguments.devices or len(set(arguments.devices)) != len(arguments.devices):
-        raise ValueError('Gauntlet devices must be nonempty and unique.')
+    # A device may repeat: one shard per GPU leaves the GPU idle while its single Stockfish replies,
+    # and the opponent is one process per shard, so several shards on a GPU is how the CPU fills.
+    if not arguments.devices:
+        raise ValueError('Gauntlet devices must be nonempty.')
     if arguments.output_directory.exists():
         raise ValueError(f'Gauntlet output directory already exists: {arguments.output_directory}')
     _search_configuration(arguments.model_search_budget, TorchScriptInferenceBackend())
