@@ -151,7 +151,7 @@ class ProductionReplayInput:
     kind: Literal['production_replay']
     path: Path
     experiment: Path
-    orchestrator_recorded_sha256: str
+    orchestrator_recorded_sha256: str | None = None
 
 
 DatasetInput: TypeAlias = DistillationFileInput | ProductionReplayInput
@@ -160,7 +160,9 @@ DatasetInput: TypeAlias = DistillationFileInput | ProductionReplayInput
 class ProductionReplaySnapshot(FrozenModel):
     schema_version: Literal[1] = 1
     replay_store_path: Path
-    orchestrator_recorded_replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    # Provenance only, never verified against the file. A replay store that has been deleted
+    # cannot be rehashed, so the run records that it was unavailable rather than inventing one.
+    orchestrator_recorded_replay_store_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     experiment_path: Path
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -800,8 +802,8 @@ def parse_arguments() -> Arguments:
             raise ValueError('--replay-experiment and --orchestrator-recorded-replay-sha256 require --replay-store.')
         dataset_input: DatasetInput = DistillationFileInput(kind='distillation_file', path=namespace.dataset)
     else:
-        if namespace.replay_experiment is None or namespace.orchestrator_recorded_replay_sha256 is None:
-            raise ValueError('--replay-store requires --replay-experiment and --orchestrator-recorded-replay-sha256.')
+        if namespace.replay_experiment is None:
+            raise ValueError('--replay-store requires --replay-experiment.')
         dataset_input = ProductionReplayInput(
             kind='production_replay',
             path=namespace.replay_store,
@@ -854,7 +856,9 @@ def parse_arguments() -> Arguments:
                 raise ValueError('Replay store and replay experiment configuration must both exist.')
             if arguments.distil_auxiliary_heads:
                 raise ValueError('The first production-replay experiment trains only primary policy and WDL heads.')
-            if not re.fullmatch(r'[0-9a-f]{64}', orchestrator_recorded_sha256):
+            if orchestrator_recorded_sha256 is not None and not re.fullmatch(
+                r'[0-9a-f]{64}', orchestrator_recorded_sha256
+            ):
                 raise ValueError(
                     'Orchestrator-recorded replay SHA-256 must contain exactly 64 lowercase hexadecimal digits.'
                 )
