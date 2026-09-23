@@ -53,7 +53,7 @@ and validated before it is presented as a self-contained reproduction snapshot.
 | Selected checkpoint and deployment hashes | **Verified** | [Compact evidence index](evidence/final-chess-20260923/README.md) |
 | Teacher evaluation matrix | **Complete** | Ten 100-game rows in the [result record](results/final-chess-run.md); three directories await re-fetch |
 | 100,000-search headline: 3,251 [3,206, 3,297] | **Complete** | Second deep anchor agrees within four Elo; result directory awaits re-fetch |
-| Accepted-lineage trajectory | **Export captured; reconciliation pending** | Recap reports 216 observations over 3.0 days; JSON contains 229 through 76.33 hours; both preserve the 2,407.6 peak |
+| Accepted-lineage trajectory | **Publication curve complete** | Final recipe: 180 observations through 2.5 days, endpoint 2,372.2, peak 2,407.6; later experiments excluded by scope |
 | First distilled student | **Complete; evidence pending** | 470,295 parameters and 2,683 [2,626, 2,738] at 10,000 searches; directories await re-fetch |
 | Longer distilled student | **Pending** | Training and queued evaluation were active at the evidence cutoff |
 | $43.20 training figure | **Narrow derived measure** | 60 accepted-lineage hours at $0.72/h; not total spend |
@@ -63,8 +63,8 @@ and validated before it is presented as a self-contained reproduction snapshot.
 - Re-fetch and checksum the result directories created after the current evidence pull.
 - Freeze the longer-student result separately if it completes.
 - Reconcile total games, admitted positions, replay occupancy, discarded compute, and actual end-to-end spend.
-- Reconcile the ladder export with the recap's observation count and duration, then generate the cross-campaign,
-  training-dynamics, and deployment-fidelity figures.
+- Generate the remaining training-dynamics and deployment-fidelity figures; the cross-campaign ladder figure is
+  complete.
 - Repair and validate the missing progressive-candidate evaluation definition in the living configuration.
 - Replace the previous public result in the root README once the evidence and figures above are frozen.
 - Complete the narrative technical report and add explicit code and model licenses.

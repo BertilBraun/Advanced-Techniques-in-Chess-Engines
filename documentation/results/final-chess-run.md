@@ -54,11 +54,16 @@ The checkpoint manifest and archive-level hashes are listed in the
 
 ## Training trajectory and excluded work
 
-The operator recap summarizes the stitched ladder as **216 observations over 3.0 effective days**, rising from 798
-to approximately 2,380 and peaking at **2,407.6**. The later delivered JSON contains 229 multi-rung observations
-through 76.33 hours, while preserving the same peak. That count and endpoint difference remains an explicit figure-
-generation reconciliation item. The trajectory reached
-the previous four-day baseline's 2,388.6 peak in approximately **2.5 effective days**, rather than 4.04 days.
+The report-scoped stitched ladder contains **180 observations through exactly 2.5 effective days**, rising from
+798 to **2,372.2** at the cutoff and peaking at **2,407.6**. Later observations belong to experiments that did not
+improve the accepted result and are retained only in the untrimmed source evidence. The comparison trims the previous
+four-day baseline at exactly 3.0 days, before its noisy terminal interval, where it ends at 2,265.4 Elo. On those
+declared boundaries, the final recipe ends 106.8 Elo higher with half a day less training.
+
+![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
+
+The [trimmed publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) is derived from the
+checksum-covered source export. It records the two cutoffs and their reasons alongside descriptive series labels.
 
 Two failed branches are excluded from that curve but remain part of the provenance:
 
@@ -137,16 +142,14 @@ Before the result moves into the root README, complete these items:
 - re-fetch and checksum all evaluation result directories created after the current evidence pull;
 - reconcile total self-play games, accepted positions, replay occupancy, and resume-safe training counters;
 - distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
-- reconcile the delivered ladder export with the recap's observation count and duration, then generate the
-  cross-campaign ladder figure with descriptive model labels;
+- preserve the generated cross-campaign figure and its trimmed machine-readable input alongside the final report;
 - generate the loss, learning-rate, throughput, replay, quantization-fidelity, and transition figures from the
   checksum-covered archives;
 - freeze the longer-student result separately if it completes.
 
-## Cross-campaign figure specification
+## Cross-campaign figure
 
-The root README and report should share a plot of the matched 64-search ladder over effective training time for five
-descriptively labelled campaigns: the early baseline, the first major architecture revision, the previous four-day
-baseline, its later successor, and the final training lineage. Internal run identifiers belong only in the figure's
-provenance sidecar. The final series must preserve raw time as well as stitched accepted-lineage time, show resume and
-discard boundaries, and overlay smoothing without replacing raw observations.
+The report figure compares the matched 64-search ladder over effective training time for five descriptively labelled
+campaigns: the early baseline, first major architecture revision, previous four-day baseline, quantized successor,
+and final recipe. Internal identifiers remain only in the provenance data. Raw observations remain visible beneath
+the centered seven-point means. The root README can reuse this SVG when the remaining publication gate closes.

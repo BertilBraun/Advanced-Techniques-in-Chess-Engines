@@ -98,7 +98,7 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
   outcomes
 - [ ] Final training curves, learning-rate curves, replay statistics, and systems telemetry (terminal summary exists;
   archive-derived figures remain)
-- [ ] Cross-generation progress figure using descriptive checkpoint/campaign labels rather than internal run identifiers
+- [x] Cross-generation progress figure using descriptive checkpoint/campaign labels rather than internal run identifiers
 - [ ] Cost, hardware, runtime, and reproducibility accounting
 
 ## Reader-facing incident studies

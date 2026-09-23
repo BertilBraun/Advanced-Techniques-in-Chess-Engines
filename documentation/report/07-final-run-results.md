@@ -20,14 +20,25 @@ not justify replacing the selected checkpoint.
 
 ## Training outcome
 
-The operator recap summarizes the accepted-lineage ladder as **216 observations over 3.0 effective days**. It rose
-from 798 to approximately 2,380 and reached a peak of **2,407.6**. A later delivered JSON contains 229 multi-rung
-observations through 76.33 hours while preserving the same peak; that count and endpoint difference must be
-reconciled before the figure caption is final. The most informative efficiency comparison is against the previous
-four-day baseline: its 2,388.6 peak was reached after approximately **2.5 effective days**, rather than 4.04 days.
+The report-scoped final lineage contains **180 observations through exactly 2.5 effective days**. It rose from 798
+to **2,372.2** at the cutoff and reached a peak of **2,407.6** inside that interval. Later points belong to capacity
+and training experiments that did not improve the accepted result and are excluded from the comparison rather than
+presented as continued final-model training.
+
+The previous four-day baseline is cut at exactly **3.0 days**, retaining 143 clean observations and ending at
+2,265.4 Elo. Later points from its noisy terminal evaluation interval are excluded. Under those declared boundaries,
+the final recipe ends **106.8 Elo higher in half a day less training**, and **348.2 Elo above the early baseline's
+terminal observation**.
+
+![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
+
+Figure 7.1: Raw ladder observations are shown faintly beneath centered seven-point means. The final recipe is cut at
+2.5 days and the previous four-day baseline at 3.0 days. The tracked
+[publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) records those rules and retains
+the source-series identities; internal run labels do not appear in the figure.
 
 That stitched curve is not the entire compute history. It deliberately excludes two reverted branches while retaining
-their raw time in the delivered export:
+their raw time in the source export:
 
 1. An early INT8 conversion collapse was detected after one ladder observation and reverted.
 2. A from-scratch capacity increase was promoted because training losses were compared across candidates that had
@@ -106,13 +117,11 @@ be added as a separate experiment rather than replacing the completed first stud
 
 The numerical result is ready; the visual account is not. Publication still requires:
 
-1. A matched 64-search ladder comparison across the early baseline, architecture revision, previous four-day
-   baseline, later successor, and final lineage, with internal run identifiers confined to a provenance sidecar.
-2. Raw and smoothed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
-3. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
-4. Games, fresh positions, training presentations, replay occupancy/age, and trainer/self-play throughput.
-5. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
-6. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
+1. Raw and smoothed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
+2. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
+3. Games, fresh positions, training presentations, replay occupancy/age, and trainer/self-play throughput.
+4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
+5. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
 
 The root README should remain unchanged until the post-pull result directories are fetched, the result tables are
 checksum-complete, and the headline figures are generated from committed compact inputs.

@@ -6,14 +6,14 @@ derived_training_presentations,836608000,presentations,derived,optimizer steps m
 selected_checkpoint_effective_time,60,hours,captured_export,accepted-lineage stitched time
 node_hourly_price,0.72,USD_per_hour,repository_config,configured training-node rate
 selected_checkpoint_narrow_cost,43.20,USD,derived,60 accepted-lineage hours multiplied by configured rate; not total spend
-stitched_observations,216,observations,operator_recap_pending_export_reconciliation,delivered export contains 229 multi-rung observations
-stitched_effective_duration,3.0,days,operator_recap_pending_export_reconciliation,delivered export ends at 76.33 hours
-delivered_export_observations,229,observations,captured_export,final multi-rung series
-delivered_export_duration,76.33,hours,captured_export,final multi-rung series endpoint at 274800 seconds
+report_scoped_observations,180,observations,derived_from_captured_export,final lineage through exact 2.5-day cutoff
+report_scoped_effective_duration,2.5,days,derived_from_captured_export,later unsuccessful experiments excluded
+delivered_export_observations,229,observations,captured_export,untrimmed final multi-rung source series
+delivered_export_duration,76.33,hours,captured_export,untrimmed source endpoint at 274800 seconds
 stitched_start_elo,798,benchmark_elo,captured_export,multi-rung ladder rounded from 798.2
-stitched_terminal_elo,2380,benchmark_elo_approximate,operator_recap_pending_export_reconciliation,delivered export endpoint is 2333.5 after later observations
+report_scoped_terminal_elo,2372.2,benchmark_elo,derived_from_captured_export,exact 2.5-day observation
 stitched_peak_elo,2407.6,benchmark_elo,captured_export,multi-rung ladder
 previous_baseline_peak,2388.6,benchmark_elo,captured_export,comparison campaign
-time_to_previous_peak,2.5,days_approximate,operator_recap_pending_export_reconciliation,accepted-lineage stitched time
+time_to_previous_peak,2.5,days_approximate,captured_export,accepted-lineage stitched time
 previous_baseline_duration,4.04,days,captured_export,comparison campaign
 discarded_replay_rows,4040112,rows,operator_recap_pending_provenance_check,removed after failed capacity promotion

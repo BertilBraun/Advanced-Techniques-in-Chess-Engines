@@ -189,8 +189,11 @@ and archived artifact locations. The following work remains before publication:
 - freeze the exact serving-artifact identities and re-fetch evaluation outputs produced after the evidence pull;
 - extract complete optimizer volume, admitted data, effective replay reuse, and systems telemetry from the archive;
 - loss, learning-rate, Elo, replay-age, resignation, cut, throughput, and resource curves;
-- the shared-protocol audit and final cross-campaign ladder figure; and
+- the remaining shared-protocol audit; and
 - render the largest model's TensorRT/QAT recovery and fidelity history without implying it is the reported model.
 
 These pending results do not block factual review of any source dossier. They do block final evaluation, abstract,
 headline README claims, and conclusion prose.
+
+The cross-campaign ladder figure is complete. Its deterministic input trims the final recipe at exactly 2.5 days
+and the previous four-day baseline at exactly 3.0 days while preserving the untrimmed export as provenance.

@@ -9,9 +9,13 @@ The compact tables intentionally expose evidence status rather than making every
 - [`evaluation-results.csv`](evaluation-results.csv) contains the teacher matrix and parallel-search sweep;
 - [`student-results.csv`](student-results.csv) separates the completed first student from the unfinished longer run;
 - [`training-summary.csv`](training-summary.csv) distinguishes archive-backed checkpoint facts, derived values, and
-  ladder facts that still require reconciliation; and
+  report-scoped ladder facts; and
 - [`ladder-elo-export.json`](ladder-elo-export.json) is the delivered cross-campaign ladder input, SHA-256
   `136ded703b8b81fec915839577e5f82fb859b7e19aabb15d8af9f55d29aa58dc`.
+- [`ladder-elo-report-trimmed.json`](ladder-elo-report-trimmed.json) is the deterministic publication input derived
+  from that export, SHA-256 `14da412f5f7fae93395e48c69a48863681ac053743080ea0bc0aa86d0f1f9ed8`.
+- [`chess-ladder-progress.svg`](../../showcase/chess-ladder-progress.svg) is the rendered report figure, SHA-256
+  `bd3370f558355b26c6eb2fecda0174365d89348fe81ad386f1dbf71629022962`.
 
 ## Evidence freeze
 
@@ -27,11 +31,11 @@ The archive pull predates several evaluations reported in the operator recap. Th
 but publication remains gated on fetching their result directories and checking their manifests and checksums. The
 second, longer student training and its queued evaluations were still running and are not reported as completed.
 
-The later ladder export is now preserved, but it does not exactly match the recap's summary count. Its final
-multi-rung series contains 229 observations through 274,800 stitched seconds (76.33 hours), while the recap reports
-216 observations over 3.0 days. The selected checkpoint remains at 60 accepted-lineage hours and the 2,407.6 peak is
-present in the export. The count and duration difference must be explained before the figure caption is finalized;
-neither source is silently substituted for the other.
+The source export deliberately remains untrimmed. For publication, the final lineage ends at its exact 2.5-day
+observation: 180 points, terminal Elo 2,372.2, peak Elo 2,407.6. Later capacity and training experiments did not
+improve the accepted result and are outside the report curve. The previous four-day baseline ends at its exact
+3.0-day observation: 143 points and terminal Elo 2,265.4. Its later, noisier evaluation interval is likewise outside
+the report curve. The derived JSON records both cutoffs and reasons without altering the original evidence.
 
 ## Selected checkpoint
 
@@ -84,5 +88,5 @@ distillation, terminal evaluation, and other project compute. Actual end-to-end 
 - Record the completed longer-student result separately; do not overwrite the first student experiment.
 - Reconcile final games, admitted positions, replay occupancy, discarded work, stage time, and actual total spend
   from the provenance and logs archives.
-- Reconcile the ladder export's 229 points and 76.33-hour endpoint with the recap's 216 points and 3.0-day summary,
-  then generate the cross-campaign and training-dynamics figures.
+- Generate the remaining training-dynamics figures; the cross-campaign ladder figure and publication input are now
+  frozen.
