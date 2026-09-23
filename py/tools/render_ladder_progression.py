@@ -71,20 +71,20 @@ class SeriesSpecification:
 
 
 SERIES_SPECIFICATIONS = (
-    SeriesSpecification('Early baseline', 'v9::evaluation/ladder_elo', '#737373'),
-    SeriesSpecification('Architecture revision', 'v29::evaluation/ladder_elo_64', '#cc79a7'),
+    SeriesSpecification('Early baseline', 'v9::evaluation/ladder_elo', '#b8860b'),
+    SeriesSpecification('Architecture revision', 'v29::evaluation/ladder_elo_64', '#7b4fa8'),
     SeriesSpecification(
         'Previous four-day baseline',
         'v34::evaluation/ladder_elo_64',
-        '#009e73',
+        '#2e7d32',
         cutoff_seconds=3 * 24 * 60 * 60,
         cutoff_reason='The clean evaluation interval ends at 3.0 days; later noisy points are outside report scope.',
     ),
-    SeriesSpecification('Quantized successor', 'v46::evaluation/ladder_elo_64', '#e69f00'),
+    SeriesSpecification('Quantized successor', 'v46::evaluation/ladder_elo_64', '#c1440e'),
     SeriesSpecification(
         'Final recipe',
         'final::evaluation/ladder_elo_64',
-        '#0072b2',
+        '#1f4e79',
         cutoff_seconds=5 * 12 * 60 * 60,
         cutoff_reason='The accepted final training result ends at 2.5 days; later experimentation is excluded.',
     ),
@@ -123,95 +123,85 @@ def select_publication_series(
     )
 
 
-def centered_mean(values: tuple[float, ...], radius: int = 3) -> tuple[float, ...]:
-    return tuple(
-        sum(values[max(0, index - radius) : min(len(values), index + radius + 1)])
-        / len(values[max(0, index - radius) : min(len(values), index + radius + 1)])
-        for index in range(len(values))
-    )
+def bias_corrected_ema(values: tuple[float, ...], decay: float = 0.95) -> tuple[float, ...]:
+    numerator = 0.0
+    denominator = 0.0
+    smoothed_values: list[float] = []
+    for value in values:
+        numerator = numerator * decay + value
+        denominator = denominator * decay + 1.0
+        smoothed_values.append(numerator / denominator)
+    return tuple(smoothed_values)
 
 
 def configure_axes(axes: Axes) -> None:
-    axes.set_xlim(0.0, 3.08)
+    axes.set_xlim(0.0, 3.05)
     axes.set_ylim(600.0, 2500.0)
-    axes.set_xlabel('Effective training time (days)', fontsize=11)
-    axes.set_ylabel('64-search ladder Elo', fontsize=11)
+    axes.set_xlabel('effective training time (days)')
+    axes.set_ylabel('64-search ladder Elo')
     axes.set_xticks((0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0))
     axes.set_yticks((750, 1000, 1250, 1500, 1750, 2000, 2250, 2500))
-    axes.grid(axis='both', color='#d7dce2', linewidth=0.7, alpha=0.72)
+    axes.grid(axis='both', color='#b0b0b0', linewidth=0.6, alpha=0.25)
     axes.set_axisbelow(True)
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
-    axes.spines['left'].set_color('#6b7280')
-    axes.spines['bottom'].set_color('#6b7280')
-    axes.tick_params(colors='#374151', labelsize=9)
+    axes.spines['left'].set_color('#404040')
+    axes.spines['bottom'].set_color('#404040')
+    axes.tick_params(colors='#303030')
 
 
 def plot_series(axes: Axes, series: PublicationSeries, color: str) -> None:
     days = tuple(point.seconds / 86_400.0 for point in series.points)
     elos = tuple(point.elo for point in series.points)
-    trend = centered_mean(elos)
-    axes.plot(days, elos, color=color, linewidth=0.75, alpha=0.24, zorder=1)
-    axes.scatter(days, elos, color=color, s=8, alpha=0.24, edgecolors='none', zorder=2)
-    axes.plot(days, trend, color=color, linewidth=2.25, label=series.label, zorder=3)
-    axes.scatter(days[-1], elos[-1], color=color, s=30, edgecolors='white', linewidths=0.8, zorder=4)
+    axes.plot(days, bias_corrected_ema(elos), color=color, linewidth=2.35, label=series.label)
 
 
 def render_figure(publication: PublicationExport, path: Path) -> None:
     plt.rcParams.update(
         {
-            'font.family': 'DejaVu Sans',
-            'svg.fonttype': 'none',
+            'figure.dpi': 110,
+            'font.family': 'Segoe UI',
+            'font.size': 10,
+            'axes.titlesize': 13,
+            'axes.titleweight': 'semibold',
+            'axes.labelsize': 10,
+            'legend.frameon': False,
+            'legend.fontsize': 9,
+            'svg.fonttype': 'path',
             'svg.hashsalt': 'alphazero-chess-ladder-progress',
         }
     )
     figure: Figure
     axes: Axes
-    figure, axes = plt.subplots(figsize=(10.8, 6.2), constrained_layout=False)
+    figure, axes = plt.subplots(figsize=(9.2, 5.35), constrained_layout=False)
     figure.patch.set_facecolor('white')
     axes.set_facecolor('white')
     configure_axes(axes)
     for specification, series in zip(SERIES_SPECIFICATIONS, publication.series, strict=True):
         plot_series(axes, series, specification.color)
 
-    figure.suptitle(
-        'Engineering progress across five chess training campaigns',
-        x=0.09,
-        y=0.965,
-        ha='left',
-        fontsize=17,
-        fontweight='bold',
-        color='#111827',
-    )
     axes.set_title(
-        'Raw observations and centered seven-point means on the fixed-node Stockfish ladder',
+        '64-search ladder Elo across training campaigns',
         loc='left',
-        pad=12,
-        fontsize=10.5,
-        color='#4b5563',
+        pad=10,
+        color='#202020',
     )
-    legend = axes.legend(
+    axes.legend(
         loc='lower right',
-        frameon=True,
-        framealpha=0.96,
-        facecolor='white',
-        edgecolor='#d1d5db',
-        fontsize=9,
         ncol=1,
     )
-    legend.get_frame().set_linewidth(0.7)
     axes.text(
         0.0,
-        -0.17,
-        'Report cuts: final recipe at 2.5 days; previous baseline at 3.0 days. '
-        'Later experimental/noisy points are excluded. The early baseline uses the legacy primary ladder tag.',
+        -0.18,
+        'Bias-corrected 0.95 EMA. Report cuts: final recipe at 2.5 days; previous baseline at 3.0 days. '
+        'Later experimental/noisy points are excluded.',
         transform=axes.transAxes,
         ha='left',
         va='top',
-        fontsize=8.5,
-        color='#4b5563',
+        fontsize=8,
+        color='#555555',
     )
-    figure.subplots_adjust(left=0.09, right=0.98, top=0.86, bottom=0.20)
+    figure.subplots_adjust(left=0.10, right=0.98, top=0.93, bottom=0.20)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(
         path,

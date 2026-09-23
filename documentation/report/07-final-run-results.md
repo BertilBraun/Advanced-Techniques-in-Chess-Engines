@@ -32,8 +32,8 @@ terminal observation**.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
-Figure 7.1: Raw ladder observations are shown faintly beneath centered seven-point means. The final recipe is cut at
-2.5 days and the previous four-day baseline at 3.0 days. The tracked
+Figure 7.1: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
+training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The tracked
 [publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) records those rules and retains
 the source-series identities; internal run labels do not appear in the figure.
 
@@ -117,7 +117,7 @@ be added as a separate experiment rather than replacing the completed first stud
 
 The numerical result is ready; the visual account is not. Publication still requires:
 
-1. Raw and smoothed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
+1. Detailed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
 2. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
 3. Games, fresh positions, training presentations, replay occupancy/age, and trainer/self-play throughput.
 4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.

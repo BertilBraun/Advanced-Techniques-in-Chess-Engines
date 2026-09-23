@@ -151,5 +151,6 @@ Before the result moves into the root README, complete these items:
 
 The report figure compares the matched 64-search ladder over effective training time for five descriptively labelled
 campaigns: the early baseline, first major architecture revision, previous four-day baseline, quantized successor,
-and final recipe. Internal identifiers remain only in the provenance data. Raw observations remain visible beneath
-the centered seven-point means. The root README can reuse this SVG when the remaining publication gate closes.
+and final recipe. Internal identifiers remain only in the provenance data. Curves use the project's established
+bias-corrected 0.95 exponential moving average. The root README can reuse this SVG when the remaining publication
+gate closes.
