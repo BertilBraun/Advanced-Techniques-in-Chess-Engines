@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
+import socket
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -12,6 +14,7 @@ from typing import Literal, TypeAlias
 import numpy as np
 import numpy.typing as npt
 import torch
+import torch.distributed as distributed
 from pydantic import Field
 from src.distillation.dataset import build_replay_training_batch, build_training_batch, open_dataset, read_manifest
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
@@ -21,7 +24,7 @@ from src.games.chess.training import ChessImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore, ReplayStoreState
 from src.training.batch import TrainingBatch
-from src.training.checkpoint.contracts import CheckpointManifest
+from src.training.checkpoint.contracts import CheckpointManifest, read_checkpoint_manifest
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.checkpoint.persistence import create_model
 from src.training.model_cost import format_model_cost, measure_model_cost
@@ -48,12 +51,14 @@ from src.training.targets import (
     RemainingGameLengthTargetConfiguration,
     build_training_target_layout,
 )
+from src.training.trainer.rank import DistributedTrainingModel
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import ConstantSchedule
 from src.util.hashing import file_sha256
 from src.util.log import log
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
+from torch.nn.parallel import DistributedDataParallel
 
 HELD_OUT_EVALUATION_BATCHES = 8
 DISTILLABLE_AUXILIARY_HEADS = ('next_policy', 'remaining_game_length')
@@ -135,7 +140,7 @@ class Arguments:
     evaluate_every: int
     checkpoint_every: int
     distil_auxiliary_heads: tuple[str, ...]
-    device_id: int
+    device_ids: tuple[int, ...]
     random_seed: int
     generation: int
 
@@ -615,7 +620,19 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
             f'{split.training_row_count} training rows are fewer than one batch of {arguments.batch_size}.'
         )
 
-    device = select_device(arguments.device_id)
+    world_size = len(arguments.device_ids)
+    rank = int(os.environ.get('DISTILL_RANK', '0'))
+    device = select_device(arguments.device_ids[rank])
+    if device.type == 'cuda':
+        torch.cuda.set_device(device)
+    if world_size > 1:
+        distributed.init_process_group(
+            backend='nccl' if device.type == 'cuda' else 'gloo',
+            rank=rank,
+            world_size=world_size,
+        )
+    # Every rank draws its own rows, so the global batch is the configured one split across ranks.
+    local_batch_size = arguments.batch_size // world_size
     torch.manual_seed(arguments.random_seed)
     torch.cuda.manual_seed_all(arguments.random_seed)
 
@@ -628,6 +645,15 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         auxiliary_head_layouts(auxiliary_heads, dataset.action_size),
     )
     optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
+    # One step path for both: the production trainer's shim routes DDP's forward to training_output,
+    # and wrapping in it unconditionally keeps single-GPU and data-parallel runs on the same call.
+    step_model: torch.nn.Module = DistributedTrainingModel(model)
+    if world_size > 1:
+        step_model = DistributedDataParallel(
+            step_model,
+            device_ids=None if device.type == 'cpu' else [device.index],
+            broadcast_buffers=False,
+        )
     objective = distillation_objective(auxiliary_heads)
     counts = parameter_counts(model)
     log(
@@ -656,7 +682,7 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
     )
     log('Headline metric is the held-out policy gap above the policy floor, excluding value and auxiliary losses.')
 
-    generator = np.random.default_rng(arguments.random_seed)
+    generator = np.random.default_rng(arguments.random_seed + rank)
     model.train()
     recent_training_losses: list[LossValues] = []
     if device.type == 'cuda':
@@ -679,19 +705,25 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         batch = source_training_batch(
             dataset,
             split.training_row_count,
-            arguments.batch_size,
+            local_batch_size,
             generator,
             device,
             auxiliary_heads,
         )
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
-            loss = objective.calculate_loss(model.training_output(batch.states), batch)
+            loss = objective.calculate_loss(step_model(batch.states), batch)
         loss.total.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.max_grad_norm)
         optimizer.step()
         recent_training_losses.append(observed_losses(loss))
         window_steps += 1
+        if rank != 0:
+            if step % arguments.evaluate_every == 0 or step == arguments.steps:
+                recent_training_losses.clear()
+                window_steps = 0
+                window_started_at = time.perf_counter()
+            continue
         if arguments.checkpoint_every and not step % arguments.checkpoint_every and step != arguments.steps:
             intermediate = intermediate_run_state(arguments.output_run_state, step)
             save_student_checkpoint(model, optimizer, arguments.generation, intermediate)
@@ -718,15 +750,44 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
             f'total gap above floor {held_out_loss.total - floor.total:.4f}'
         )
 
+    if world_size > 1:
+        distributed.barrier()
+    if rank != 0:
+        distributed.destroy_process_group()
+        return read_checkpoint_manifest(arguments.generation, arguments.output_run_state)
     manifest = save_student_checkpoint(model, optimizer, arguments.generation, arguments.output_run_state)
     if isinstance(dataset, OpenedProductionReplay):
         if dataset.store.state != dataset.snapshot.state:
             raise RuntimeError('Production replay state changed while the read-only student training input was open.')
     log(f'Wrote generation {arguments.generation} student to {arguments.output_run_state}.')
+    if world_size > 1:
+        distributed.destroy_process_group()
     return manifest
 
 
+def _rank_main(rank: int, arguments: Arguments, rendezvous_port: int) -> None:
+    os.environ['DISTILL_RANK'] = str(rank)
+    os.environ['MASTER_ADDR'] = '127.0.0.1'
+    os.environ['MASTER_PORT'] = str(rendezvous_port)
+    dataset = open_training_dataset(arguments.dataset_input)
+    try:
+        _train_student_with_dataset(arguments, dataset)
+    finally:
+        close_training_dataset(dataset)
+
+
 def train_student(arguments: Arguments) -> CheckpointManifest:
+    if len(arguments.device_ids) > 1:
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            rendezvous_port = probe.getsockname()[1]
+        torch.multiprocessing.spawn(
+            _rank_main,
+            args=(arguments, rendezvous_port),
+            nprocs=len(arguments.device_ids),
+            join=True,
+        )
+        return read_checkpoint_manifest(arguments.generation, arguments.output_run_state)
     dataset = open_training_dataset(arguments.dataset_input)
     try:
         return _train_student_with_dataset(arguments, dataset)
@@ -794,6 +855,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--checkpoint-every', default=0, type=int)
     parser.add_argument('--distil-auxiliary-heads', nargs='+', default=(), choices=DISTILLABLE_AUXILIARY_HEADS)
     parser.add_argument('--device-id', default=0, type=int)
+    parser.add_argument('--devices', nargs='+', type=int, help='Data-parallel device IDs; overrides --device-id.')
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
     namespace = parser.parse_args()
@@ -839,7 +901,7 @@ def parse_arguments() -> Arguments:
         evaluate_every=namespace.evaluate_every,
         checkpoint_every=namespace.checkpoint_every,
         distil_auxiliary_heads=tuple(namespace.distil_auxiliary_heads),
-        device_id=namespace.device_id,
+        device_ids=tuple(namespace.devices) if namespace.devices else (namespace.device_id,),
         random_seed=namespace.random_seed,
         generation=namespace.generation,
     )
