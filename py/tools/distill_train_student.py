@@ -975,8 +975,12 @@ def parse_arguments() -> Arguments:
             f'Dataset {arguments.dataset_input.path} captured auxiliary heads {captured_heads} '
             f'and cannot supply {absent_heads}.'
         )
-    if arguments.device_id < 0 or arguments.random_seed < 0 or arguments.generation < 0:
-        raise ValueError('Device ID, random seed and generation must be nonnegative.')
+    if not arguments.device_ids or any(device < 0 for device in arguments.device_ids):
+        raise ValueError('Device IDs must be nonempty and nonnegative.')
+    if arguments.batch_size % len(arguments.device_ids):
+        raise ValueError('Batch size must divide evenly across the data-parallel devices.')
+    if arguments.random_seed < 0 or arguments.generation < 0:
+        raise ValueError('Random seed and generation must be nonnegative.')
     return arguments
 
 
