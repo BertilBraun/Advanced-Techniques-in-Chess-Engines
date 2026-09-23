@@ -1,0 +1,4 @@
+experiment,status,parameters,teacher_parameter_ratio,training_steps,approximate_epochs,search_budget,opponent_nodes,opponent_anchor_elo,games,wins,draws,losses,score,model_elo,ci_low,ci_high,capture_status
+first_student,complete,470295,13.4,36621,7.5,10000,10000,2470,,,,,0.670,2593,2534,2660,awaiting_refetch
+first_student,complete,470295,13.4,36621,7.5,10000,20000,2700,,,,,0.475,2683,2626,2738,awaiting_refetch
+longer_student,training_and_evaluation_pending,470295,13.4,110000,23.0,,,,,,,,,,,,not_complete

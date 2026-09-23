@@ -19,17 +19,20 @@ not make it current guidance.
 
 ## Results
 
-The final chess training lineage is active and its terminal measurements are pending. The complete readable recipe
-is [`chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml); the
-[final-run result record](results/final-chess-run.md) defines the frozen identity, statistics, evaluations, and plots
-required before publication.
+The final chess training and teacher evaluation matrix are complete. The selected deployment reached **3,114
+benchmark Elo [3,063, 3,166]** at 10,000 searches and **3,251 [3,206, 3,297]** at 100,000 searches on the project's
+fixed-node Stockfish 13 ladder. The [final-run result record](results/final-chess-run.md) gives the full matrix,
+protocol, confidence intervals, selected model, training trajectory, student result, and evidence boundary.
 
-The retained v34 three-day checkpoint remains the latest completed public chess result. It reached 3,037 benchmark
-Elo at 10,000 searches and 3,167 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
+Publication remains gated on re-fetching three late result directories, freezing the longer-student outcome, and
+generating the final figures. The root README therefore still shows the previous completed public benchmark for now.
+The complete readable recipe is [`chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml); the
+result record and compact evidence index pin what actually ran.
 
 | Result | Status | Evidence |
 | --- | --- | --- |
-| Final chess training lineage | **Active; terminal result pending** | [Result contract and publication gate](results/final-chess-run.md) |
+| Final chess teacher result | **Complete; evidence capture partially pending** | [Result, protocol, and publication gate](results/final-chess-run.md) |
+| Final chess evidence freeze | **Partial** | [Hashes, machine-readable tables, and missing captures](evidence/final-chess-20260923/README.md) |
 | v34 training dynamics and scaling | **Final through generation 1702** | [Hourly curves, throughput, and outscaling playbook](benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) |
 | v34 generation 1465 replay compression | **Final** | [13.20x smaller student and match artifacts](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
 | v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,167 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
@@ -39,7 +42,7 @@ Elo at 10,000 searches and 3,167 at 80,000 searches on the project’s SSDF-deri
 
 “Final” means the measurement and compact evidence are committed. It does not mean that the absolute Elo scale is
 equivalent to FIDE, online-server, CCRL, or current Stockfish ratings. The rating-scale analysis is separate work.
-See [What the v34 Elo numbers mean](analysis/chess-elo-scale-and-reporting-20260911.md) for the calibrated scale and
+See [What the benchmark Elo numbers mean](analysis/chess-elo-scale-and-reporting-20260911.md) for the calibrated scale and
 recommended public language.
 
 ## Directory guide

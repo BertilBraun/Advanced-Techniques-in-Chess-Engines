@@ -1,112 +1,118 @@
-# 7. Final-run results
+# 7. Final training and evaluation results
 
-> **Status: pending.** The final chess run is still training. This chapter is the only location in the technical
-> report for incomplete terminal values. Do not replace pending fields with live dashboard readings or extrapolations.
+> **Evidence state.** Teacher training and the ten-row terminal evaluation matrix are complete. Seven matrix rows are
+> checksum-covered by the current local archive; the policy-only rows and deepest second anchor were produced after
+> that pull and await re-fetch. A longer student experiment remains in progress. The quantitative authority is the
+> [final-run result record](../results/final-chess-run.md), backed by the
+> [compact evidence index](../evidence/final-chess-20260923/README.md).
 
-The project-level result record is [`documentation/results/final-chess-run.md`](../results/final-chess-run.md). Once
-the archive and evaluations are complete, that page is the quantitative authority; this chapter should interpret it
-rather than duplicate every artifact.
+## What was selected
 
-## Frozen run identity
+The strongest fully retained checkpoint is a **6.32-million-parameter, 14-block, 160-channel convolutional model**
+with scaled post-activation residual blocks, global context conditioning, and a chess from-to attention policy head.
+It was trained with quantization-aware training and evaluated through its INT8 TensorRT artifact. This distinction is
+important: the reported strength belongs to the deployed numerical path, not a more accurate float surrogate.
 
-| Field | Final value |
-| --- | --- |
-| Public run name | **Pending** |
-| Training lineage and resume boundaries | **Pending audit** |
-| Source revision | **Pending archive** |
-| Resolved configuration SHA-256 | **Pending archive** |
-| Run-manifest SHA-256 | **Pending archive** |
-| Archive SHA-256 and location | **Pending fetch and verification** |
-| Start, stop, and effective training duration | **Pending completion** |
-| Hardware/runtime identity | **Pending frozen manifest** |
-| Training-node cost and exclusions | **Pending completion** |
+The ladder's strongest region spans several nearby checkpoints rather than a single isolated spike. Generation 1026
+was the last checkpoint in that region for which the full model, optimizer, QAT, ONNX, and TensorRT set had been
+retained. A subsequently grown 19-block, 176-channel model recovered its parent's strength but remained flat and did
+not justify replacing the selected checkpoint.
 
-The lineage audit must distinguish continuous learning state from operational run identifiers V89–V93. Downtime,
-failed exports, discarded segments, evaluation compute, and node rental should be reported consistently rather than
-compressed into one ambiguous “training time” number.
+## Training outcome
 
-## Selected model
+The operator recap summarizes the accepted-lineage ladder as **216 observations over 3.0 effective days**. It rose
+from 798 to approximately 2,380 and reached a peak of **2,407.6**. A later delivered JSON contains 229 multi-rung
+observations through 76.33 hours while preserving the same peak; that count and endpoint difference must be
+reconciled before the figure caption is final. The most informative efficiency comparison is against the previous
+four-day baseline: its 2,388.6 peak was reached after approximately **2.5 effective days**, rather than 4.04 days.
 
-| Field | Final value |
-| --- | --- |
-| Checkpoint generation and optimizer step | **Pending selection** |
-| Active progressive stage | **Pending** |
-| Training/inference parameter counts | **Pending manifest** |
-| Checkpoint hash | **Pending** |
-| ONNX/TensorRT artifact hashes | **Pending** |
-| Precision and serving backend | **Pending frozen artifact** |
+That stitched curve is not the entire compute history. It deliberately excludes two reverted branches while retaining
+their raw time in the delivered export:
 
-Selection should be declared before terminal match interpretation or governed by a pre-stated rule. If a non-terminal
-checkpoint is selected, document why and preserve the terminal checkpoint too.
+1. An early INT8 conversion collapse was detected after one ladder observation and reverted.
+2. A from-scratch capacity increase was promoted because training losses were compared across candidates that had
+   seen different numbers of examples. The larger candidate was still roughly 270 Elo weaker. Training returned to
+   the last valid checkpoint and removed 4,040,112 contaminated replay rows.
 
-## Training volume
+The second incident changed the method, not merely the operational state. Promotion now uses a match between deployed
+artifacts rather than training-loss parity, and capacity growth starts from a function-preserving widening of the
+parent. The corrected larger model reached parity but did not break through the plateau. This is evidence against
+capacity being the immediate bottleneck under the tested recipe; it is not evidence that larger networks cannot help
+under a different learning-rate, target-quality, or replay regime.
 
-| Measure | Final value |
-| --- | --- |
-| Completed self-play games | **Pending** |
-| Fresh materialized positions | **Pending** |
-| Training presentations | **Pending** |
-| Optimizer steps | **Pending** |
-| Final replay occupancy/capacity | **Pending** |
-| Effective replay reuse | **Pending** |
-| Time and volume per model stage | **Pending** |
-| Time and volume per visit stage | **Pending** |
-| Replay age percentiles and effective unique-row reuse | **Pending** |
-| Materialization rejection and quarantine counts | **Pending** |
-| Resignation threshold, triggers, continuations, and false non-losses | **Pending** |
+The selected checkpoint records 408,500 completed optimizer steps. With the configured global batch of 2,048 this
+corresponds to **836,608,000 training presentations**. Final games, admitted positions, replay occupancy, and
+resume-reconciled reuse remain to be derived from the archives.
 
-Counts must come from the fetched archive and reconcile coordinator, replay, and trainer accounting. If restart or
-resume boundaries create duplicate counters, report the reconciliation method.
+The narrow cost attached to the selected checkpoint is **$43.20**, calculated as 60 accepted-lineage hours at
+`$0.72/h`. It excludes the reverted work, later growth experiment, distillation, evaluation, and idle rental time.
+Until total spend is reconciled, it must not be described as the project's total compute cost.
 
-## Terminal evaluation matrix
+## Strength across four decades of search
 
-The final protocol should include policy-only, the production-scale 64-search condition, an intermediate/deep budget
-such as 10,000 searches, and a high-search condition chosen to represent roughly five seconds per move under a
-documented saturated workload. The exact high budget must be fixed by measurement, not assumed from v34.
+The terminal protocol used 100 games per row from 50 colour-swapped opening pairs against single-threaded Stockfish
+13 at fixed node limits. For each search budget, the reported rating is the opponent rung whose score lies closest to
+0.500.
 
-| Candidate search | Opponent and limit | Games | W/D/L | Score | Benchmark Elo (95% CI) | Latency |
-| ---: | --- | ---: | --- | ---: | ---: | ---: |
-| Policy only | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** |
-| 64 searches | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** |
-| 10,000 searches | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** |
-| High-search condition | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** | **Pending** |
+| Search budget | Headline score and anchor | Benchmark Elo (95% CI) | Increment |
+| ---: | --- | ---: | ---: |
+| Policy only | 0.440 vs 1,000 nodes | **1,658 [1,597, 1,717]** | -- |
+| 100 | 0.480 vs 10,000 nodes | **2,456 [2,393, 2,518]** | +798 |
+| 1,000 | 0.450 vs 50,000 nodes | **2,925 [2,875, 2,974]** | +469 |
+| 10,000 | 0.520 vs 100,000 nodes | **3,114 [3,063, 3,166]** | +189 |
+| 100,000 | 0.530 vs 200,000 nodes | **3,251 [3,206, 3,297]** | +137 |
 
-Every row requires balanced paired openings, exact Stockfish identity and fixed-node limit, search parallelism,
-inference batch/concurrency, artifact hashes, raw games, and confidence intervals. The comparison with v34 must use
-matched protocols or explicitly identify differences.
+Search therefore adds 1,593 benchmark Elo from policy-only play to the deepest measured condition, with diminishing
+returns at each decade. The 100,000-search estimate is unusually well anchored: an independent 100,000-node opponent
+gives 3,247 Elo, only four points below the 200,000-node result. That local agreement supports the top headline, but
+does not validate extrapolation beyond the measured anchors.
 
-## Figures to generate from the archive
+The complete ten-row matrix, including W/D/L and archive-capture status, is in the
+[result record](../results/final-chess-run.md#terminal-evaluation-protocol).
 
-1. The headline 64-search ladder-Elo progression across v9, v29, v34, the audited v46/v48-era successor, and the
-   stitched V89–V93 final lineage. Follow the source, timing, resume-boundary, smoothing, and label requirements in
-   the [final-run result contract](../results/final-chess-run.md#headline-cross-lineage-figure).
-2. Total, policy, WDL, and auxiliary losses against wall-clock and optimizer step.
-3. Learning rate, gradient norm, and clipping fraction.
-4. Policy-only and searched final-run ladder Elo against wall-clock, with uncertainty and model-promotion annotations.
-5. Generations, games, fresh positions, and training presentations against wall-clock.
-6. Self-play and trainer throughput, including pause and visit-stage changes.
-7. Replay occupancy, age distribution, and sampling mixture over time.
-8. INT8 legal-policy fidelity over time, with engine-template rebuilds and model transitions.
-9. Cost/strength comparison with the v34 result under matched definitions.
-10. Backend usage over time: TensorRT INT8, FP16 fallback, and bootstrap TorchScript.
-11. Resignation threshold, trigger volume, continuation outcomes, and estimated search saved.
+## Two protocol effects that matter
 
-Figures must be generated from archived machine-readable evidence, record their source files, and avoid hand-entered
-curves.
+### Weak opponents bias low-budget estimates
 
-## Result interpretation to complete
+At 100, 1,000, 10,000, and 100,000 searches, the harder opponent rung reads 128, 102, 46, and 4 Elo higher than the
+easier rung. The shrinking gap is consistent with draw distortion against weak opposition. It is a serious concern at
+low budgets but immaterial to the deepest result.
 
-The completed discussion should answer:
+### Parallelism buys time by spending strength
 
-- How much stronger was the selected model than v34 under identical search and opponent conditions?
-- How much 64-search ladder strength was gained from v9 to the final checkpoint under a genuinely matched protocol?
-- Did progress continue after reaching v34 strength, and at what marginal Elo per additional wall-clock day?
-- Which model and visit transitions changed throughput or learning slope?
-- Did policy-only strength and searched strength improve together?
-- How much wall-clock and cost were lost to operational faults or resume boundaries?
-- Does the deepest measured search continue to add strength, and how far is the result from unrestricted engines?
-- Did the 19x176 stage run through a validated INT8 path, and what fidelity/throughput did it achieve?
-- Were replay rejection, fallback inference, false resignation, or operational interruption rates material?
+The headline curve is an operating curve, not a pure search-budget ablation: it uses one parallel search at 100 and
+1,000 searches, four at 10,000, and sixteen at 100,000. A controlled 1,000-search sweep measured 2,823 Elo with one
+parallel search, 2,804 with four, and 2,778 with sixteen. Four-way parallelism therefore cost 19 Elo; sixteen-way cost
+45 Elo.
 
-Until those inputs exist, the abstract, root README, and conclusion should contain a clearly marked result placeholder
-rather than a speculative live number.
+The operational timing definition reports approximately 5.3x speedup for four-way and 13.9x for sixteen-way
+parallelism. The result manifests' broader aggregate-duration fields imply smaller 4.8x and 10.1x ratios. Both are
+preserved pending a final timing-definition choice. At only 100 searches, sixteen-way parallelism cost 235 Elo, so
+parallelism cannot be changed silently across a compute curve.
+
+## What the student establishes—and what it does not
+
+The completed first distilled model has **470,295 parameters**, 13.4 times fewer than the teacher. At 10,000
+searches it reached **2,683 Elo [2,626, 2,738]** against its closest anchor. The teacher reaches 3,114 under the same
+nominal search count, although the inference backends differ: the student used bfloat16-trained TorchScript while the
+teacher used INT8 TensorRT. The result demonstrates substantial compression, but it is not a controlled
+architecture-only comparison.
+
+A longer student run and its queued matches were unfinished at the cutoff. Held-out loss had crossed above training
+loss early in that run, but the gap alone cannot establish memorisation or strength regression. Its evaluation must
+be added as a separate experiment rather than replacing the completed first student.
+
+## Figures still required
+
+The numerical result is ready; the visual account is not. Publication still requires:
+
+1. A matched 64-search ladder comparison across the early baseline, architecture revision, previous four-day
+   baseline, later successor, and final lineage, with internal run identifiers confined to a provenance sidecar.
+2. Raw and smoothed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
+3. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
+4. Games, fresh positions, training presentations, replay occupancy/age, and trainer/self-play throughput.
+5. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
+6. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
+
+The root README should remain unchanged until the post-pull result directories are fetched, the result tables are
+checksum-complete, and the headline figures are generated from committed compact inputs.
