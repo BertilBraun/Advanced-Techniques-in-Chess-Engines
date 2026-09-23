@@ -43,9 +43,11 @@ const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("App container is missing.");
 
 const baselineRunRows: readonly BaselineRunRow[] = [
-  { duration: "64 searches", elo: "2,265 [2,236–2,297]", evidence: "56.50% vs Stockfish 13 at 5k nodes" },
-  { duration: "10,000 searches", elo: "3,037 [3,012–3,061]", evidence: "41.00% vs Stockfish 13 at 100k nodes" },
-  { duration: "80,000 searches", elo: "3,167 [3,143–3,193]", evidence: "59.50% vs Stockfish 13 at 100k nodes" },
+  { duration: "Policy only", elo: "1,658 [1,597–1,717]", evidence: "32/24/44 vs Stockfish 13 at 1k nodes" },
+  { duration: "64 searches", elo: "2,372", evidence: "Checkpoint-1026 online three-rung ladder" },
+  { duration: "1,000 searches", elo: "2,925 [2,875–2,974]", evidence: "21/48/31 vs Stockfish 13 at 50k nodes" },
+  { duration: "10,000 searches", elo: "3,114 [3,063–3,166]", evidence: "30/44/26 vs Stockfish 13 at 100k nodes" },
+  { duration: "100,000 searches", elo: "3,251 [3,206–3,297]", evidence: "25/56/19 vs Stockfish 13 at 200k nodes" },
 ];
 
 function escapeHtml(value: string): string {
@@ -84,7 +86,7 @@ root.innerHTML = `
     <section class="hero" aria-labelledby="page-title">
       <p class="eyebrow">PLAY THE NETWORK</p>
       <h1 id="page-title">Your move.<br><em>Its calculation.</em></h1>
-      <p class="intro">Play a superhuman chess model trained from scratch through self-play for three days and $52 of rented compute. Choose its raw policy or give MCTS time to search.</p>
+      <p class="intro">Play a superhuman chess model trained from scratch through self-play for 2.5 days and $43.20 of rented compute. Choose its raw policy or give MCTS time to search.</p>
     </section>
 
     <section class="play-layout">
@@ -172,23 +174,23 @@ root.innerHTML = `
     <section class="panel run-summary-panel" aria-labelledby="run-summary-title">
       <div class="panel-heading"><h2  id="run-summary-title">Model Training</h2></div>
       <dl class="kv-grid">
-        <div><dt>Checkpoint</dt><dd>Generation 1465 · 14 blocks × 160 channels</dd></div>
-        <div><dt>Training</dt><dd>3 days of self-play from scratch</dd></div>
+        <div><dt>Checkpoint</dt><dd>Generation 1026 · 14 blocks × 160 channels · 6.32M parameters</dd></div>
+        <div><dt>Training</dt><dd>2.5 days of self-play from scratch · INT8 QAT</dd></div>
         <div><dt>Hardware</dt><dd>8x NVIDIA RTX 4070 SUPER, shared self-play and training</dd></div>
-        <div><dt>Training-node cost</dt><dd>$52</dd></div>
+        <div><dt>Training-node cost</dt><dd>$43.20</dd></div>
       </dl>
       <h3 class="run-summary-subtitle">Approximate Elo by search budget</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Search budget</th><th>Benchmark Elo (95% CI)</th><th>Direct match</th></tr>
+            <tr><th>Search budget</th><th>Benchmark Elo</th><th>Evidence</th></tr>
           </thead>
           <tbody id="baseline-summary-body">
             ${baselineRowsHtml()}
           </tbody>
         </table>
       </div>
-      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Each row comes from 400 games; intervals cover paired-match sampling, conditional on the fixed anchors. At 80,000 searches, isolated saturated throughput averaged 5.31 seconds per move on one RTX 4070 SUPER.</p>
+      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Bracketed intervals are 95% paired-match estimates from 100 opening-paired games and are conditional on the fixed anchors. The 64-search row is the online three-rung ladder estimate at checkpoint 1026 and has no retained bootstrap interval.</p>
     </section>
 
   </main>

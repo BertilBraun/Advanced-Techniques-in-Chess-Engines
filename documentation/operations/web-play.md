@@ -108,10 +108,10 @@ extension also disables build-host-specific CPU instructions because Modal may
 serve the image on a different host. With revision `main`, each cold container
 resolves the branch to one commit before downloading the artifact. The
 production deployment currently uses Hugging Face revision
-`0a3e449e02eb0ef03241911dea3e0487d06a82b5` and
-`production/v93-generation-782/model.int8.onnx`. The artifact has SHA-256
-`86c4d0820fc41c1aab223ef521ac45a8c8050482faf2a8ac2c40c0927e2774ba`,
-contains the V93 14x160 network's 52-plane input contract, and is specialized
+`dc8fccccb67ab5ec9e36267a165a9700b7dbf55f` and
+`production/final-generation-1026/model.int8.onnx`. The artifact has SHA-256
+`d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658`,
+contains the final generation-1026 14x160 network's 52-plane input contract, and is specialized
 from its 320-position training batch to the serving batch of 64 during the
 Modal engine build.
 
