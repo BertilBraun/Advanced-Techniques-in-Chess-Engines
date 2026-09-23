@@ -71,7 +71,10 @@ Until total spend is reconciled, it must not be described as the project's total
 
 The terminal protocol used 100 games per row from 50 colour-swapped opening pairs against single-threaded Stockfish
 13 at fixed node limits. For each search budget, the reported rating is the opponent rung whose score lies closest to
-0.500.
+0.500. Anchor ratings come from
+[Marco Meloni's fixed-node Stockfish 13 benchmark](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+which connects Stockfish through Fruit 2.2.1 to the historical SSDF scale. The resulting values are benchmark Elo,
+not FIDE ratings or estimates on a current unrestricted-engine list.
 
 | Search budget | Headline score and anchor | Benchmark Elo (95% CI) | Increment |
 | ---: | --- | ---: | ---: |

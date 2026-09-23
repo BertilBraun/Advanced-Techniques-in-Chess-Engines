@@ -15,7 +15,7 @@ The compact tables intentionally expose evidence status rather than making every
 - [`ladder-elo-report-trimmed.json`](ladder-elo-report-trimmed.json) is the deterministic publication input derived
   from that export, SHA-256 `14da412f5f7fae93395e48c69a48863681ac053743080ea0bc0aa86d0f1f9ed8`.
 - [`chess-ladder-progress.svg`](../../showcase/chess-ladder-progress.svg) is the rendered report figure, SHA-256
-  `a805081675597cabde73f1ac2a44b1dc22110b183ef15c644ef97c9a76216698`.
+  `882e8889e9f1d4f8394125fdc3e39070ceae9b9a45a8d5fe0682d70dfcf96d42`.
 
 ## Evidence freeze
 

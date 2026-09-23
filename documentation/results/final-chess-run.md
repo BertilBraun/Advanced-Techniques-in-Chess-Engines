@@ -24,10 +24,11 @@ matching float TorchScript export because it does not invoke the native search s
 | 10,000 | **3,114** | [3,065, 3,163] | +189 |
 | 100,000 | **3,251** | [3,206, 3,297] | +137 |
 
-This is protocol-specific benchmark Elo calibrated against the fixed-node Stockfish 13 anchor curve. It is not a
-FIDE rating and is not directly comparable with CCRL, online-server, or unrestricted contemporary-engine ratings.
-The curve also mixes search parallelism, as documented below; it should not be interpreted as a controlled
-single-variable scaling law.
+This is protocol-specific benchmark Elo calibrated against
+[Marco Meloni's fixed-node Stockfish 13 curve](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+which links Stockfish through Fruit 2.2.1 to the historical SSDF scale. It is not a FIDE rating and is not directly
+comparable with CCRL, online-server, or unrestricted contemporary-engine ratings. The curve also mixes search
+parallelism, as documented below; it should not be interpreted as a controlled single-variable scaling law.
 
 ## Selected model and evidence
 

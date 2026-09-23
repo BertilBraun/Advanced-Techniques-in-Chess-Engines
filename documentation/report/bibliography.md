@@ -91,10 +91,14 @@ marked **verify** require metadata, version, and section checks during the publi
 
 ## Evaluation calibration
 
-- Meloni, M. (2021). Stockfish and lc0 fixed-node strength comparison. The existing report uses this historical
-  SSDF-linked calibration. **Verify the exact page, table transcription, and access date** before publication. The
-  limitations in [the repository's Elo-scale analysis](../analysis/chess-elo-scale-and-reporting-20260911.md) must
-  accompany any absolute benchmark Elo claim.
+- Meloni, M. (2021, March 8; updated August 29, 2021). *Stockfish and Lc0, test at different number of nodes*.
+  [MeloniMarco.it](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+  accessed 2026-09-24. This is the project's historical fixed-node Stockfish 13 calibration source: Meloni used
+  CuteChess and Ordo over more than 110,000 games, anchored Stockfish through Fruit 2.2.1 to the historical SSDF
+  list, and explicitly framed the human comparison as an approximation. It is a practitioner benchmark rather than
+  a peer-reviewed rating study. The limitations in
+  [the repository's Elo-scale analysis](../analysis/chess-elo-scale-and-reporting-20260911.md) must accompany every
+  absolute benchmark-Elo claim.
 
 ## Repository sources to cite as first-party evidence
 

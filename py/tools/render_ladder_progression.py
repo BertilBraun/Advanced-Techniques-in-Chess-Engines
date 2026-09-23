@@ -173,7 +173,7 @@ def render_figure(publication: PublicationExport, path: Path) -> None:
     )
     figure: Figure
     axes: Axes
-    figure, axes = plt.subplots(figsize=(9.2, 5.35), constrained_layout=False)
+    figure, axes = plt.subplots(figsize=(9.2, 4.82), constrained_layout=False)
     figure.patch.set_facecolor('white')
     axes.set_facecolor('white')
     configure_axes(axes)
@@ -190,18 +190,7 @@ def render_figure(publication: PublicationExport, path: Path) -> None:
         loc='lower right',
         ncol=1,
     )
-    axes.text(
-        0.0,
-        -0.18,
-        'Bias-corrected 0.95 EMA. Report cuts: final recipe at 2.5 days; previous baseline at 3.0 days. '
-        'Later experimental/noisy points are excluded.',
-        transform=axes.transAxes,
-        ha='left',
-        va='top',
-        fontsize=8,
-        color='#555555',
-    )
-    figure.subplots_adjust(left=0.10, right=0.98, top=0.93, bottom=0.20)
+    figure.subplots_adjust(left=0.10, right=0.98, top=0.93, bottom=0.12)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(
         path,
