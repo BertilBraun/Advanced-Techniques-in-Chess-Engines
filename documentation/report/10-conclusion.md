@@ -21,11 +21,17 @@ Several of the most useful lessons are methodological:
 - inference conversion is part of model correctness, not merely deployment;
 - a run without a fetched, hashed archive is not durable evidence.
 
-The final quantitative conclusion is intentionally pending. Once training stops, the archive is verified, and the
-terminal evaluation matrix is complete, [Chapter 7](07-final-run-results.md) will state the selected checkpoint,
-training volume, cost, policy-only and searched strength, uncertainty, latency, and comparison with v34. The root
-README can then present the concise headline while this report preserves the full chain from research question to
-evidence.
+The final campaign selected a 6.3-million-parameter convolutional model. Under the fixed-node Stockfish calibration,
+it measured 1,658 benchmark Elo without search and 2,456, 2,925, 3,114, and 3,251 Elo at successively larger search
+budgets from 100 to 100,000 searches per move. Those ratings are protocol-specific rather than FIDE or universal
+engine ratings, and the search curve mixes parallelism at the deeper points. The complete intervals, paired-game
+counts, artifact hashes, and cost boundary are recorded in the
+[final result record](../results/final-chess-run.md).
+
+The campaign also bounded the progressive-capacity result. A loss-based gate promoted a larger but much weaker
+candidate because unequal replay presentations made training losses incomparable. Function-preserving growth and QAT
+recovery brought the larger network back to parity, but it did not improve the strength curve. The reported model
+therefore remains the medium network; capacity was not the immediate constraint under this recipe.
 
 The final publication work is specified in the [publication plan](publication-plan.md), and the
 [coverage matrix](coverage-matrix.md) keeps supporting, superseded, and primary evidence reviewable rather than

@@ -113,37 +113,43 @@ does not change the stored rows or their sampling probabilities.
   replay-source optimizer-step identity. Because replay sampling and augmentation are seeded by that identity, their
   first quanta use the same deterministic sample stream. When the multiplier supplies a second candidate quantum, it
   repeats that stream after the candidate's weights have advanced.
-- A candidate has its own learning-rate clock. Its catch-up schedule decays linearly from `0.1` to `0.01` across 600
-  candidate-local quanta; it is not read at the much later global training index.
-- Promotion compares total objective loss, not Elo. Active and candidate comparable-loss exponential moving averages
-  use decay `0.8`. At least ten shared outer quanta are required, and the current threshold is strict parity: the
-  candidate EMA must be no greater than the active EMA (`maximum_relative_loss: 1.0`).
-- Candidate models start from their own seeded random initializations. Weights and optimizer moments are not grown or
-  copied from the active model. Only the immediate successor trains; model sizes cannot be skipped.
+- A candidate has its own learning-rate clock. The canonical schedule decays linearly from `0.1` to `0.01` across 600
+  candidate-local quanta; it is not read at the much later global training index. During the completed campaign this
+  floor proved too low once the active model was also at 0.01, so a campaign-specific continuation raised the
+  candidate floor to 0.03.
+- Promotion is now based on head-to-head play. A candidate must score at least 0.48 in two consecutive completed
+  paired matches against the active checkpoint. A failing score resets the count. A failed or cancelled evaluation
+  is absence of evidence and does not reset it.
+- Ordinary controller candidates start from seeded random initializations. Only the immediate successor trains;
+  model sizes cannot be skipped. The completed campaign separately tested a manually grown successor whose initial
+  function matched its parent; that path is documented in the network dossier and is not yet controller behavior.
 - After every required model has completed its work, the state machine chooses the active model, persists private
   candidate state, and publishes one public checkpoint. Extra candidate quanta do not cause intermediate self-play
   publication.
 
 ### Evidence and rationale
 
-- The state machine, fractional multiplier, own-clock learning rate, exact replay identity, ordered promotion, and
+- The state machine, fractional multiplier, own-clock learning rate, exact replay identity, match gate, and
   crash recovery have focused tests. This is strong mechanism evidence.
 - The multiplier was added because a from-scratch larger candidate could not erase the active model's accumulated
   training deficit at one quantum per outer quantum. Averaging 1.5 gives it additional catch-up work while keeping
   active progress and credit consumption unchanged.
-- Strict loss parity replaced an earlier tolerance. The retained threshold prevents a larger candidate from promoting
-  merely because it is close; it must match or improve the active objective after the warmup window.
+- The candidate multiplier initially contained a clocking defect: indexing the fractional schedule by candidate
+  progress made it settle at two quanta per generation. It is now indexed by the outer generation and alternates one
+  and two as intended.
+- The former loss-EMA gate was invalidated empirically. Because the candidate received more optimizer work on the
+  same replay distribution, its training loss was systematically advantaged and could reach parity while its playing
+  strength remained far behind. It promoted a larger candidate that then lost about 270 Elo. Match-based promotion
+  replaced the loss comparison rather than merely adjusting its threshold.
 
 ### Pitfalls and unknowns
 
-- Promotion loss is a replay-fitting criterion, not playing strength. It can prefer capacity that fits the current
-  replay distribution without guaranteeing a stronger search policy.
-- The candidate has more optimizer steps before its compared loss, by design. The comparison answers whether it has
-  caught up sufficiently, not which architecture learns faster under equal optimization compute.
+- Training loss remains useful for optimization diagnostics, but cannot compare promotion candidates that receive
+  unequal replay presentations. The failed gate is a transferable warning against treating replay fit as strength.
 - Repeating the same deterministic batch stream in a multiplier-supplied second quantum improves comparability and
   recovery but reduces the unique rows seen during candidate catch-up.
-- The exact 1.5 multiplier, 600-quantum catch-up schedule, ten-observation warmup, and strict parity gate do not have a
-  fixed-model or alternative-promotion counterfactual. They are current control semantics, not isolated Elo results.
+- The exact 1.5 multiplier, catch-up schedule, 0.48 match threshold, and two-match confirmation do not have a
+  fixed-model or alternative-controller counterfactual. They are current control semantics, not isolated Elo results.
 - Final reporting must record candidate start, candidate-local optimizer steps, extra wall time, promotion comparisons,
   promotions or reversions, and which model produced each admitted replay interval.
 
@@ -154,6 +160,7 @@ does not change the stored rows or their sampling probabilities.
 - [Sequential candidate training and own-clock learning rate](../../../py/src/training/session.py)
 - [Trainer replay identity and comparable objective resolution](../../../py/src/training/trainer/group.py)
 - [Fractional multiplier and recovery tests](../../../py/test/test_progressive_model_sizing.py)
+- [Function-preserving growth procedure](../../../py/tools/grow_checkpoint.py)
 
 ## Initialization, bootstrap-policy calibration, and deterministic seeding
 

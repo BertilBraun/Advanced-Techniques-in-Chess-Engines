@@ -11,16 +11,20 @@ how quickly a generation completes, so it also changes every generation-indexed 
 temperature, and evaluation schedule in wall-clock time. Earlier reuse comparisons therefore changed more than
 sample efficiency.
 
-The final value of 4 is retained, but there is no clean final-lineage online optimum. V39 contains useful throughput
-arithmetic, while v34 dynamics show why high presentations without enough fresh target diversity can have diminishing
-returns. Final reporting must include both configured reuse and empirical presentations per admitted unique row.
+The final value of 4 is retained, but there is no clean online optimum from the accepted training lineage. The
+[production-topology decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md) contains
+useful throughput arithmetic, while the
+[previous baseline dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) show why high
+presentations without enough fresh target diversity can have diminishing returns. Final reporting must include both
+configured reuse and empirical presentations per admitted unique row.
 
 ## Growing replay
 
 Capacity grows from 600,000 to 20 million rows rather than allocating the terminal window immediately. Early in a
 run, a huge nominal capacity contains no extra information; later, a wider window preserves strategic variety and
 reduces concentration on a narrow recent policy. The exact staged schedule was not compared with a fixed-window
-control. It is a motivated design (**R/M**, supported by observational **O**) rather than a measured multiplier.
+control. It is supported by design rationale, tested mechanics, and observational evidence rather than a measured
+strength multiplier.
 
 Replay reporting should include occupancy, age percentiles, unique rows presented, wrap behavior, and age by sample
 probability. A raw capacity number is insufficient.
@@ -48,18 +52,18 @@ one-variable Elo arms.
 
 ## Endgame conversion and target poisoning
 
-Runs v7/v8 often reached overwhelmingly won positions and hit the ply cap. The causal audit separated several
-hypotheses that initially looked equivalent. Tablebase removal and remaining-length censoring did not explain the
-difference. Resignation rate alone did not distinguish the runs. The strongest data finding was an early window in
-which forced fast continuation excluded the last plies of long games from primary policy training while shallow
-cutoff values were propagated across trajectories.
+Two post-runtime-rework training attempts often reached overwhelmingly won positions and hit the ply cap. The causal
+audit separated several hypotheses that initially looked equivalent. Tablebase removal and remaining-length
+censoring did not explain the difference. Resignation rate alone did not distinguish the attempts. The strongest
+data finding was an early window in which forced fast continuation excluded the last plies of long games from
+primary policy training while shallow cutoff values were propagated across trajectories.
 
 That window later aged out of replay, but weight damage could persist. The final design eliminates the forced-fast
 tail, lengthens game caps over time, censors unknown remaining-length labels, and uses the search-root value for a cut
 game. The [conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
 [sample-stream comparison](../analysis/v8-training-data-comparison-20260826.md), and
 [cut-value benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md) together provide
-observational **O**, diagnostic **P**, and mechanics **M** evidence—not a clean factorial ablation.
+observational, diagnostic-proxy, and mechanics evidence—not a clean factorial ablation.
 
 ## Calibrated resignation
 
@@ -81,7 +85,7 @@ that the targets are trainable and wired correctly; they do not isolate Elo.
 
 ## Reanalysis and publication freshness
 
-A bounded synchronous reanalysis path existed in the older v10 replay design. It used materialized override sidecars
+A bounded synchronous reanalysis path existed in an earlier replay design. It used materialized override sidecars
 and was removed when replay ownership changed. No controlled current-pipeline efficacy experiment exists. Reanalysis
 is therefore superseded infrastructure, not a negative result.
 
@@ -98,6 +102,6 @@ than a universal 50% rule. Fully asynchronous learning was proposed but not impl
 ## Replay infrastructure as evidence
 
 The fixed-layout columnar store, parallel materialization, atomic claims, quarantine path, rejection-rate ceiling,
-prefetch, and credit ledger are systems contributions. Loader and credit benchmarks provide **T/M** evidence. They
-do not show stronger chess directly, but they prevent corrupted or stalled ingestion from masquerading as a learning
-plateau.
+prefetch, and credit ledger are systems contributions. Loader and credit benchmarks establish throughput and
+mechanical correctness. They do not show stronger chess directly, but they prevent corrupted or stalled ingestion
+from masquerading as a learning plateau.

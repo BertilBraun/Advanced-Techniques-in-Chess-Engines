@@ -17,6 +17,9 @@ self-play data.
 
 ## Dossiers ready for factual review
 
+Start with the concise [owner review guide](owner-review-guide.md). It contains only unresolved memory questions,
+high-impact causal interpretations, and public-scope choices; reviewing the full dossiers is not required.
+
 - [Search and inference](search-and-inference.md)
 - [Network architecture and policy](network-architecture-and-policy.md)
 - [Training, data generation, and replay](training-data-and-replay.md)

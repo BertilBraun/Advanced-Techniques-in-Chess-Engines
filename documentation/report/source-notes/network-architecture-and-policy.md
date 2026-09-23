@@ -356,8 +356,10 @@ into publication text.
   `conv -> BN -> ReLU -> conv -> BN -> add skip -> ReLU`.
 - Depth and width were varied extensively. Throughput is highly shape- and batch-dependent; equal parameter counts
   do not imply equal serving cost.
-- Smaller early networks and larger later networks are independently trained against the same growing replay stream.
-  No weights are transplanted across sizes.
+- The original progressive controller trained each larger network independently against the same growing replay
+  stream. The final capacity investigation also tested a function-preserving transition from the trained 14-by-160
+  network into the 19-by-176 network; this is a distinct, manual growth path rather than the controller's ordinary
+  candidate initialization.
 - The retained shapes avoid a measured inefficient width region and were checked at self-play and evaluation batch
   sizes rather than selected from parameter count alone.
 
@@ -369,8 +371,9 @@ into publication text.
   nats. The gap is modest, but the CNN also had a major memory and serving-throughput advantage.
 - Channel width produced a non-monotonic throughput curve. Width 128 was a local optimum; the 132-152 region cost
   materially more than arithmetic predicted. At evaluation batch 64, depth and kernel-launch count dominated width.
-- Progressive sizing has a measured throughput premise and durable promotion mechanism, but there is no fixed-model
-  counterfactual proving the exact ladder's strength-per-cost benefit.
+- Progressive sizing has a measured throughput premise and a recoverable controller, but the completed campaign also
+  exposed two important controller failures: unequal candidate training invalidated loss-based promotion, and a
+  from-scratch larger network did not recover the active network's playing strength before promotion.
 
 ### Decision rationale
 
@@ -404,27 +407,47 @@ into publication text.
 ### Approaches and mechanisms
 
 - Fixed sizing remains a supported control: one complete model definition trains and serves throughout.
-- Progressive sizing owns an ordered set of complete, independently initialized networks. The retained sequence is
+- Progressive sizing owns an ordered set of complete network definitions. The retained sequence is
   12 residual blocks by 128 channels, 14 by 160, and 19 by 176; every stage otherwise shares the same 52-plane input,
   scaled post-activation block family, global context, from-to policy, WDL head, and auxiliary objectives.
-- No parameter, optimizer-state, or checkpoint transplantation occurs. A successor starts from its own persisted
-  random initialization and learns from the same captured replay description as the active model.
+- The production controller initializes an ordinary successor independently and trains it from the same captured
+  replay description as the active model. A separate end-of-campaign procedure grew a trained 14-by-160 checkpoint
+  into 19-by-176 while preserving its function, trained the new capacity, then rebuilt and fine-tuned QAT state.
 - Candidate start and candidate promotion are separate gates:
   - **Start gate:** the bias-corrected primary-ladder Elo EMA uses decay 0.90. The slope is computed over the code's
     six-observation window: seven retained EMA samples span six observation-to-observation intervals. Two consecutive
     complete windows strictly below the stage threshold latch the immediate successor. The thresholds are 50
     Elo/hour before the 14-by-160 successor and 4 Elo/hour before the 19-by-176 successor.
-  - **Catch-up cadence:** an eligible successor trains an average of 1.5 optimizer quanta per global generation. Since
+  - **Catch-up cadence:** an eligible ordinary successor trains an average of 1.5 optimizer quanta per global
+    generation. Since
     a quantum is indivisible, the code alternates one and two quanta from the global generation index. The active
     model always receives one quantum, and replay credit is consumed only once for that active quantum. When two
     candidate quanta run at one boundary, both loaders receive the same global replay-source optimizer step and
     therefore repeat the same deterministic batch sequence while the candidate's optimizer state advances.
-  - **Promotion gate:** active and successor losses are compared on paired shared-replay quanta with EMA decay 0.8.
-    After ten paired warmup observations, the successor promotes only when its EMA loss is no greater than the active
-    EMA loss. The configured maximum relative loss is exactly 1.0; there is no above-active tolerance.
+  - **Promotion gate:** the current controller schedules a paired candidate-versus-active match at evaluation
+    boundaries. A candidate score of at least 0.48 passes; two consecutive completed matches must pass. A failure
+    resets the sequence, while a failed or cancelled evaluation supplies no evidence and does not reset it.
 - Only the active checkpoint is published to self-play and evaluation. Private candidate checkpoints, optimizer
-  progress, paired loss state, the Elo latch, and any partially completed multi-model quantum are persisted for
-  exact recovery.
+  progress, match-gate state, the Elo latch, and any partially completed multi-model quantum are persisted for exact
+  recovery. Candidate checkpoints referenced by evaluation jobs are pinned against retention.
+
+### Function-preserving growth
+
+- Width growth uses random-in/zero-out wiring: new units compute small nonzero activations, but existing outputs do
+  not read them initially. This preserves the parent function while giving every zeroed reader a gradient at the
+  first update; zeroing both sides would preserve the function but permanently strand the new capacity.
+- Appended residual blocks are identity-initialized by zeroing their final branch output. Existing blocks require
+  branch-scale compensation because the configured scale changes with depth. The compensation belongs on the final
+  batch-normalization affine parameters, not on its running statistics or the preceding convolution.
+- Global-pooling blocks divide channels into local and global groups at one quarter of the width. Widening must map
+  channels around that moving boundary or copied units silently change roles.
+- The measured 14-by-160 to 19-by-176 growth changed policy logits by at most `1.34e-05`, changed value outputs by
+  `1.07e-06`, preserved top-one policy agreement exactly on the probe, and delivered gradients to every zeroed
+  reader. A 100-game float match scored 0.455, or -31.4 Elo with a 95% interval spanning parity.
+- One float epoch over the live replay window brought the grown network to a 0.495 match score against its parent.
+  Direct INT8 conversion nevertheless failed fidelity (`0.759` top-one agreement, `0.102` mean KL, `2.01` maximum
+  KL). Ten QAT quanta recovered fidelity to `0.878` / `0.036` / `0.227`; the deployed INT8 network then scored
+  0.440, about 42 Elo below the parent estimate. The float match therefore could not decide deployment.
 
 ### Evidence and decision rationale
 
@@ -434,32 +457,45 @@ into publication text.
 - The stage thresholds deliberately differ. The first transition is allowed while the small network still gains
   appreciably because the medium candidate needs time to catch up; the final transition waits for a much flatter
   medium-model curve.
-- The 1.5 multiplier addresses a concrete failure of one-quantum catch-up: a randomly initialized candidate that
-  starts late otherwise cannot close the active model's accumulated optimizer-step advantage promptly.
+- The 1.5 multiplier addressed a concrete failure of one-quantum catch-up, but its first implementation indexed the
+  fractional schedule by the candidate's own advancing clock. It converged to two quanta per generation rather than
+  alternating one and two. Indexing by the outer generation now makes the long-run average exactly 1.5.
+- The original catch-up schedule decayed to 0.01, exactly the floor already reached by the active model. A later
+  campaign-specific configuration raised the candidate floor to 0.03 so it retained an optimization-rate advantage.
+- Loss-based promotion was rejected after it promoted a from-scratch larger candidate that subsequently lost about
+  270 Elo. The candidate received more presentations of each replay sample because of its step multiplier, so lower
+  training loss was not comparable evidence of equal playing strength. The deployed engine passed its fidelity
+  checks, ruling out an INT8 conversion failure as the explanation. Promotion is now match-based.
+- Function-preserving growth solved a different problem: instead of asking a random larger model to relearn the
+  parent's function, it began at the parent's behavior and exposed only the added capacity to learning.
 - Retention is an assembled system decision. There is no fixed-model equal-cost counterfactual proving the causal
   Elo-per-currency gain of this exact sequence, start controller, or promotion controller.
 
-### Pitfalls and stale documentation
+### Pitfalls and interpretation
 
-- `documentation/architecture/progressive-model-sizing.md` and `documentation/system/training-and-model.md` contained
-  stale normative values during this audit: 15/5 rather than 50/4 Elo/hour, five consecutive point-to-point slopes
-  rather than two confirmed six-interval windows, 1.002 rather than 1.0 maximum relative loss, and one candidate
-  quantum rather than the 1.5 alternating cadence. The final YAML and current implementation are authoritative; the
-  two current-system documents were corrected in the same follow-up pass as this dossier.
 - “Six-observation window” can be misread as six stored points. The constant is six slope intervals and the runtime
   retains seven EMA samples to compute the oldest-to-current change.
 - A slope equal to the threshold does not confirm a plateau; the comparison is strictly below.
-- The promotion loss compares the assembled weighted objective, not playing strength. Evaluation starts a candidate
-  but never directly promotes it.
+- The failed loss gate compared the assembled weighted objective, not playing strength, after unequal optimization
+  exposure. It must be presented as a failed controller, not as an ablation showing that large models are weaker.
 - Candidate extra quanta increase wall-clock time and repeat the captured boundary's deterministic samples; they do
   not create fresh self-play data or extra replay credit.
+- The function-preserving growth tools were an explicit recovery experiment, not yet the initialization path inside
+  the general progressive controller.
+- The standalone final YAML names the match-gate evaluation but currently omits the corresponding
+  `progressive_candidate` evaluation definition. The campaign continuation configuration contains it, while the
+  typed loader does not validate the cross-reference. This is a reproducibility defect to fix before reusing the
+  standalone recipe, not evidence against the gate itself.
 
 ### Unresolved evidence
 
 - No fixed 12-by-128, fixed 14-by-160, or fixed 19-by-176 run provides an equal-cost counterfactual to the full policy.
 - The independent contribution of the 50/4 thresholds, six-interval smoothing, two confirmations, 1.5 catch-up
-  multiplier, and exact-loss promotion condition has not been ablated.
-- Final stage transition telemetry and terminal strength belong to the pending final-run evidence package.
+  multiplier, catch-up learning-rate floor, and match threshold has not been ablated.
+- The larger grown network reached parity and then remained flat. The reported checkpoint is therefore the retained
+  14-by-160 model, not the promoted 19-by-176 continuation. This bounds the result to the tested recipe: added
+  capacity was not the binding constraint under the same learning-rate floor, self-play targets, and replay stream.
+  It is not a general upper bound on larger networks.
 
 ### Sources
 
@@ -469,6 +505,9 @@ into publication text.
 - [Progressive controller tests](../../../py/test/test_progressive_model_sizing.py)
 - [Progressive throughput benchmark](../../benchmarks/progressive-sizing-throughput-rtx4070super-20260823/README.md)
 - [Current architecture guide](../../architecture/progressive-model-sizing.md)
+- [Function-preserving growth tool](../../../py/tools/grow_checkpoint.py)
+- [Grown-checkpoint trainer](../../../py/tools/train_grown_checkpoint.py)
+- [QAT reconstruction for grown checkpoints](../../../py/tools/quantize_grown_checkpoint.py)
 
 ## Attention and proposed hybrid trunks
 

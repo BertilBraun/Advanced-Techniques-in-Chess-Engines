@@ -49,12 +49,13 @@ The history is easier to understand as phases rather than as a sequence of versi
    efficiency, leading to forensic comparisons of encoding, search semantics, schedules, and training data.
 3. **Search and architecture research.** The project measured attention trunks, policy heads, progressive sizing,
    search parallelism, adaptive budgets, learned stopping, and target construction.
-4. **Compression and inference research.** The v34 model was evaluated, distilled, and used to investigate TensorRT,
-   FP16, INT8, quantization-aware training, folding, and refitting.
+4. **Compression and inference research.** The previous four-day baseline was evaluated, distilled, and used to
+   investigate TensorRT, FP16, INT8, quantization-aware training, folding, and refitting.
 5. **Final recipe development.** Frozen-replay screens and online runs converged on progressive CNNs, a from-to policy
    head, SGD, pre-fold INT8 serving, growing replay, targeted data selection, and fixed-budget search.
-6. **Final run and publication.** The final run is active at the time of this draft. Terminal evaluation and archived
-   statistics will complete [Chapter 7](07-final-run-results.md).
+6. **Final run and publication.** The final campaign and terminal teacher evaluation are complete. The
+   [result record](../results/final-chess-run.md) freezes the selected model and measured search curve; remaining
+   publication work concerns archive reconciliation and figures rather than an unknown headline result.
 
 The older [platform rework ledger](../architecture/platform-rework.md) and
 [Python runtime rework](../architecture/python-runtime-rework.md) preserve the detailed engineering chronology. They

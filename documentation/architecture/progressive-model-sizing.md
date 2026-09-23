@@ -14,9 +14,10 @@ relationship between architectures. Progressive sizing also selects one explicit
 chess configuration uses stage-specific plateaus in the primary searched evaluation ladder; historical research
 configurations may retain the single-latch Elo policy or elapsed active-run starts.
 
-This policy does not add a transformer path, model-shape adapter, weight transfer, match gate, or checkpoint
-averaging. Every later model starts from its own random initialization. All models use the run-fixed input,
-policy/WDL, and auxiliary-head layout, so their total losses have the same defined terms and weights.
+The controller does not infer a model-shape adapter or average checkpoints. Its ordinary candidate path initializes
+each later model independently. A separate, explicit growth tool can widen and deepen one convolutional checkpoint
+while preserving its function, but that recovery procedure is not an implicit controller transition. All models use
+the run-fixed input, policy/WDL, and auxiliary-head layout.
 
 ## KataGo precedent and intentional differences
 
@@ -35,9 +36,7 @@ This platform intentionally differs:
   may receive more according to its configured multiplier;
 - the coordinator waits for all required models before publishing the checkpoint and transitioning self-play;
 - the final staged Elo plateau policy persists one latch for the immediate successor and resets it after promotion;
-- promotion compares paired exponential moving averages built only from quanta seen by both the active model and its
-  immediate successor, rather than an unspecified lifetime average;
-- no match gate decides promotion, and evaluation results never publish or promote a candidate;
+- promotion is decided by repeated candidate-versus-active matches rather than by training loss;
 - no parameters or optimizer moments transfer between sizes, and no checkpoints are averaged;
 - only one active checkpoint is atomically published to self-play and evaluation.
 
@@ -93,12 +92,17 @@ window, configurable ladder search budget, or post-latch cancellation within one
 
 The promotion configuration explicitly owns:
 
-- EMA decay `d`, constrained to `0 < d < 1` and normally configured as `0.8`;
-- a positive number of paired warmup quanta;
-- the maximum candidate-to-active relative loss;
+- a candidate-match evaluation definition;
+- a minimum candidate score and a positive number of consecutive passing evaluations;
 - a positive catch-up learning rate for an eligible candidate that is not yet active;
 - a candidate step multiplier of at least one, which controls how many complete optimizer quanta the successor trains
   per global generation.
+
+The configured match-gate `definition_id` must name a `progressive_candidate` evaluation definition. The current
+standalone final YAML names `progressive-candidate` in the gate but does not yet include the corresponding evaluation
+definition that exists in the campaign continuation configuration. The typed loader does not currently cross-check
+that reference. This must be corrected before treating the standalone YAML as an executable future promotion recipe;
+without it, the evaluator produces no candidate-match observations and the gate cannot pass.
 
 The primary searched ladder is the highest configured project-model search budget, currently the
 `evaluation/ladder_elo_64` series also published as `evaluation/ladder_elo`. Policy-only and lower-search ladder
@@ -148,24 +152,41 @@ objective and auxiliary target layout for a quantum.
 
 ## Promotion semantics
 
-For the active model and only its immediate successor, the runtime records total training loss after each shared
-quantum and updates paired EMAs:
+At an evaluation boundary the candidate checkpoint plays the currently published active checkpoint using the
+configured paired-match definition. The candidate is the measured side even though it is not yet published. The
+current gate requires a score of at least `0.48` in two consecutive completed evaluations. A score below the
+threshold resets the consecutive-pass count. A failed, cancelled, or empty match adds no observation and therefore
+does not turn infrastructure failure into negative playing evidence.
 
-```text
-ema_next = decay * ema_previous + (1 - decay) * observed_total_loss
-```
+The evaluator returns durable observations in boundary order. The progressive state ignores already-applied
+boundaries, records the recent match evidence, and promotes only the immediate successor. The candidate checkpoints
+used by pending match jobs are pinned so retention cannot delete them while a match is running. Once the configured
+run of passes exists, the next completed training quantum publishes the successor and clears the old gate state.
 
-The first shared observation initializes each EMA directly. A successor is promotable only after the configured
-number of paired observations. It promotes when:
+The controller previously promoted on paired training-loss EMAs. That comparison was invalid once the candidate
+step multiplier gave the candidate more presentations of every replay sample: lower loss at equal strength was
+built into the schedule. It promoted a larger candidate whose playing strength was about 270 Elo lower even though
+its deployed INT8 artifact passed fidelity checks. The loss gate, decay, warmup count, and relative-loss threshold
+were removed rather than retuned.
 
-```text
-candidate_ema <= active_ema * maximum_relative_loss
-```
+## Function-preserving capacity growth
 
-The configuration chooses this tolerance. The final chess recipe uses `1.0`, so candidate loss must be no greater
-than active loss after ten paired warmup observations. Comparisons occur strictly in stage order. If the active model
-changes, a later candidate's paired comparison resets so the candidate and new active EMA cover exactly the same
-shared global quanta.
+The end-of-campaign capacity test used an explicit alternative to independent candidate initialization. The growth
+tool maps a trained 14-by-160 checkpoint into 19-by-176 without changing its initial function:
+
+- new units use random incoming weights and zero outgoing readers, so the network output is preserved while those
+  readers receive gradient immediately;
+- appended residual blocks have a zero final branch output and initially act as identities;
+- copied branch-ending batch-normalization affine parameters compensate for the changed inverse-square-root depth
+  scale; running statistics are not scaled;
+- global-pooling channel maps preserve the moving local/global split created by widening.
+
+The probe measured maximum policy and value differences of `1.34e-05` and `1.07e-06`, exact top-one agreement, and
+nonzero gradient at every newly zeroed reader. The grown float model was then trained for one replay-window epoch at
+the active model's learning rate. Because quantizer structure changes with depth and width, it could not inherit the
+parent's QAT state: it was wrapped and calibrated anew, then needed ten QAT quanta to recover acceptable INT8
+fidelity. The float match was therefore not a valid deployment gate. This tooling is intentionally explicit and is
+not yet folded into the generic progressive state machine.
 
 ## Persistence, publication, and recovery
 
@@ -180,9 +201,9 @@ initialization restartable.
 - the candidate-start policy variant and, for Elo plateau starts, EMA Elo, latest applied boundary, instantaneous
   EMA gain rate, confirmation count, and latch; staged state additionally records its target candidate and latest
   raw observation;
-- every model's optimizer progress, latest checkpoint, training-loss EMA, and paired promotion EMA;
+- every model's optimizer progress and latest checkpoint, plus the candidate match-gate state;
 - a pending quantum's exact replay identity and ordered required model IDs;
-- each completed model result and comparable total loss.
+- each completed model result.
 
 After each model result the pending record is saved. A crash resumes at the first incomplete model without repeating
 completed candidates or allowing replay ingestion. A changed replay identity is a fatal restart error.
@@ -194,8 +215,8 @@ completion, or between state completion and credit commit. Self-play and evaluat
 published reference.
 
 Private retention keeps the exact latest checkpoint for every candidate and any checkpoint named by a pending
-quantum; older private model, optimizer, inference, and manifest files are removed. Ordinary published checkpoint
-retention remains unchanged.
+quantum or in-flight promotion match; older private model, optimizer, inference, and manifest files are removed.
+Ordinary published checkpoint retention remains unchanged.
 
 The coordinator delegates the complete quantum to a `TrainingSession`. Fixed training and progressive training are
 separate implementations with typed result variants; the coordinator pauses the workers selected by the experiment
@@ -225,3 +246,22 @@ count nor repeats an already applied boundary. Candidate-start telemetry records
 boundaries. The Elo series uses the runtime's bias-corrected 0.90 EMA, and the gain rate is the oldest-to-current
 change across the retained seven-sample window divided by the elapsed time across its six observation intervals.
 Evaluation and self-play series remain attached only to the globally published model generation.
+
+Candidate-match telemetry records `promotion/candidate_match_score`, `candidate_match_games`, `consecutive_passes`,
+`required_passes`, and `minimum_score`. Training loss remains available as an optimization diagnostic, but it is not
+a promotion signal.
+
+## Observed limits of the final capacity test
+
+The independently initialized larger candidate exposed why the former controller was unsafe: its greater replay
+exposure lowered training loss before it reached the active model's playing strength. Function-preserving growth
+removed the need to relearn the parent's function and brought the larger network to parity, but continued training
+then remained flat. The reported checkpoint is consequently the 14-by-160 model, not the later 19-by-176
+continuation. This supports only a bounded conclusion: capacity was not the binding constraint for the tested
+training recipe and data regime. It does not show that larger chess networks are generally unhelpful.
+
+The current candidate multiplier is indexed by the outer generation. This matters for fractional values: indexing
+1.5 by candidate-local progress caused the sequence to settle at two quanta per generation, whereas the outer clock
+produces the intended one/two alternation. Likewise, a catch-up schedule ending at the active model's 0.01 learning
+rate removed the candidate's late advantage; the completed campaign tested a 0.03 floor in its continuation
+configuration. These are controller lessons, not isolated strength ablations.

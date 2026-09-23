@@ -74,26 +74,47 @@ immediate successor starts. After a promotion, the next stage begins a fresh pla
 observed Elo rather than reusing the previous stage's latch.
 
 Once eligible, the active model and its immediate successor train sequentially on the identical replay snapshot and
-deterministic sample identity. The successor starts from its own random initialization; no weights or optimizer
-moments transfer. The active model trains one optimizer quantum per global generation. The successor's configured
-step multiplier is `1.5`, implemented as alternating one and two complete quanta from the global generation index.
+deterministic sample identity. The ordinary controller successor starts from its own random initialization; no
+weights or optimizer moments transfer. The active model trains one optimizer quantum per global generation. The
+successor's configured step multiplier is `1.5`, implemented as alternating one and two complete quanta from the
+global generation index.
 When two successor quanta run, both use the same global replay-source step and therefore repeat the same
 deterministic batch sequence while the successor optimizer advances. Its catch-up learning rate follows its own
 local-generation schedule from `0.1` to `0.01` through 600 local generations.
 
-Promotion is loss-based, not match-based. Paired active/candidate total-loss EMAs use decay `0.8`; after ten shared
-global observations, the candidate promotes when its EMA is no greater than the active model's EMA
-(`maximum_relative_loss: 1.0`). Only one checkpoint is published for self-play and evaluation after the entire
-global quantum. The implemented state machine and recovery record are in
+Promotion is match-based. At each evaluation boundary an eligible successor plays the published active checkpoint.
+The candidate must score at least `0.48` in two consecutive completed paired matches; a failing score resets the
+count, while a failed or cancelled evaluation adds no observation. The former loss-EMA gate was removed because the
+candidate's extra quanta made its replay-fitting loss systematically incomparable with the active model's loss. Only
+one checkpoint is published for self-play and evaluation after the entire global quantum. The implemented state
+machine and recovery record are in
 [`training/progressive.py`](../../py/src/training/progressive.py) and
 [`training/session.py`](../../py/src/training/session.py).
+
+The standalone final YAML currently names the gate's `progressive-candidate` definition without declaring the
+matching `progressive_candidate` evaluation entry. The campaign continuation configuration contains that entry, but
+the standalone recipe must be repaired before reuse or it will never receive a promotion observation.
+
+The completed capacity investigation also used a manual function-preserving transition from 14×160 to 19×176. New
+units were wired random-in/zero-out, appended residual blocks were initialized as identities, branch scales were
+compensated on batch-normalization affine parameters, and global-pooling channel roles were preserved. The probe
+measured a `1.34e-05` maximum policy difference and exact top-one agreement. After one float replay-window epoch,
+the grown network required ten QAT quanta to restore acceptable INT8 fidelity. This path is implemented by
+[`grow_checkpoint.py`](../../py/tools/grow_checkpoint.py),
+[`train_grown_checkpoint.py`](../../py/tools/train_grown_checkpoint.py), and
+[`quantize_grown_checkpoint.py`](../../py/tools/quantize_grown_checkpoint.py); it is not yet the controller's
+automatic initialization policy.
+
+The grown network reached parity but did not improve the strength curve. The reported checkpoint therefore remains
+the 14×160 model. This establishes only that added capacity was not the binding constraint under the tested learning
+rate, self-play targets, and replay stream; it is not a general claim that 19×176 or larger networks cannot help.
 
 ## Checkpoint publication and recovery
 
 Each progressive model has a private checkpoint namespace. A complete checkpoint contains raw training weights,
 optimizer state, QAT state, a trimmed deployment artifact, hashes, network definition, and policy-prior calibration.
 The manifest is written last. `progressive-training.json` records the active model, each candidate's progress,
-candidate-start state, promotion comparison, and any pending quantum with its exact replay identity and completed
+candidate-start state, match-gate evidence, and any pending quantum with its exact replay identity and completed
 model prefix.
 
 After every required model has trained, the selected active private checkpoint is published into the ordinary

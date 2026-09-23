@@ -249,8 +249,9 @@ credits are therefore earned by materialization, not by the current number of li
 | `COORD` | `RETENTION` | Active generation plus evaluation-required checkpoint generations | Retention runs after publication/reporting and never removes the active or referenced inference artifact. |
 
 For progressive sizing, the training session may own more than one persistent trainer group. It trains the required
-active and candidate models sequentially against the same replay snapshot, records comparable loss, chooses the
-active model under the configured promotion rule, and publishes only that choice to the public checkpoint namespace.
+active and candidate models sequentially against the same replay snapshot, records candidate-versus-active match
+observations from the evaluator, chooses the active model under the configured promotion rule, and publishes only
+that choice to the public checkpoint namespace.
 
 ### Evaluation and feedback
 
@@ -264,6 +265,7 @@ active model under the configured promotion rule, and publishes only that choice
 | `EVALJOBS` | `EVALRESULT` | Game-level records, aggregate statistics, duration, or typed failure | Atomic result write; deadline failure may instead be written by the manager. |
 | `EVALRESULT` | `EVALMGR` | Completed job | Manager updates adaptive ladder state, TensorBoard, pending state, and checkpoint references. |
 | primary ladder observations | `SESSION` | Time-boundary Elo observations | Feedback controls when a larger candidate begins; it does not directly alter model weights. |
+| candidate match observations | `SESSION` | Candidate score, game count, and evaluation boundary | Two consecutive scores at or above the configured threshold authorize promotion; failed jobs add no observation. |
 
 Paired-opening match execution reverses candidate color. Concurrent match groups may share one candidate selector so
 candidate positions from several opponent groups form one inference batch.

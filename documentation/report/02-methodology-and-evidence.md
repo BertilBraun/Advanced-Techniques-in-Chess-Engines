@@ -48,22 +48,22 @@ for optimizer, architecture, and quantization diagnosis, but they do not by them
 
 ## Evidence dimensions
 
-A single “strong/weak” label is too imprecise for this project. Conclusions are classified by the observation they
-actually contain:
+A single “strong/weak” label is too imprecise for this project, but letter codes proved equally hard to read. The
+report therefore names the observation directly:
 
-| Grade | Observation | Valid use |
+| Evidence dimension | Observation | Valid use |
 | --- | --- | --- |
-| **S — strength** | Paired games or a calibrated ladder under a frozen protocol | Strength claim for that checkpoint, search, and opponent |
-| **O — online learning** | Self-play learning slope, preferably from a shared-state fork | Learning-system comparison within the measured regime |
-| **P — proxy** | Frozen replay, held-out loss, target fidelity, policy agreement, or fixed-batch fit | Candidate selection or mechanism diagnosis, not Elo |
-| **T — throughput** | Forward, search, actor, trainer, or admitted-replay rate | Performance claim under the recorded workload, not learning quality |
-| **M — mechanics** | Unit/integration test, smoke, persistence audit, or telemetry | Correctness and operation, not efficacy |
-| **R — rationale** | Literature transfer, design analysis, or an unexecuted plan | Motivation only |
+| Playing strength | Paired games or a calibrated ladder under a frozen protocol | Strength claim for that checkpoint, search, and opponent |
+| Online learning | Self-play learning slope, preferably from a shared-state fork | Learning-system comparison within the measured regime |
+| Proxy measurement | Frozen replay, held-out loss, target fidelity, policy agreement, or fixed-batch fit | Candidate selection or mechanism diagnosis, not Elo |
+| Throughput | Forward, search, actor, trainer, or admitted-replay rate | Performance claim under the recorded workload, not learning quality |
+| Mechanics | Unit/integration test, smoke, persistence audit, or telemetry | Correctness and operation, not efficacy |
+| Design rationale | Literature transfer, design analysis, or an unexecuted plan | Motivation only |
 
-A technique can have several grades. Progressive sizing has **T** evidence for the small-model premise and **M**
-evidence for durable promotion, but no isolated **O/S** comparison of the exact final ladder against a fixed model.
-QAT has **P/T/M** evidence; the final run determines whether the resulting extra data production converted to
-learning and strength.
+A technique can have evidence in several dimensions. Progressive sizing has throughput evidence for the small-model
+premise and mechanics evidence for durable promotion, but no isolated online-learning or strength comparison of the
+exact final ladder against a fixed model. QAT has proxy, throughput, and mechanics evidence; the completed campaign
+shows the strength of the assembled system without assigning that strength to QAT alone.
 
 The [experiment ledger](../experiments/README.md) records technique status, the
 [benchmark coverage ledger](../experiments/benchmark-coverage.md) accounts for benchmark artifacts, and the
@@ -93,8 +93,8 @@ online-server, CCRL, or universally portable engine ratings. Every published str
 - hardware and, when latency is claimed, concurrency and batching assumptions.
 
 The interpretation and acceptable language are defined in
-[the Elo-scale note](../analysis/chess-elo-scale-and-reporting-20260911.md). The v34 terminal protocol provides the
-clearest completed example in the [generation-1465 benchmark](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
+[the Elo-scale note](../analysis/chess-elo-scale-and-reporting-20260911.md). The previous four-day baseline provides a
+complete historical example in the [terminal baseline benchmark](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
 
 ## Throughput and fidelity
 

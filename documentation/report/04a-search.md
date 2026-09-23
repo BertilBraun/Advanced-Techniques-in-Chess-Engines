@@ -12,8 +12,9 @@ affect throughput. Those answers must not be conflated. Visits dominated the mea
 several heuristics produced smaller or unresolved differences. The final recipe therefore uses an observable staged
 cap—300, 400, 500, 600, then 800 visits—rather than a controller whose output is hard to audit.
 
-This is **S/P** evidence that search depth matters for the tested checkpoint, plus **R** for the exact training-time
-schedule. There is no one-variable experiment proving that these generation boundaries are optimal. The principal
+Playing-strength and proxy measurements show that search depth matters for the tested checkpoint; design rationale
+supports the exact training-time schedule. There is no one-variable experiment proving that these boundaries are
+optimal. The principal
 records are the [search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md) and
 [search synthesis](../analysis/chess-search-findings-20260827.md).
 
@@ -39,7 +40,8 @@ not direct measurements of the final all-full workload.
 The first stopping study reconstructed possible savings from final visit distributions. It did not have temporal
 traces proving that a live rule could have stopped at the inferred earlier point. It also showed why a “fast” search
 was not target-free: its policy could supervise the preceding row's next-policy head, and full-search output affected
-restart-state selection. The correct classification is **audited and declined, P/R**, not implemented and defeated
+restart-state selection. The correct classification is **audited and declined on proxy evidence and design
+rationale**, not implemented and defeated
 in a match. See the [R3 termination audit](../benchmarks/adaptive-search-termination-r3-20260813/README.md).
 
 ## Predicted budgets
@@ -53,7 +55,8 @@ Its proxy result was real: the live allocator captured useful KL headroom and al
 positions. Its learning result was negative: adaptive runs trailed non-adaptive lineages by roughly 60–100 ladder
 Elo. The leading mechanism is a mismatch between per-position fidelity and training value. A target can be close to
 a deep policy in KL yet remain too self-referential to teach the next network. Because the proxy succeeded and Elo
-failed, this is one of the project's clearest demonstrations that **P does not imply O/S**
+failed, this is one of the project's clearest demonstrations that proxy success does not imply better online
+learning or playing strength
 ([negative result](../analysis/adaptive-search-budget-negative-result-20260901.md)).
 
 ## Learned early stopping
@@ -62,7 +65,8 @@ Learned stopping moved the decision inside search so it could observe the tree. 
 trained checkpoint and rebuilt replay, then forked byte-identical arms. The strongest stopping arm skipped 14% of
 nominal search but reduced generation time by only about 3%, because self-play overlapped training and the removed
 work was mostly slack. Paired strength differences were unresolved and economically too small to measure in the
-available horizon. This is **O/T** negative evidence from a strong shared-state control, not proof that stopping is
+available horizon. This is negative online-learning and throughput evidence from a strong shared-state control, not
+proof that stopping is
 universally useless ([conclusion](../analysis/adaptive-search-conclusion-20260904.md)).
 
 ## Parallelism and batch fill
@@ -85,7 +89,8 @@ playouts with coefficient 1.5, and a 0.99 per-ply search-value discount. Their e
 - reduced-parent FPU is configured and widely motivated but not isolated here;
 - the search study did not statistically resolve a standalone value-discount benefit.
 
-They are retained recipe choices (**M/R**, with limited **S/P**), not four measured Elo multipliers.
+They are retained recipe choices supported by mechanics and design rationale, with limited strength and proxy
+evidence—not four measured Elo multipliers.
 
 ## Graph search and inference caching
 
@@ -93,7 +98,7 @@ The graph branch implemented shared descendant nodes, parent-local edges, correc
 virtual loss, graph-aware rerooting/pruning, and exact chess history identity. Exact repetition semantics eliminated
 most apparent board transpositions. At 1,000–10,000 searches, avoidable evaluations were tiny while graph bookkeeping
 reduced throughput by about 6–9%. Higher-search tests found more hits but still lost throughput. The implementation
-was rejected for this workload (**T/M**), not merely left unfinished.
+was rejected for this workload on throughput and mechanics evidence, not merely left unfinished.
 
 Inference caching was audited separately without merging search state. Its ideal unbounded reuse ceiling was only
 about 3.5% in the production-like mixed workload before synchronization, storage, eviction, and finite-capacity

@@ -37,7 +37,7 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
 - [x] Value-head representations and widths
 - [x] Input feature planes, history, repetition, and rule-state encoding
 - [x] Quantization-driven architectural constraints
-- [x] Progressive model sizing and cross-size initialization
+- [x] Progressive model sizing, failed loss-based promotion, match gating, and function-preserving growth
 - [x] Auxiliary policy and remaining-length heads
 - [x] Distillation and smaller deployment models
 
@@ -96,7 +96,8 @@ dossiers. The audit and exact boundary are recorded in [the completeness audit](
 - [x] External-engine calibration and uncertainty
 - [x] Strength, target fidelity, throughput, admitted-data rate, training cadence, and wall-clock learning as distinct
   outcomes
-- [ ] Final training curves, learning-rate curves, replay statistics, and systems telemetry
+- [ ] Final training curves, learning-rate curves, replay statistics, and systems telemetry (terminal summary exists;
+  archive-derived figures remain)
 - [ ] Cross-generation progress figure using descriptive checkpoint/campaign labels rather than internal run identifiers
 - [ ] Cost, hardware, runtime, and reproducibility accounting
 

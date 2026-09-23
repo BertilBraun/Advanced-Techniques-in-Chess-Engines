@@ -7,16 +7,16 @@ the quantitative placeholder chapter; it does not contain provisional result val
 
 | Publication claim | Required evidence | Allowed wording before closure |
 | --- | --- | --- |
-| Final model strength | Frozen checkpoint, paired terminal matches, raw games, CI, exact calibration | “Pending terminal evaluation” |
-| Improvement over v34 | Same protocol or explicit normalization, both artifact identities | “Final run is active”; no numeric delta |
-| Superhuman play | Calibrated fixed-node result with scale caveat and protocol | Use v34 only if clearly labeled predecessor |
+| Final model strength | Frozen checkpoint, paired terminal matches, raw games, CI, exact calibration | Report the completed matrix with its protocol limits |
+| Improvement over the previous four-day baseline | Same protocol or explicit normalization, both artifact identities | Compare only matched ladder conditions |
+| Superhuman play | Calibrated fixed-node result with scale caveat and protocol | Use “benchmark Elo,” not FIDE or universal engine rating |
 | Training cost | Start/stop/downtime audit, node price, exclusions | No live extrapolation |
 | Training volume | Reconciled replay/coordinator/trainer counters | No dashboard snapshot |
-| INT8 enabled more data | Backend usage, matched backend T results, admitted replay and generation rates | “Designed to improve throughput” |
-| Progressive sizing helped efficiency | Stage timing/throughput plus existing small-vs-large T benchmark | Do not claim causal Elo/dollar without counterfactual |
-| Replay/restart/auxiliary choices improved strength | Isolated O/S ablation, if any | “Retained in the final bundle” |
+| INT8 enabled more data | Backend usage, matched backend-throughput results, admitted replay and generation rates | “Designed to improve throughput” |
+| Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |
+| Replay/restart/auxiliary choices improved strength | Isolated online-learning or playing-strength ablation, if any | “Retained in the final bundle” |
 | Resignation was safe and useful | Threshold history, continuation outcomes, false-nonloss bound, saved work | “Calibrated with continuation auditing” |
-| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | “Recipe available”; result identity pending |
+| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Selected artifact is frozen; post-pull matches still require checksum capture |
 
 ## Required headline tables
 
@@ -28,15 +28,18 @@ the quantitative placeholder chapter; it does not contain provisional result val
    occupancy, and rejection/quarantine totals.
 4. **Stage history:** model stage, visit stage, wall-clock interval, optimizer interval, actor/trainer throughput,
    backend, and promotions/resumes.
-5. **Comparison with v34:** only matched rows, with protocol differences shown rather than footnoted away.
-6. **Negative-result summary:** technique, tested claim, strongest evidence grade, outcome, and why it was not retained.
+5. **Comparison with the previous four-day baseline:** only matched rows, with protocol differences shown rather than
+   footnoted away.
+6. **Negative-result summary:** technique, tested claim, strongest evidence dimension, outcome, and why it was not
+   retained.
 
 ## Required figures
 
 The source and derivation of each figure must be machine-readable and retained beside the final archive.
 
-1. Cross-lineage 64-search ladder Elo for v9, v29, v34, the audited successor, and stitched V89–V93.
-2. Final-lineage searched and policy-only Elo with uncertainty, promotions, resumes, and backend incidents.
+1. Cross-campaign 64-search ladder Elo for the early baseline, first major architecture revision, previous four-day
+   baseline, later successor, and final accepted lineage. Internal identifiers belong only in the plot sidecar.
+2. Final accepted-lineage searched and policy-only Elo with uncertainty, promotions, resumes, and backend incidents.
 3. Policy, WDL, auxiliary, and total losses against wall clock and optimizer step.
 4. Learning rate, gradient norm, and clipping fraction.
 5. Games, fresh positions, presentations, generations, and optimizer steps against wall clock.
@@ -50,7 +53,7 @@ The source and derivation of each figure must be machine-readable and retained b
 ## Final inputs
 
 - fetched and checksum-verified terminal archive;
-- exact V89–V93 source/config/resume timeline;
+- exact source/configuration/resume manifest for every accepted and discarded interval;
 - reconciled run counters and cost accounting;
 - selected checkpoint rule and hashes;
 - TensorRT/ONNX/template/engine identities and fidelity reports;
@@ -61,12 +64,13 @@ The source and derivation of each figure must be machine-readable and retained b
 
 ## Writing pass after evidence arrives
 
-1. Populate [Final-run results](07-final-run-results.md) and the project result record first.
+1. Reconcile the [project result record](../results/final-chess-run.md) with the checksum-covered result artifacts.
 2. Write results and discussion without changing historical conclusions to fit the outcome.
-3. Update the abstract/conclusion, then replace the root README's temporary v34 showcase with the final result and
-   update the documentation index. Retain v34 only as a clearly labeled historical comparison and evidence link.
+3. Update the abstract/conclusion, then replace the root README's temporary predecessor showcase with the final result
+   and update the documentation index. Retain the previous four-day baseline only as a clearly labeled historical
+   comparison and evidence link.
 4. Replace any remaining “current/live/pending” statements with a dated final status.
-5. Verify every quantitative claim against the claim map and evidence grade.
+5. Verify every quantitative claim against the claim map and named evidence dimension.
 6. Pin mutable external documentation and complete bibliography metadata.
 7. Run link/anchor validation, render plots, and inspect Markdown/PDF output.
 8. Confirm the public model artifact matches the reported checkpoint rather than merely sharing a run name.

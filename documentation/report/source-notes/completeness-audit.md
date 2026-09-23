@@ -7,9 +7,11 @@ visible subjects have been added and checked against their direct sources. The o
 rediscover material that the repository already records.
 
 This does not mean the eventual prose is finished or that every retained setting has causal evidence. One disputed
-experiment still requires project-owner memory or a recovered artifact, several historical conclusions retain
-explicit provenance limits, and the final evaluation sections must wait for the terminal archive. Check marks in the
-[topic inventory](topic-inventory.md) record the result of this re-audit.
+experiment still requires project-owner memory or a recovered artifact, and several historical conclusions retain
+explicit provenance limits. The final training recap now resolves the reported checkpoint and the progressive-sizing
+outcome; the teacher evaluation table is integrated, while several post-pull result directories, the final figures,
+and full cost accounting remain open. Check marks in the [topic inventory](topic-inventory.md) record the result of
+this re-audit.
 
 ## Sources checked
 
@@ -33,8 +35,8 @@ labels.
 | Dossier | Readiness | Audit result |
 | --- | --- | --- |
 | Search and inference | Ready for owner factual review | Fixed/mixed budgets, heuristic stopping, predicted allocation, learned stopping, MCTS mechanics, parallelism, graph search, both cache investigations, `torch.compile`, TorchScript, CUDA graphs, TensorRT, and metric boundaries have substantive entries. |
-| Network architecture and policy | Ready for owner factual review | Input representation and symmetry, all policy families, progressive sizing, distillation, trunks, context, value heads, auxiliaries, quantization, and initialization have substantive entries. The remembered split-trunk experiment remains an explicit owner-memory question rather than an invented result. |
-| Training, data, and replay | Ready for owner factual review | Progressive candidate training, root-value blending, publication cadence, replay, starts, resignation, cuts, auxiliaries, reanalysis, overlap, storage, and optimizer screens are covered with evidence boundaries. |
+| Network architecture and policy | Ready for owner factual review | Input representation and symmetry, all policy families, progressive sizing, function-preserving growth, distillation, trunks, context, value heads, auxiliaries, quantization, and initialization have substantive entries. The remembered split-trunk experiment remains an explicit owner-memory question rather than an invented result. |
+| Training, data, and replay | Ready for owner factual review | Progressive candidate training, the rejected loss gate, match-based promotion, candidate scheduling defects, root-value blending, publication cadence, replay, starts, resignation, cuts, auxiliaries, reanalysis, overlap, storage, and optimizer screens are covered with evidence boundaries. |
 | Runtime architecture and current-system figure | Ready for owner factual review | The selected interaction graph is separated from a new investigation dossier covering pipes, queues, clients, fine-grained coroutines, native ownership, direct slots, topology, CUDA graph constraints, and interactive latency. Current progressive semantics were rechecked against code and configuration. |
 | Evaluation and pitfalls | Ready for current owner factual review | Protocol and failure studies are strong. The explicitly marked terminal-results fields, cross-campaign comparability audit, final curves, cost, and reproducibility identity must wait for the preserved final archive. |
 
@@ -43,9 +45,10 @@ labels.
 - **Input and augmentation:** the network dossier now defines all 52 input planes, packed binary/scalar storage,
   side-to-move canonicalization, bounded history, repetition, file reflection, castling-plane exchange, checkerboard
   restoration, and policy/legal/auxiliary permutation.
-- **Progressive sizing:** the network and training dossiers now distinguish candidate start, extra catch-up work, and
-  promotion. The architecture and system guides agree with the current 50/4 Elo-per-hour thresholds, six-interval
-  window, two confirmations, strict loss parity, ten paired observations, and 1.5 candidate multiplier.
+- **Progressive sizing:** the network and training dossiers now distinguish candidate start, extra catch-up work,
+  promotion, and manual function-preserving growth. The architecture and system guides agree with the current 50/4
+  Elo-per-hour thresholds, six-interval window, two start confirmations, 1.5 candidate multiplier, and the
+  match-based promotion gate. They also preserve why unequal candidate training invalidated the former loss gate.
 - **Distillation:** raw teacher-output imitation and frozen-replay compression are separate investigations, with
   equal-search, equal-time, and arithmetic equal-compute claims kept distinct.
 - **Value targets:** replay outcome discount, optimizer-time root-value blending, and search-backup discount are now
@@ -125,6 +128,22 @@ weights, resignation parameters, search constants, and much of the final bundle 
 comparisons. The dossiers generally state this correctly. Publication prose must preserve those qualifications and
 must not retroactively allocate the terminal run's total gain among individual settings.
 
+### Capacity conclusion is bounded
+
+The independently initialized larger candidate was promoted by an invalid loss comparison and remained far weaker
+in play. Function-preserving growth removed the relearning deficit, restored INT8 fidelity through QAT, and reached
+parity, but the larger continuation then stayed flat. The reported checkpoint remains the 14-by-160 model. This is
+evidence that capacity was not binding under the tested learning-rate floor, search targets, and replay stream; it
+is not evidence that larger networks are generally ineffective.
+
+### Standalone promotion configuration needs one repair
+
+The current standalone final YAML configures a match gate with definition ID `progressive-candidate`, but its
+evaluation-definition list contains no `progressive_candidate` entry. The campaign continuation configuration does
+contain that paired-match definition. Because configuration loading does not cross-check the reference, the
+standalone YAML loads but could never accumulate promotion evidence. Correct the final YAML before presenting it as
+an executable reproduction recipe.
+
 ## Nonblocking scope choices found outside the original inventory
 
 The audit added explicit inventory rows for augmentation/canonicalization and model-publication cadence, and both are
@@ -160,16 +179,18 @@ These are the remaining questions the repository audit cannot answer safely:
 These questions are suitable for owner review. No known repository-visible subject remains for the owner to
 rediscover before that review.
 
-## Terminal-archive-only work
+## Remaining result-integration work
 
-The following omissions are intentional until the current training campaign is frozen:
+The final recap has supplied the terminal checkpoint choice, cost basis, principal strength matrix, capacity outcome,
+and archived artifact locations. The following work remains before publication:
 
-- terminal policy-only, fixed-search, moderate/deep-search, and very-deep-search strength;
-- the final checkpoint and exact serving-artifact identities;
-- complete hardware, wall time, cost, optimizer volume, admitted data, and effective replay reuse;
+- reconcile the final policy-only, fixed-search, moderate/deep-search, and very-deep-search results with their raw
+  result files and uncertainty calculations;
+- freeze the exact serving-artifact identities and re-fetch evaluation outputs produced after the evidence pull;
+- extract complete optimizer volume, admitted data, effective replay reuse, and systems telemetry from the archive;
 - loss, learning-rate, Elo, replay-age, resignation, cut, throughput, and resource curves;
 - the shared-protocol audit and final cross-campaign ladder figure; and
-- the largest model's actual TensorRT precision, template, refit, fidelity, and fallback history.
+- render the largest model's TensorRT/QAT recovery and fidelity history without implying it is the reported model.
 
 These pending results do not block factual review of any source dossier. They do block final evaluation, abstract,
 headline README claims, and conclusion prose.

@@ -90,7 +90,7 @@ Replay reuse affects optimizer cadence as well as statistical efficiency because
 generation. The project found that changing replay ratio could leave short-run wall-clock strength similar while
 advancing every generation schedule at a different real-time pace. Later frozen-replay and online investigations
 separated optimizer choice, reuse, and initialization; the
-[v35–v42 audit](../analysis/v35-v42-regression-audit-20260913.md) is the main causal record.
+[controlled regression audit](../analysis/v35-v42-regression-audit-20260913.md) is the main causal record.
 
 The final recipe uses reuse 4 and grows capacity from 600,000 to 20 million positions. Sampling is 30% uniform with
 the remainder weighted by capped policy surprise. Regret-like information is used to select restart states rather

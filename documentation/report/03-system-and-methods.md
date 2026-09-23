@@ -107,5 +107,5 @@ progression from frequent noisy signal to terminal-strength measurement.
 Operational loss is research loss on rented compute. The coordinator persists credit, replay, active/candidate model
 state, and evaluation state at explicit boundaries. Workers publish completed games atomically; replay
 materialization isolates an individual bad game but fails loudly on a systemic rejection rate; and final export
-binds evidence to source and configuration identity before the ephemeral node is released. These are **M** claims
-about recoverability, not model-quality features, but they determine whether a multi-day result is trustworthy.
+binds evidence to source and configuration identity before the ephemeral node is released. These are mechanics and
+recoverability claims, not model-quality features, but they determine whether a multi-day result is trustworthy.

@@ -13,7 +13,8 @@ attention is inherently unsuitable.
 The later viability study calibrated bootstrap priors, used a fixed teacher dataset, paired held-out cross-entropy,
 and measured production-card throughput separately. A bare attention trunk did not beat the CNN at a matched head.
 The best attention cell improved the proxy, but most of its advantage came from the from-to policy head and it paid a
-large throughput cost. The project retained the CNN. This is **P/T**, not a terminal online trunk ablation.
+large throughput cost. The project retained the CNN. This is proxy and throughput evidence, not a terminal online
+trunk ablation.
 
 Packed-QKV and SDPA-backend work improved or clarified the attention implementation but became superseded when the
 attention family was not selected. Hybrid CNN/transformer trunks remained proposals.
@@ -41,11 +42,19 @@ architecture/deployment result, not evidence that the residual block is stronger
 
 The throughput premise is measured: small early models can generate substantially more search on the production
 GPU. The mechanism is also durable: active and candidate trainers consume the same replay-batch identity; candidate
-start is triggered by searched-Elo gain per hour; loss EMAs govern promotion; private candidate checkpoints survive
-restart; publication is ordered and idempotent.
+start is triggered by searched-Elo gain per hour; paired candidate-versus-active matches govern promotion; private
+candidate checkpoints survive restart; publication is ordered and idempotent. The former loss-EMA gate was removed
+after unequal candidate training made its losses incomparable and promoted a much weaker larger model.
+
+Function-preserving growth later mapped the trained 14x160 network into 19x176, recovered INT8 fidelity with QAT,
+and removed the need for the larger model to relearn its parent's function. The larger continuation reached parity
+but did not improve the strength curve, so the reported model remains 14x160. This bounds the conclusion to the
+tested recipe: capacity was not the immediate bottleneck, but the experiment does not establish a general limit on
+larger networks.
 
 The exact 12x128 → 14x160 → 19x176 ladder has no fixed-model counterfactual. Its causal strength-per-dollar gain is
-unresolved even if the final model is strong. Evidence is **T/M**, with final-run **O/S** for the assembled bundle.
+unresolved. The evidence establishes throughput and controller mechanics; the completed campaign establishes online
+learning and strength only for the assembled bundle.
 
 ## Bootstrap calibration and deterministic initialization
 
@@ -55,8 +64,8 @@ and WDL constraints, and calibrates policy scale toward a top-three-mass target.
 it is not an architecture-specific constant.
 
 The adaptive-search postmortem found that the configured random seed did not reach network construction. Nominally
-identical independent runs therefore began from different tensors. That defect was fixed, and the v35–v42 work moved
-toward exact initialization, checkpoint, replay, and inference-artifact comparisons. The
+identical independent runs therefore began from different tensors. That defect was fixed, and the subsequent
+controlled audit moved toward exact initialization, checkpoint, replay, and inference-artifact comparisons. The
 [regression audit](../analysis/v35-v42-regression-audit-20260913.md) and
 [executable bisect](../analysis/v35-v42-executable-bisect-20260913.md) are methodological evidence: uncontrolled
 short-run rankings should not be treated causally.
@@ -70,14 +79,15 @@ root Q, material, survival, king safety, control maps, and search correction—w
 
 ## AdamW, SGD, and learning-rate evidence
 
-AdamW produced the verified v34 result and is therefore superseded, not disproven. Frozen-v34-replay screens showed
-that Nesterov SGD could train the QAT network and ranked candidate warmups, fold boundaries, and deployment rates.
+AdamW produced the verified previous four-day baseline and is therefore superseded, not disproven. Frozen-replay
+screens using that model's data showed that Nesterov SGD could train the QAT network and ranked candidate warmups,
+fold boundaries, and deployment rates.
 Delayed folding helped the historical pre-fold schedule; within the tested short horizon, higher post-fold target
 rates improved proxy fitting without instability.
 
 The final schedule is not the screen winner copied literally. It keeps the authoritative training model pre-fold
-until one million optimizer steps and the deployment copy inherits the main linear learning rate. The screens are
-**P/M** mechanism and selection evidence. Final online strength belongs to the assembled run.
+until one million optimizer steps and the deployment copy inherits the main linear learning rate. The screens provide
+proxy, mechanics, and selection evidence. Final online strength belongs to the assembled run.
 
 Gradient clipping was frequent in several frozen screens but did not prevent learning. This is a diagnostic to plot,
 not proof that the clipping threshold is optimal. EMA/SWA, gradient accumulation, and dynamic loss balancing remained
@@ -89,9 +99,10 @@ The teacher-imitation probe varied student size, data volume, auxiliary imitatio
 how deeper search widened the teacher/student gap but inherited dataset sampling defects and did not produce a final
 training stage.
 
-The later v34 replay-compression study published a 0.47M-parameter student and evaluated equal searches, approximate
-equal serving time, and equal network compute. The answer depended on the constraint: the student was much smaller
+The later replay-compression study of the previous four-day baseline published a 0.47M-parameter student and
+evaluated equal searches, approximate equal serving time, and equal network compute. The answer depended on the
+constraint: the student was much smaller
 and faster but did not match the teacher. Compression is therefore measured and useful, yet inconclusive as a
 replacement for direct final-model training
 ([probe](../benchmarks/chess-distillation-probe-rtx3060-20260827/README.md),
-[v34 compression](../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md)).
+[replay compression](../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md)).

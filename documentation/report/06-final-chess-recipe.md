@@ -7,9 +7,9 @@ The reproduction entry point is
 expanded and inherits from no other YAML file. Documentation should link to that file instead of copying every field,
 because the living recipe may be revised if the project resumes.
 
-The current final training run was developed iteratively across V89–V93. Those versions include operational resumes
-and fixes; they do not redefine the intended recipe as separate scientific runs. The terminal report must freeze the
-actual source revision and resolved configuration used by the reported checkpoint.
+The final campaign included operational resumes and correctness repairs without restarting the scientific training
+lineage. The frozen result record, rather than those internal labels, must identify the exact source revision and
+resolved configuration used by the reported checkpoint.
 
 ## Recipe summary
 
@@ -22,7 +22,7 @@ actual source revision and resolved configuration used by the reported checkpoin
 | Quantization | TensorRT INT8 QAT, pre-fold deployment copy, per-generation recalibration |
 | Model ladder | 12x128 → 14x160 → 19x176 convolutional networks |
 | Context/head | Global pooling every second residual block; from-to attention policy head |
-| Candidate timing | Searched-Elo plateau thresholds; loss-based promotion after catch-up |
+| Candidate timing | Searched-Elo plateau thresholds; repeated candidate-versus-active matches for promotion |
 | Replay | Staged 0.6M → 20M positions; reuse 4; eight materializers |
 | Sampling | 30% uniform plus capped policy-surprise weighting |
 | Search | 300 → 400 → 500 → 600 → 800 visits; reduced-parent FPU; forced playouts |
@@ -35,14 +35,22 @@ This table is explanatory, not executable. The YAML remains authoritative.
 
 ## Progressive stages
 
-All stages share the same semantic heads and objective, making loss comparison meaningful during catch-up:
+All stages share the same semantic heads and objective. Training loss remains useful for optimization diagnostics,
+but it is not a valid promotion comparison when a candidate receives additional replay presentations:
 
 1. **12 blocks × 128 channels.** The high-throughput bootstrap and early-data stage.
 2. **14 blocks × 160 channels.** The medium stage used once early Elo gain per hour no longer justifies staying small.
-3. **19 blocks × 176 channels.** The maximum configured stage, started under a lower plateau threshold.
+3. **19 blocks × 176 channels.** The maximum configured stage, tested both from independent initialization and by
+   function-preserving growth from the medium model.
 
 Each block family uses scaled post-activation with an activation cap of 6. The branch scale decreases with depth.
 The from-to policy key size is 128 in every stage, and the value head shape remains fixed.
+
+The independently initialized largest candidate exposed the failure of loss-based promotion: its additional
+optimizer work lowered replay loss before it matched playing strength. Promotion is now match-based. The later grown
+candidate preserved the medium model's function and recovered INT8 fidelity through QAT, but did not establish a
+stronger plateau. The reported checkpoint is therefore the 14-block, 160-channel model. This is a bounded capacity
+result for the tested recipe, not a claim that larger networks are generally ineffective.
 
 ## Data curriculum
 

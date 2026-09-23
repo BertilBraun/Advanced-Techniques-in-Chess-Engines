@@ -100,8 +100,8 @@ marked **verify** require metadata, version, and section checks during the publi
 
 - [Final run result record](../results/final-chess-run.md) — pending quantitative authority.
 - [Final configuration](../../py/configs/production/chess-final-config.yaml) — living reproduction entry point.
-- [v34 terminal strength](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
-- [v34 training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).
+- [Previous-baseline terminal strength](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
+- [Previous-baseline training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).
 - [Search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md).
 - [Adaptive-search conclusion](../analysis/adaptive-search-conclusion-20260904.md).
 - [Attention viability](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md).
