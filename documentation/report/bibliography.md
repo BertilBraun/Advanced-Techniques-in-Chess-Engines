@@ -11,14 +11,16 @@ marked **verify** require metadata, version, and section checks during the publi
   search, optimizer, and evaluation context.
 - Silver, D., Schrittwieser, J., Simonyan, K. et al. (2017). *Mastering the Game of Go without Human Knowledge*.
   *Nature* 550, 354–359. [doi:10.1038/nature24270](https://doi.org/10.1038/nature24270). AlphaGo Zero background.
-- Wu, D. J. (2019). *Accelerating Self-Play Learning in Go*.
-  [arXiv:1902.10565](https://arxiv.org/abs/1902.10565). KataGo playout-cap randomization, forced playouts and
+- Wu, D. J. (2019; revised 2020). *Accelerating Self-Play Learning in Go*.
+  [arXiv:1902.10565v5](https://arxiv.org/abs/1902.10565v5). KataGo playout-cap randomization, forced playouts and
   target pruning, auxiliary targets, global-pooling architecture, resignation, and efficiency ablations. Cite the
   pinned post-paper methods documentation below for policy-surprise weighting.
-- Tian, Y. et al. (2019). *ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero*.
-  [arXiv:1902.04522](https://arxiv.org/abs/1902.04522). Reproduction methodology, replay, search, and scaling.
-- Lan, L.-C. et al. (2021). *Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search*.
-  [arXiv:2012.07910](https://arxiv.org/abs/2012.07910). Adaptive stopping taxonomy and comparison.
+- Tian, Y. et al. (2019; revised 2022). *ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero*.
+  [arXiv:1902.04522v5](https://arxiv.org/abs/1902.04522v5). Reproduction methodology, replay, search, and scaling;
+  published at ICML 2019.
+- Lan, L.-C., Tsai, M.-Y., Wu, T.-R., Wu, I.-C., and Hsieh, C.-J. (2021). *Learning to Stop: Dynamic Simulation
+  Monte-Carlo Tree Search*. [arXiv:2012.07910v1](https://arxiv.org/abs/2012.07910v1). Adaptive stopping taxonomy
+  and comparison; published at AAAI 2021.
 - Czech, J., Blüml, J., Kersting, K., and Steingrimsson, H. (2023; revised 2024). *Representation Matters for
   Mastering Chess: Improved Feature Representation in AlphaZero Outperforms Switching to Transformers*.
   [arXiv:2304.14918v2](https://arxiv.org/abs/2304.14918v2). Representation and chess-architecture context; do not

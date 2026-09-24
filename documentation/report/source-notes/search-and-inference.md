@@ -619,7 +619,7 @@ states with different draw rights.
 - [Corrected paper audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-paper-audit-rtx4070s-20260818/README.md)
 - [Low- through high-budget graph benchmark](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-rtx4070s-20260818/README.md)
 - [Preserved native MCGS tests](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/cpp/test/TestMonteCarloGraphSearch.cpp)
-- [Czech, Korus, and Kersting, “Improving AlphaZero Using Monte-Carlo Graph Search”](https://arxiv.org/abs/2012.11045)
+- [Czech, Korus, and Kersting, “Monte-Carlo Graph Search for AlphaZero”](https://arxiv.org/abs/2012.11045v1)
 
 ## Neural inference caching
 
