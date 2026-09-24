@@ -140,10 +140,11 @@ At 1,000 searches against the same 20,000-node opponent, one, four, and sixteen 
 0.645, and 0.610, corresponding to 2,823, 2,804, and 2,778 Elo. Thus four-way parallelism cost **19 Elo** and
 sixteen-way parallelism cost **45 Elo** in this sweep.
 
-The operational recap reports match wall times of 18.1, 3.4, and 1.3 minutes, or approximately **5.3x** speedup for
-four-way and **13.9x** for sixteen-way parallelism. The archived result manifests record slightly broader aggregate
-durations of 18.5, 3.8, and 1.8 minutes. Publication should preserve the named timing definition rather than blend
-the two. A separate 100-search comparison found a much larger **235-Elo** penalty for sixteen-way parallelism. The
+The operational recap and archived result manifests record slightly different wall times for the same sweep:
+**18.1–18.5 minutes** with one parallel search, **3.4–3.8** with four, and **1.3–1.8** with sixteen. These are ranges
+between two recorded timers, not statistical confidence intervals or repeated-run variability. Their paired
+speedup ratios are approximately **4.8–5.3x** for four-way and **10.1–13.9x** for sixteen-way parallelism. A separate
+100-search comparison found a much larger **235-Elo** penalty for sixteen-way parallelism. The
 budget dependence is important, but these two budgets do not determine a universal “safe parallelism” curve; the
 measured result is a strength/latency trade-off at specific operating points.
 

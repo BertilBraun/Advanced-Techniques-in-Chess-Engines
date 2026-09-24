@@ -65,8 +65,8 @@ Every result-table row is now marked `captured_tail`.
 ### Recap corrections made during archive audit
 
 - The 10,000-search teacher rows used four parallel searches, not sixteen.
-- Four-way parallelism delivered about 5.3x operational speedup for a 19-Elo cost; the roughly 14x figure belongs to
-  sixteen-way parallelism and its 45-Elo cost.
+- The two recorded wall-time totals bound four-way speedup at about 4.8–5.3x for a 19-Elo cost and sixteen-way
+  speedup at about 10.1–13.9x for a 45-Elo cost. These are timer-source ranges, not confidence intervals.
 - The longer student saw 22.528 complete replay epochs, not 23 exactly.
 - The two superseded student gauntlets failed because the evaluation configuration matched more than one model, not
   because their checkpoint manifest was absent.

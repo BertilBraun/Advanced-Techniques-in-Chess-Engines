@@ -141,9 +141,10 @@ The headline curve is an operating curve, not a pure search-budget ablation: it 
 parallel search, 2,804 with four, and 2,778 with sixteen. Four-way parallelism therefore cost 19 Elo; sixteen-way cost
 45 Elo.
 
-The operational timing definition reports approximately 5.3x speedup for four-way and 13.9x for sixteen-way
-parallelism. The result manifests' broader aggregate-duration fields imply smaller 4.8x and 10.1x ratios. Both are
-preserved pending a final timing-definition choice. At only 100 searches, sixteen-way parallelism cost 235 Elo, so
+The two recorded timing totals give **18.1–18.5 minutes** with one parallel search, **3.4–3.8** with four, and
+**1.3–1.8** with sixteen. These are descriptive ranges across the operational recap and result manifests, not
+confidence intervals. The corresponding paired speedup ratios span approximately **4.8–5.3x** for four-way and
+**10.1–13.9x** for sixteen-way parallelism. At only 100 searches, sixteen-way parallelism cost 235 Elo, so
 parallelism cannot be changed silently across a compute curve. The available points suggest that a fixed parallel
 count becomes less harmful as the total budget grows, but they are too sparse to define how much parallelism is
 effectively free at each budget. That frontier would require a dedicated budget-by-parallelism grid.
