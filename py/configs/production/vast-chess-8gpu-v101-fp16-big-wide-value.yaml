@@ -86,8 +86,11 @@ chess:
         kind: tensorrt
         bootstrap_with_torchscript: true
         allow_fidelity_deviation: true
+        # The configured template supplies the input shape only; the engine that actually runs is
+        # built from this architecture's own ONNX signature and cached under automatic-refit, so a
+        # template carrying the narrower value head is a shape probe rather than a mismatch.
         templates:
-        - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b320.engine}
+        - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v48-19x176-fp16-b320.engine}
 
 evaluation:
   # Three bracketed rungs, so the ladder stays on the same estimator as the reported run and the
@@ -119,7 +122,7 @@ evaluation:
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
           templates:
-          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b64.engine}
+          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v48-19x176-fp16-b64.engine}
   - opening_pair_count: 50
     maximum_game_plies: 300
     first_generation: 1
@@ -146,4 +149,4 @@ evaluation:
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
           templates:
-          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b64.engine}
+          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v48-19x176-fp16-b64.engine}
