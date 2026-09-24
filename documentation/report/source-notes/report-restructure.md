@@ -10,8 +10,9 @@ source dossiers pass review.
    - compute regime, research goals, claimed contributions, and explicit non-claims;
    - no internal run chronology.
 2. **System overview**
-   - publication-quality interaction SVG;
-   - Python/C++ ownership, processes, data products, synchronization, and artifact lifecycle.
+   - publication-quality normal-loop SVG;
+   - Python/C++ ownership, batched self-play, replay, training, deployment, and compact evaluation feedback;
+   - omit recovery and candidate-controller internals from the main figure.
 3. **Training and evaluation method**
    - state/action encoding, model outputs, search target construction, replay, optimization, and evaluation protocols.
 4. **Search investigations**
@@ -25,10 +26,12 @@ source dossiers pass review.
    - data creation, eligibility, replay growth/reuse, selection versus weighting, starts, resignation, cuts,
      auxiliaries, and reanalysis.
 7. **Inference and systems engineering**
-   - native ownership, batching, topology, compiler/backend alternatives, quantization, replay/DDP, and end-to-end
-     throughput accounting.
+   - compact enabling argument: native MCTS, batching, TensorRT, replay/DDP, and end-to-end throughput accounting;
+   - detailed topology sweeps, compiler alternatives, and runtime mechanics move to an appendix/evidence index.
 8. **Failure studies and transferable pitfalls**
-   - bounded chronological narratives only where the sequence of failure, diagnosis, and repair is itself useful.
+   - only late-game target poisoning, invalid TensorRT refits, and promotion by incomparable training losses;
+   - cache-measurement correction, seeding, compiler-boundary, materializer, and recovery incidents remain internal
+     evidence rather than publication narratives.
 9. **Final integrated recipe**
    - the canonical living configuration explained by mechanism, without development-version identifiers.
 10. **Final evaluation and learning dynamics**
@@ -46,8 +49,10 @@ source dossiers pass review.
   fidelity measurement,” “live-pipeline throughput benchmark,” or “implementation inspection.”
 - Replace development-version comparisons with descriptive model/checkpoint labels. Internal identifiers may remain
   inside machine-readable provenance and linked source paths, but not as the report's explanatory vocabulary.
-- Promote graph search, inference caching, compiler alternatives, policy representations, and other substantial
-  investigations from clauses or decision-table rows to full subsections.
+- Promote graph search, inference caching, policy representations, and other substantial algorithmic investigations
+  from clauses or decision-table rows to full subsections. Compiler variants remain supporting systems evidence.
+- Use *generation* for the approachable training-and-publication cycle, *checkpoint* for its durable model artifact,
+  and *optimizer quantum* only where those concepts diverge.
 
 ## Writing gate
 

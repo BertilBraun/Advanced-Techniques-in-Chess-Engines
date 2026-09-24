@@ -1,5 +1,11 @@
 # 5. Systems optimization
 
+This chapter is an enabling argument, not a claim of a new systems algorithm. AlphaZero required enough searched
+positions per hour for the training loop to improve on the available node. The consequential choices were native C++
+search ownership, large inference batches across many concurrent games, a faster deployment engine, and replay and
+trainer paths able to consume the resulting data. Detailed topology sweeps belong in the supporting evidence rather
+than the main narrative.
+
 ## Native search and direct inference
 
 The largest early gain came from moving rules, search-tree ownership, and inference coordination into C++. A naive
@@ -73,9 +79,7 @@ The rejected alternatives matter. Full-trunk post-training INT8 was fast but cat
 value outputs. Calibration sweeps, partial early-block quantization, SmoothQuant, weight-only variants, and FP8 did
 not pass the joint speed/fidelity gate. These are local implemented negative results in the
 [salvage investigation](../benchmarks/tensorrt-int8-salvage-rtx4070s-20260912/README.md), not universal claims about
-those methods. `torch.compile` improved an eager diagnostic but did not beat the then-production TorchScript path;
-TensorRT subsequently became the final serving compiler, so this remains historical boundary evidence rather than an
-open production-backend choice.
+those methods. TensorRT subsequently became the final serving compiler.
 
 The final networks use activation caps and scaled post-activation residual branches to make quantization tractable.
 Only the backbone convolutions are quantized; policy/value heads, linear layers, and the start block remain outside

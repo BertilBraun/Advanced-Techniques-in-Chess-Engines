@@ -9,10 +9,9 @@ the evidence boundary instead of inventing a conclusion.
 
 ## Minimum useful pass
 
-The **Priority 1** owner-memory pass is complete. The answers and their evidence limits are recorded below. The next
-useful review is the eight short causal summaries in Priority 2. Priority 3 and the final-result decisions are
-editorial choices and may wait for the report outline. You do not need to open any linked dossier unless a summary
-looks wrong.
+The Priority 1 owner-memory pass, Priority 2 causal review, and Priority 3 editorial scope review are complete. Their
+answers and evidence limits are recorded below. The remaining owner questions concern only final-result presentation.
+You do not need to open any linked dossier unless a summary looks wrong.
 
 ## Priority 1 — facts only the project owner can recover
 
@@ -92,23 +91,30 @@ The owner review of these interpretations is complete.
    report float rather than treating INT8 as intrinsically mandatory.
    [Context](network-architecture-and-policy.md#quantization-driven-residual-architecture)
 
-## Priority 3 — choices for the public report
+## Priority 3 — public-report choices
 
-These are editorial decisions, not missing research.
+The editorial scope review is complete.
 
-1. **Scope:** should the report be explicitly a chess study conducted on a multi-game platform, with Go appearing
-   only as a source of transferred ideas and a small integration check? This is the recommended scope.
-2. **Systems depth:** should native ownership, batching, TensorRT, cache work, and runtime alternatives form one major
-   systems chapter, while detailed topology sweeps move to an appendix? This would retain the engineering contribution
-   without interrupting the learning narrative. [Context](runtime-architecture-alternatives.md#implications-for-report-structure-and-figures)
-3. **Failure studies:** which incidents deserve main-text treatment? Recommended: late-game poisoning, invalid
-   TensorRT refit, misleading promotion by training loss, and cache measurement correction. Put the seed bug,
-   compiler boundary, and replay-materializer wedge in an appendix unless one is especially important to you.
-4. **Architecture figure:** should the main SVG show the normal data/control loop plus compact evaluation feedback,
-   with recovery and progressive-candidate detail moved to a second figure or appendix? This is the recommended
-   legibility tradeoff. [Figure specification](system-architecture-and-figure-dossier.md#proposed-publication-svg)
-5. **Terminology:** may the public text use *training quantum* for one optimizer-and-publication unit and reserve
-   *checkpoint* for a durable model artifact? This avoids the ambiguous internal term *generation*.
+1. **Scope — chess study:** Chess is the research subject. Small-board Go appears briefly as a platform check, a
+   source of transferred ideas, and a failed attempt to use a cheaper game for hyperparameter exploration. The basic
+   loop worked, but small-board Go's first-player advantage, shorter games, rapidly learned value target, and different
+   tuning needs made it a poor proxy for pushing chess performance. It did not receive its own optimization campaign.
+2. **Systems depth — enabling argument only:** Native ownership, batching, C++ MCTS, TensorRT, and the main throughput
+   chain remain in one compact chapter because sufficient self-play volume is a precondition for learning. Detailed
+   topology sweeps and low-level alternatives move to an appendix/evidence index. The report should not present these
+   implementation optimizations as a separate algorithmic breakthrough.
+   [Context](runtime-architecture-alternatives.md#implications-for-report-structure-and-figures)
+3. **Failure studies — three main incidents:** Keep late-game target poisoning, semantically invalid TensorRT refits,
+   and promotion by incomparable training losses. Do not promote the cache-measurement correction, seed bug,
+   `torch.compile` boundary comparison, or replay-materializer wedge into publication narratives. Their source notes
+   remain as internal evidence where useful.
+4. **Architecture figure — normal loop:** The main SVG shows Python/C++ ownership, batched native self-play, replay,
+   training, deployment, and compact evaluation feedback. Recovery and progressive-candidate internals are omitted
+   from the main figure; recovery does not need a second publication figure.
+   [Figure specification](system-architecture-and-figure-dossier.md#proposed-publication-svg)
+5. **Terminology — retain generation:** *Generation* is approachable enough for the public narrative and remains the
+   term for one training-and-publication cycle. Define it once and reserve *checkpoint* for the durable model artifact
+   written at such a boundary. Use *optimizer quantum* only where the distinction is technically necessary.
 
 ## Final-result decisions now ready for review
 
@@ -144,5 +150,5 @@ The canonical configuration issue is resolved: its progressive-candidate gate no
 definition and the file loads successfully. Exact historical reproduction still requires the resolved configuration,
 source revision, and artifact hashes frozen in the evidence record.
 
-After the remaining causal and editorial choices above are answered, the next useful owner pass is a short narrative
+After the six final-result presentation choices above are answered, the next useful owner pass is a short narrative
 outline and selected figures, not the underlying 5,000 lines of source notes.

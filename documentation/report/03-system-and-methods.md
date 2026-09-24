@@ -2,6 +2,11 @@
 
 ## Runtime boundary
 
+The systems design matters here for one reason: AlphaZero training needs enough searched games and fresh positions to
+learn within the available wall-clock budget. The report therefore describes the throughput-critical path—native
+search, batching, inference, replay, and training ownership—while leaving topology sweeps and recovery machinery to
+the linked engineering record.
+
 The system has one native implementation of the latency-sensitive path and one typed orchestration layer:
 
 - [`cpp/`](../../cpp/README.md) owns chess and Go state, legal actions, encodings, batched inference, MCTS, self-play,
@@ -63,9 +68,10 @@ data generation silently.
 ## Training
 
 The final trainer uses eight persistent NCCL ranks, one per GPU, with global batch 2,048 and bfloat16 training.
-Training proceeds in blocking optimizer quanta while a configured subset of self-play workers remains active. This
-overlap turns many nominal self-play savings into slack rather than wall-clock savings, a central result of the
-adaptive-stopping study.
+Training proceeds in blocking optimizer quanta while a configured subset of self-play workers remains active. A
+*generation* is the approachable public term for one training-and-publication cycle; a *checkpoint* is the durable
+model artifact written at such a boundary. This overlap turns many nominal self-play savings into slack rather than
+wall-clock savings, a central result of the adaptive-stopping study.
 
 The primary objective combines policy cross-entropy and WDL/value loss. Outcome value is discounted by ply, and a
 small scheduled blend introduces search-root value later in training. Two training-only auxiliary targets are
@@ -74,11 +80,12 @@ learning; they are not served during search.
 
 ## Progressive models and publication
 
-Training begins with a smaller network to exploit its higher early self-play throughput. Larger candidates are grown
-from the current model and trained beside it. Candidate starts are triggered by an Elo-improvement plateau, and
-promotion requires loss catch-up under a shared objective. A promotion publishes the new model without changing
-replay identity or generation accounting. Persistence includes both candidate and active state so restart does not
-silently repeat or skip transitions. The full contract is in
+Training begins with a smaller network to exploit its higher early self-play throughput. In the production
+controller, the immediate larger candidate starts from an independent initialization and trains beside the active
+model. Candidate starts are triggered by an Elo-improvement plateau, and promotion requires two qualifying
+head-to-head matches. A separate final investigation tested function-preserving growth from the trained medium model;
+it is not the controller's ordinary initialization path. A promotion publishes the new model without changing replay
+identity or generation accounting. The full contract is in
 [Progressive model sizing](../architecture/progressive-model-sizing.md).
 
 Rank zero publishes a complete training checkpoint and a trimmed inference artifact. In the final path, QAT-aware
@@ -102,10 +109,6 @@ reshuffle outcomes, so it is part of the protocol rather than an invisible speed
 [deep generation-936 match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) show the
 progression from frequent noisy signal to terminal-strength measurement.
 
-## Failure and restart semantics
-
-Operational loss is research loss on rented compute. The coordinator persists credit, replay, active/candidate model
-state, and evaluation state at explicit boundaries. Workers publish completed games atomically; replay
-materialization isolates an individual bad game but fails loudly on a systemic rejection rate; and final export
-binds evidence to source and configuration identity before the ephemeral node is released. These are mechanics and
-recoverability claims, not model-quality features, but they determine whether a multi-day result is trustworthy.
+Detailed restart and recovery semantics are implementation concerns rather than a report contribution. The public
+reproducibility boundary is simply that completed trajectories, replay state, checkpoints, and evaluation evidence
+are durably committed before they are credited or reported; the linked architecture documentation owns the mechanics.

@@ -162,18 +162,17 @@ The final YAML now includes the `progressive_candidate` evaluation referenced by
 self-contained configuration. Exact historical reproduction still requires the frozen resolved configuration and
 source revision rather than whichever future revision the living file reaches.
 
-## Nonblocking scope choices found outside the original inventory
+## Resolved scope choices found outside the original inventory
 
 The audit added explicit inventory rows for augmentation/canonicalization and model-publication cadence, and both are
-now covered. The following are project-owner scope choices rather than missing repository research:
+now covered. The project owner resolved the remaining scope choices as follows:
 
-- **Go platform work.** A 7x7 baseline and KataGo evaluation integration exist. Decide whether the report is about
-  the chess campaign on a multi-game platform or about the complete repository. If chess-focused, state the scope and
-  use Go only where it supplies a transfer comparison.
+- **Go platform work.** The report is a chess study. Small-board Go appears only as a platform check, a source of
+  transferred ideas, and a qualitative example of failed hyperparameter transfer; it is not a second research result.
 - **Historical pretraining.** Exclude it from the report. The claimed campaign trained from scratch through self-play.
   Rare checkpoint-resumed late-stage parameter ablations are diagnostic continuations, not pretraining.
-- **Model refresh and interactive serving.** The runtime dossier now covers them. The owner can still choose whether
-  they appear as enabling infrastructure or as full systems results in the publication.
+- **Systems work.** Model refresh, batching, native ownership, TensorRT, and replay/trainer throughput appear only as
+  enabling infrastructure. Detailed topology and runtime alternatives move to supporting material.
 - **Mixed-precision training.** BF16 is part of the retained trainer and inference recipe, but the dossier has no
   self-contained precision investigation. Add it to the systems section if the historical tests support a decision;
   otherwise describe it only as configured method.
@@ -183,8 +182,8 @@ now covered. The following are project-owner scope choices rather than missing r
 The owner confirms that trunks were always shared; broader policy-head comparisons, a slower underperforming plane
 head, a faster-learning global-pooling comparison, and completed auxiliary-head runs existed, although several raw
 result bundles are not currently known. Those memories are recorded as qualitative decision history rather than
-quantitative evidence. Historical pretraining is out of report scope. The remaining owner pass concerns causal and
-editorial wording, not recovery of these facts.
+quantitative evidence. Historical pretraining is out of report scope. Causal and editorial scope review is complete;
+only the remaining final-result presentation choices require owner judgment.
 
 ## Remaining result-integration work
 

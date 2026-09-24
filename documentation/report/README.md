@@ -3,7 +3,8 @@
 This report explains how the project built and studied a compute-constrained AlphaZero-style chess system. It is
 repository-native: claims link to the benchmark, analysis, configuration, or frozen evidence that supports them.
 Chess is the research result. Go 7x7 and 9x9 appear only where they explain the shared platform or an early design
-decision.
+decision, including why small-board Go was not retained as a proxy for chess hyperparameter optimization. Systems
+work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
 
 > **Writing pass ready.** The topic-first source dossiers and final strength evidence are complete enough to begin the
 > narrative rewrite. The chapters remain evidence-bearing drafts rather than final prose. Use the

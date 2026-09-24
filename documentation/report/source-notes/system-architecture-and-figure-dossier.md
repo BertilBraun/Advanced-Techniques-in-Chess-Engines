@@ -385,33 +385,32 @@ These statements should either appear visually or be available in the figure cap
 
 ### Overall canvas
 
-- View box: `0 0 1800 1260`; intended to remain legible at a two-column page width and crisp when enlarged.
+- View box: `0 0 1800 1000`; intended to remain legible at a two-column page width and crisp when enlarged.
 - White or very light neutral background.
-- Four labeled panels with generous gutters. Do not encode the project as a left-to-right historical timeline.
+- Three labeled panels plus a compact evaluation-feedback inset. Do not encode the project as a historical timeline.
 - Use native `<text>`, `<path>`, `<marker>`, `<pattern>`, and `<g>` elements so labels remain searchable and the
   source remains editable.
 - Minimum final rendered type size: 8 pt for edge labels, 9 pt for node labels, 11 pt for panel titles.
 
 ### Panel layout
 
-#### Panel A — Process and accelerator topology (`x=40..1760`, `y=50..330`)
+#### Panel A — Ownership and throughput path (`x=40..1760`, `y=50..260`)
 
-Place the Python coordinator in the center. Arrange persistent process groups around it:
+Show only the ownership boundaries needed to understand the learning loop:
 
-- self-play group on the left with badge `32 processes · 4/GPU`;
-- trainer group below with badge `8 DDP ranks · NCCL`;
-- replay materialization on the right with badge `1 supervisor thread + 8 processes`;
-- evaluation group upper-right with badge `≤16 short-lived jobs · 8-GPU cycle`;
-- a horizontal row of eight GPU cards at the bottom of the panel.
+- Python orchestration owns configuration, process lifecycle, replay, training, evaluation, and publication;
+- C++ owns chess state, legal actions, MCTS trees, and batched search execution;
+- TensorRT on the GPUs evaluates leaf batches;
+- completed games return to Python for replay and training;
+- the published model returns to the native inference path.
 
-Inside each GPU card, show four small self-play slots, one trainer-rank slot, and an evaluation-job slot drawn with a
-dashed outline because evaluation occupancy is intermittent. Tint two self-play slots pale amber to communicate that
-the coordinator requests half of them to pause during training. A caption should say that unpaused self-play and
-already-running evaluation may overlap training and therefore contend for device capacity.
+Use one compact GPU group rather than drawing every process slot. Exact worker counts, pauses, CUDA streams, and
+contention topology belong in the systems appendix and final-configuration table.
 
-This panel answers **where work runs**. Avoid data-artifact detail here.
+This panel answers **who owns each part of the throughput-critical loop**. Avoid recovery and artifact-lifecycle
+detail here.
 
-#### Panel B — Native self-play and inference loop (`x=40..860`, `y=370..870`)
+#### Panel B — Native self-play and inference loop (`x=40..860`, `y=300..740`)
 
 Use a nested-box cutaway of one self-play process:
 
@@ -423,10 +422,8 @@ Python self-play worker
     ├── retained trees / selection / reservations
     ├── batched search executor
     └── inference pipeline
-        ├── fixed slots
-        ├── dedicated inference thread
-        ├── CUDA stream / graph
-        └── TensorRT or bootstrap TorchScript model
+        ├── leaf batching
+        └── TensorRT deployment model
 ```
 
 Draw a clockwise loop:
@@ -434,54 +431,36 @@ Draw a clockwise loop:
 `active positions → tree selection → leaf batch → encoded tensors → GPU inference → legal priors + WDL → expansion
 + backup → visit target + selected move → next positions`.
 
-Show model refresh entering the inference runner from above and resetting retained trees. Show completed trajectories
-leaving the Python worker toward Panel C, not through the coordinator. Use a small crossed-out shared-server/cache
-icon labeled `no cross-process inference service/cache` to prevent the common misreading.
+Show model refresh entering the inference runner from above and completed trajectories leaving the worker toward
+Panel C. Do not add cache, fixed-slot, CUDA-graph, or restart annotations to the main figure.
 
-#### Panel C — Durable replay, training, and publication (`x=900..1760`, `y=370..870`)
+#### Panel C — Replay, training, and publication (`x=900..1760`, `y=300..740`)
 
 Use a predominantly top-to-bottom pipeline:
 
 ```text
 atomic game inbox
-    ↓ bounded same-filesystem rename
-per-worker source directories
-    ↓ parallel parse + target materialization
-sealed columnar shards ─────→ rejected quarantine
-    ↓ coordinator append + flush
-columnar circular mmap ─────→ durable sample total → credit ledger
-    ↓ immutable snapshot
-DDP ranks → rank-zero checkpoint → public checkpoint → TensorRT refit/verify → deployed engine
+    ↓ target materialization
+columnar replay
+    ↓ sampled batches
+DDP trainer → checkpoint → TensorRT export + fidelity check → deployed model
 ```
 
-Put a lock symbol around `replay snapshot` and a side reservoir beside sealed shards labeled `bounded staging while
-training holds snapshot`. Show sparse visit targets becoming dense tensors only at the rank batch-loader boundary.
-Represent candidate checkpoints as a private side lane feeding `promotion/select`, then the single public checkpoint.
-This visually prevents readers from assuming every trained candidate is deployed.
+Show the primary search policy and game outcome entering replay, and show the deployed model closing the loop back to
+Panel B. Omit staging, locks, credit accounting, quarantine, candidate checkpoints, and recovery markers. Those are
+important implementation contracts but not necessary to explain why throughput enables learning.
 
-#### Panel D — Evaluation, feedback, and recovery (`x=40..1760`, `y=910..1210`)
+#### Evaluation feedback inset (`x=350..1450`, `y=790..950`)
 
-Split this panel into two halves.
+Use one compact chain:
 
-Left half, evaluation:
-
-`cadence + frozen checkpoint → short-lived job → native candidate search / policy selector ↔ external opponent →
-atomic game results → ladder aggregation → plateau observation`.
+`published checkpoint → native policy/search ↔ Stockfish → paired-game result → Elo/selection feedback`.
 
 Route the plateau observation upward to the training session using a dashed orange feedback edge. Pair openings should
 be depicted as one opening feeding two color-reversed games.
 
-Right half, recovery:
-
-- worker death → restart current checkpoint;
-- materializer death → restart against durable worker directory;
-- rank failure → abort uncommitted quantum and require run restart;
-- evaluation failure → typed failed result, training continues;
-- manifest-last checkpoint and shard publication;
-- preserved evidence archive outside the ephemeral node boundary.
-
-Draw a rounded dashed rectangle around Panels A–D labeled `ephemeral compute node`. Place the evidence archive outside
-it and connect only durable artifacts, logs, and checksums across the boundary.
+Do not show recovery, failure paths, progressive-candidate state, evidence archival, or host-stop behavior in the
+main SVG. They may remain documented in the architecture dossier but do not need a second publication figure.
 
 ### Color and shape legend
 
@@ -492,15 +471,11 @@ it and connect only durable artifacts, logs, and checksums across the boundary.
 | Purple nested rectangle | Native C++ component |
 | Gold GPU card | CUDA device or device-resident backend |
 | Green cylinder/document | Durable file, mmap, database, or artifact |
-| Grey external box | Stockfish, KataGo, host supervisor, or operator boundary |
-| Red quarantine triangle | Rejected input or typed failed result |
+| Grey external box | Stockfish or another evaluation boundary |
 | Solid blue arrow | Control call/message |
 | Solid purple arrow | Native/GPU computation |
 | Thick green arrow | Durable data/artifact publication |
-| Dashed orange arrow | Telemetry, supervision, or feedback |
-| Small lock glyph | Mutually exclusive snapshot/publication boundary |
-| Circular-arrow glyph | Restartable process |
-| Manifest tab on artifact | Manifest-last commit marker |
+| Dashed orange arrow | Evaluation or selection feedback |
 
 Do not use single-letter legend codes. Every edge class must also differ by stroke pattern or width so the figure
 works in grayscale and for color-vision deficiencies.
@@ -509,14 +484,13 @@ works in grayscale and for color-vision deficiencies.
 
 The caption should explicitly state:
 
-- the coordinator is synchronous at state-transition boundaries, while workers, materializers, trainer ranks, and
-  evaluation jobs are separate processes;
 - self-play batching occurs inside each process across hundreds of games rather than through a shared inference
   service;
-- replay durability precedes training credit;
-- rank-zero manifest publication precedes checkpoint activation;
-- half of self-play is requested to pause during training in the deployed topology, while the remainder can overlap;
-- evaluation uses the same native searched-play stack but remains an independently scheduled, durable subsystem.
+- C++ owns the latency-sensitive game/search loop while Python owns replay, training, evaluation, and publication;
+- the loop's systems purpose is to turn many concurrent searches into enough fresh training positions per hour;
+- TensorRT evaluates batched leaves and the published model closes the self-play/training loop;
+- evaluation reuses the native policy/search stack against Stockfish and feeds strength measurements back into model
+  selection.
 
 ### SVG implementation requirements
 
@@ -527,8 +501,8 @@ The caption should explicitly state:
 5. Use a font stack such as `Inter, Segoe UI, Arial, sans-serif` and monospace only for artifact names where needed.
 6. Include a compact print-safe legend inside the SVG rather than relying solely on surrounding prose.
 7. Test at full size, at the report's final column width, in grayscale, and with text extraction.
-8. Keep topology multiplicities in badges sourced from the final configuration so a later recipe update has one
-   obvious audit surface.
+8. Keep detailed topology multiplicities out of the main figure; source them from the final configuration in the
+   systems appendix or recipe table.
 
 ## Source map
 

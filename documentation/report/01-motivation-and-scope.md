@@ -20,6 +20,13 @@ Chess is the report's primary subject and the final campaign. The same native an
 helped validate the shared runtime, external-engine evaluation, replay credit, and multi-GPU training. It did not
 receive a comparable terminal campaign, so this report does not imply a final Go result.
 
+Go was also considered as a cheaper environment for exploring hyperparameters that might transfer to chess. The
+basic AlphaZero loop worked without game-specific reconstruction, but small-board Go was a poor optimization proxy:
+the observed first-player advantage was large, games were shorter than chess, the value target learned quickly, and
+pushing play beyond the baseline appeared to require game-specific tuning. Because chess was the objective, the
+project stopped the Go optimization programme rather than maintaining two distinct recipes. This is qualitative
+project-owner rationale, not a controlled cross-game comparison.
+
 The work has three intertwined outputs:
 
 - a playable chess engine and a reproducible training system;

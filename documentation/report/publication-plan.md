@@ -3,6 +3,20 @@
 This file is the completion contract for turning the report draft into a final project publication. It complements
 the quantitative placeholder chapter; it does not contain provisional result values.
 
+## Narrative scope
+
+- The publication is a chess study. Small-board Go is limited to transferred ideas, platform validation, and the
+  qualitative finding that it was not a useful low-cost proxy for chess hyperparameter optimization.
+- Systems engineering is an enabling argument: native MCTS, cross-game inference batching, TensorRT, and replay and
+  trainer throughput made sufficient self-play volume possible. Detailed topology sweeps and runtime alternatives
+  belong in an appendix or evidence index.
+- Main-text failure studies are limited to late-game target poisoning, semantically invalid TensorRT refits, and
+  promotion by incomparable training losses.
+- The main architecture figure shows the normal Python/C++ data and control loop with compact evaluation feedback.
+  Recovery and progressive-candidate internals are not publication figures.
+- Use *generation* for a training-and-publication cycle, *checkpoint* for a durable model artifact, and *optimizer
+  quantum* only where that lower-level distinction matters.
+
 ## Claim-to-evidence map
 
 | Publication claim | Required evidence | Allowed wording before closure |
