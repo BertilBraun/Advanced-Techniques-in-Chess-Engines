@@ -44,7 +44,18 @@ class CheckpointRetention:
                 if manifest.qat is not None:
                     (self.run_path / manifest.qat.state_path).unlink(missing_ok=True)
             if generation not in inference_checkpoints:
-                (self.run_path / manifest.inference_model_path).unlink(missing_ok=True)
+                inference_model = self.run_path / manifest.inference_model_path
+                inference_model.unlink(missing_ok=True)
+                # The TensorRT engine is refit from the inference model and is useless once it is
+                # gone, but nothing removed it alongside: V101 held 125 engines against 69 surviving
+                # inference models, 3 GB, at about 24 MB a generation. The metadata and lock file
+                # the publisher writes beside the engine go with it.
+                for derived in self._derived_tensorrt_artifacts(inference_model):
+                    derived.unlink(missing_ok=True)
+
+    @staticmethod
+    def _derived_tensorrt_artifacts(inference_model: Path) -> tuple[Path, ...]:
+        return tuple(inference_model.parent.glob(f'{inference_model.with_suffix("").name}.trt-*'))
 
     def _published_generations(self) -> tuple[int, ...]:
         return tuple(

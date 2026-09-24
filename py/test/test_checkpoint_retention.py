@@ -88,3 +88,39 @@ def test_inference_checkpoint_load_does_not_require_pruned_training_artifacts(tm
     assert checkpoint.inference_model_path.is_file()
     with pytest.raises(ValueError, match='artifact does not exist'):
         CheckpointReference.load(tmp_path, 7)
+
+
+def _write_tensorrt_artifacts(run_path: Path, generation: int) -> tuple[Path, Path, Path]:
+    stem = f'model_{generation}.jit.trt-6fd640b6543a47aa'
+    engine = run_path / f'{stem}.engine'
+    metadata = run_path / f'{stem}.json'
+    lock = run_path / f'{stem}.lock'
+    engine.write_bytes(b'engine')
+    metadata.write_text('{}', encoding='utf-8')
+    lock.write_bytes(b'')
+    return engine, metadata, lock
+
+
+def test_retention_removes_the_tensorrt_engine_with_its_inference_model(tmp_path: Path) -> None:
+    for generation in range(10):
+        _write_checkpoint(tmp_path, generation)
+    pruned = _write_tensorrt_artifacts(tmp_path, 1)
+    kept = _write_tensorrt_artifacts(tmp_path, 9)
+
+    _retention(tmp_path).apply(active_generation=9, required_inference_generations=())
+
+    assert not (tmp_path / 'model_1.jit.pt').exists()
+    assert [path for path in pruned if path.exists()] == []
+    assert (tmp_path / 'model_9.jit.pt').exists()
+    assert all(path.exists() for path in kept)
+
+
+def test_retention_keeps_the_engine_of_a_required_inference_model(tmp_path: Path) -> None:
+    for generation in range(10):
+        _write_checkpoint(tmp_path, generation)
+    required = _write_tensorrt_artifacts(tmp_path, 1)
+
+    _retention(tmp_path).apply(active_generation=9, required_inference_generations=(1,))
+
+    assert (tmp_path / 'model_1.jit.pt').exists()
+    assert all(path.exists() for path in required)
