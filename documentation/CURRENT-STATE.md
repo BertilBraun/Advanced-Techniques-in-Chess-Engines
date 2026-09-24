@@ -1,6 +1,6 @@
 # Current state
 
-As of **2026-09-23**. This page separates completed work from evidence that still has to be frozen for publication.
+As of **2026-09-24**. This page separates completed work from evidence that still has to be frozen for publication.
 
 ## Project status
 
@@ -31,7 +31,7 @@ The readable recipe uses:
 - SGD with Nesterov momentum and a decaying learning rate;
 - pre-fold quantization-aware training and TensorRT INT8 self-play;
 - staged search budgets, reduced-parent FPU, forced playouts, and retained trees;
-- a replay buffer growing to 20 million rows with policy-surprise weighting;
+- a replay buffer growing to 20 million rows with policy-surprise sampling;
 - randomized openings and difficulty-weighted restart states;
 - calibrated resignation with permanent continuation games; and
 - next-policy and remaining-game-length auxiliary targets.
@@ -65,7 +65,7 @@ for the reported checkpoint rather than treating future edits to the living reci
 - Generate the remaining training-dynamics and deployment-fidelity figures; the cross-campaign ladder figure is
   complete.
 - Verify that the public download and deployed model match the reported checkpoint and artifact hashes.
-- Replace the previous public result in the root README; the strength evidence and headline figure are frozen.
+- Complete editorial and evidence-link review of the updated root README and technical report.
 - Complete the narrative technical report and choose explicit code and model/data licenses.
 
 ## Reader path

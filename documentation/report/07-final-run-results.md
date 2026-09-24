@@ -13,7 +13,7 @@ It was trained with quantization-aware training. Searched results use its INT8 T
 use the corresponding float TorchScript export because no native search service is involved. The inference path is
 therefore stated with each result rather than silently treating unlike backends as identical.
 
-The ladder's strongest region spans several nearby checkpoints rather than a single isolated spike. Generation 1026
+The ladder's strongest region spans several nearby checkpoints rather than a single isolated spike. Checkpoint 1026
 was the last checkpoint in that region for which the full model, optimizer, QAT, ONNX, and TensorRT set had been
 retained. A subsequently grown 19-block, 176-channel model recovered its parent's strength but remained flat and did
 not justify replacing the selected checkpoint.
@@ -142,9 +142,10 @@ estimate. The student used TorchScript and the teacher INT8 TensorRT, further pr
 comparison. Elo is an interval scale: parameter compression can be expressed as 13.4x, but ratings cannot be
 meaningfully expressed as one model having a percentage of another model's Elo.
 
-## Figures still required
+## Remaining publication figures and accounting
 
-The numerical result is ready; the visual account is not. Publication still requires:
+The terminal result matrix and headline search curve are complete. The publication pass still needs archive-derived
+analysis of:
 
 1. Detailed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
 2. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
@@ -152,5 +153,5 @@ The numerical result is ready; the visual account is not. Publication still requ
 4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
 5. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
 
-The root README can now use the checksum-complete result tables and generated headline ladder figure. Remaining
-figures and accounting should still distinguish what is complete from what awaits archive-derived reconciliation.
+The root README uses only the reconciled results and figures above. Additional plots and accounting must distinguish
+measured archive-derived quantities from fields that remain unreconciled.

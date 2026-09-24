@@ -112,7 +112,7 @@ device-cycled; and reports retain raw W/D/L and exact search identity. Batch sha
 reshuffle outcomes, so it is part of the protocol rather than an invisible speed setting. The
 [ladder-batching study](../benchmarks/ladder-batching-rtx4070s-20260906/README.md),
 [strength-over-generation series](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md), and
-[deep generation-936 match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) show the
+[deep fixed-node match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) show the
 progression from frequent noisy signal to terminal-strength measurement.
 
 Detailed restart and recovery semantics are implementation concerns rather than a report contribution. The public

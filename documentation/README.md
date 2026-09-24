@@ -24,8 +24,8 @@ benchmark Elo [3,065, 3,163]** at 10,000 searches and **3,251 [3,206, 3,297]** a
 fixed-node Stockfish 13 ladder. The [final-run result record](results/final-chess-run.md) gives the full matrix,
 protocol, confidence intervals, selected model, training trajectory, student result, and evidence boundary.
 
-All reported teacher and student matches are checksum-covered. The root README still shows the previous public
-benchmark only because its showcase rewrite is the next documentation phase. The complete readable recipe is
+All reported teacher and student matches are checksum-covered. The root README now leads with the final measured
+result and its two headline figures. The complete readable recipe is
 [`chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml); the result record and compact evidence
 index pin what actually ran.
 
@@ -57,7 +57,7 @@ recommended public language.
 | [`operations/`](operations/README.md) | Procedures intended to be run again | Current operational guidance |
 | [`plan/`](plan/README.md) | Active and completed experiment plans | Planning record; does not itself authorize compute |
 | [`history/`](history/README.md) | Pre-rework and superseded material | Archival and non-normative |
-| [`report/`](report/README.md) | Long-form technical report | Draft until the final result gate passes |
+| [`report/`](report/README.md) | Long-form technical report | Narrative draft with evidence-linked claims; editorial and figure work remains |
 | [`results/`](results/README.md) | Run-level publication summaries | Final only after the page's evidence gate passes |
 | [`showcase/`](showcase/README.md) | Rendered strength and loss figures | Regenerated from a fetched archive; check the run it was rendered from |
 | [`system/`](system/README.md) | Current end-to-end implementation | Current descriptive guide; code and config remain authoritative |
