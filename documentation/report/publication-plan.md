@@ -94,8 +94,8 @@ fixed table or figure count.
 5. Validate links and anchors after the topic-first chapter rewrite, then render and inspect a PDF edition if one is
    produced. Markdown remains the editable source.
 6. Verify the public Hugging Face model card, aliases, checksum index, and live-site artifact identity. The model
-   card, final ONNX, aliases, checksum index, and MIT metadata are present; correct the card's 10,000-search
-   parallelism and confidence-interval endpoints against the archived result manifests, then verify the live site.
+   card now matches the archived 10,000-search parallelism and paired-bootstrap confidence intervals; the final
+   ONNX, aliases, checksum index, and MIT metadata are present. Verify the live site's deployed artifact separately.
 7. The owner's MIT decision is recorded in the repository [license](../../LICENSE) and the
    [model-repository license commit](https://huggingface.co/BertilBraun/alphazero-chess/commit/6c068a15bdfaec6b39536e7dc681a55b13f0837e).
 

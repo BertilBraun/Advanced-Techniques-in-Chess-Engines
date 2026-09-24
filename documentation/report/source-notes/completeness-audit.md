@@ -196,7 +196,7 @@ provenance. The abstract, conclusion, and headline README claims are no longer w
 
 Publication work that remains is narrower: reconcile wider actor/search and rejection telemetry where the local
 archive permits it; retain the two-source timing ranges for the parallel-search speedup; finish optional
-figures and editorial review; correct the public model card's evaluation details and verify the live artifact.
+figures and editorial review; verify the live artifact against the now-corrected public model card.
 The owner's MIT decision is recorded in the repository and model repository. The
 [publication plan](../publication-plan.md) tracks these gates. Missing
 causal ablations must remain limitations, not be inferred from the bundled final result.
