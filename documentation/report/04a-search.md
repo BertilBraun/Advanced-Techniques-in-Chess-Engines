@@ -1,118 +1,215 @@
-# 4A. Search investigations
+# 4A. Spending search where it matters
 
-This chapter expands the search summary in [Chapter 4](04-research-investigations.md). Statuses follow the
-[search experiment ledger](../experiments/search.md); evidence grades follow
-[Chapter 2](02-methodology-and-evidence.md).
+Search was the clearest way to make a fixed network play better, but also one of the most expensive parts of the
+learning loop. That made allocation an unusually attractive research target: if easy positions could be recognized
+early, their unused simulations could be moved to difficult positions or converted into more games. The project
+tested that premise at several levels, from simple stopping rules to learned controllers and a complete graph-search
+implementation. The result was not a better allocator. It was a better understanding of why the transparent fixed
+budget remained hard to beat.
 
-## Fixed depth and the value of search
+Throughout this chapter, three outcomes are kept separate. Fixed-network playing strength asks whether search
+chooses stronger moves. Target fidelity asks whether a shallow policy resembles a deeper one. End-to-end learning
+asks whether the resulting data makes the next network improve faster. Throughput is a fourth, systems-level
+quantity. Success on any one of these axes did not guarantee success on the others. The experiment classifications
+and evidence grades used below are defined in [Chapter 2](02-methodology-and-evidence.md), with the underlying
+records indexed in the [search experiment ledger](../experiments/search.md).
 
-The broad offline evaluation asked three different questions: how much playing strength deeper search adds to a
-fixed network, how well a search policy approximates a deeper target at equal compute, and how implementation choices
-affect throughput. Those answers must not be conflated. Visits dominated the measured playing-strength axes, while
-several heuristics produced smaller or unresolved differences. The final recipe therefore uses an observable staged
-cap—300, 400, 500, 600, then 800 visits—rather than a controller whose output is hard to audit.
+## The fixed-budget baseline
 
-Playing-strength and proxy measurements show that search depth matters for the tested checkpoint; design rationale
-supports the exact training-time schedule. There is no one-variable experiment proving that these boundaries are
-optimal. The principal
-records are the [search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md) and
-[search synthesis](../analysis/chess-search-findings-20260827.md).
+The native engine performs policy-guided Monte Carlo tree search. The network supplies legal-move priors and a
+win/draw/loss value; PUCT selects leaves; neural evaluations are batched across active games; and values are backed
+up from the alternating player's perspective. A visit cap is deliberately unambiguous. It does not depend on a
+difficulty estimate, a calibrated controller, or a learned model that may become stale as training advances.
 
-## Fast/full search and target density
+The fixed-network sweep established that this simple control was valuable. Against the same opponent, score rose
+from 0.318 at 200 visits to 0.537, 0.580, 0.662, and 0.748 at 400, 600, 1,000, and 1,600 visits. Across the better
+resolved middle and deep part of the sweep, the fitted trend was about 81 Elo per doubling. Individual adjacent
+comparisons were noisy, so the monotone trend is more credible than any single increment. Search was also still
+changing the training target: at 600 visits, only 72.4% of positions selected the same best move as the network's
+own 10,000-visit reference. These measurements support spending more search when resources permit; they do not
+identify an optimal training schedule ([search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md),
+[synthesis](../analysis/chess-search-findings-20260827.md)).
 
-The historical KataGo-style design randomly selected full-search moves and used cheap searches to advance the rest
-of each game. Only full-search turns became primary policy targets. This could finish more games for a fixed search
-budget, but it coupled four quantities:
+The retained schedule therefore increased the cap in auditable stages—300, 400, 500, 600, and finally 800
+visits—rather than presenting those boundaries as independently optimized discoveries. Even this count needs care:
+a retained root can begin a move with existing statistics, so a nominal visit cap is not always the amount of new
+work performed.
 
-- fraction of plies producing policy rows;
-- quality of next-policy auxiliary targets;
-- game and terminal-outcome throughput;
-- inference-batch occupancy as cheap searches finished before expensive ones.
+## Why fast and full searches did not transfer
 
-The long tail of remaining full searches underfilled batches. Parallel simulations recovered some device fill but
-changed the search itself. Forced fast search after a late ply created a more serious failure: it removed endgame
-policy rows and allowed a shallow cutoff value to contaminate targets for the whole game. The final recipe searches
-every played move to the staged cap and handles cut games explicitly. Old 25%-full/75%-fast throughput results are
-not direct measurements of the final all-full workload.
+A KataGo-inspired scheme offered an appealing alternative. Most moves could use a cheap search to advance the game,
+while a random minority received a full search and became primary policy targets. In long Go games this can exchange
+some target density for many more independent terminal outcomes. Chess did not show the same bottleneck. Games were
+shorter, positions were often more decisive, and the value objective was already learning. Discarding cheap-search
+positions therefore reduced the supply of policy targets without a demonstrated compensating benefit from more
+finished games.
 
-## Threshold stopping: opportunity audit, not negative Elo result
+The cheap moves were not free. With a quarter of moves searched to 600 visits and the rest to 150, the cheap moves
+still consumed 42.9% of nominal search work. Nor were they isolated from training: they selected played moves,
+affected terminal outcomes and retained trees, could supervise a preceding row's next-policy target, and influenced
+which positions entered the restart archive. “Not stored as a primary policy row” was never the same as “irrelevant.”
 
-The first stopping study reconstructed possible savings from final visit distributions. It did not have temporal
-traces proving that a live rule could have stopped at the inferred earlier point. It also showed why a “fast” search
-was not target-free: its policy could supervise the preceding row's next-policy head, and full-search output affected
-restart-state selection. The correct classification is **audited and declined on proxy evidence and design
-rationale**, not implemented and defeated
-in a match. See the [R3 termination audit](../benchmarks/adaptive-search-termination-r3-20260813/README.md).
+The mixed workload also interacted badly with batching. Once the cheap searches finished, only the full-search
+minority remained. In a 512-game test this tail left about 128 active trees and filled only 86 of 320 available batch
+slots with one leaf per tree. Allowing four leaves per tree raised the average batch to about 268 and improved search
+throughput by roughly 20%, but it did so by making each search less serial. A policy intended to save compute thus
+created pressure to accept a search-quality tradeoff merely to keep the accelerator occupied
+([batch-fill study](../benchmarks/self-play-search-cpu-i7-11370h-20260824/README.md)).
 
-## Predicted budgets
+Most importantly, the design exposed a semantic failure at the end of games. Forcing cheap searches after a late
+ply removed searched endgame rows, while using the shallow cutoff value could propagate a weak soft target back
+through the capped game. The later cut-game repair and removal of the cheap tail addressed that failure
+([cut-game target study](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md)). The project therefore
+kept KataGo's broader insight—that search cost and target eligibility are distinct choices—but superseded the
+random fast/full recipe with a full search for every recorded move. This was a systems-and-target-semantics decision,
+not a clean matched-compute Elo victory for all-full search; no such long-run ablation was preserved.
 
-The later allocator was a complete production implementation. A network head predicted the policy-divergence curve
-over budget multiples; a corrector used search-derived features; a dual variable held average spend near one; and a
-gate reverted to flat search until validation conditions passed. Deep-search labels, durable replay write-back,
-TorchScript publication, calibration, and telemetry all worked.
+## Three attempts to allocate search adaptively
 
-Its proxy result was real: the live allocator captured useful KL headroom and allocated more compute to contested
-positions. Its learning result was negative: adaptive runs trailed non-adaptive lineages by roughly 60–100 ladder
-Elo. The leading mechanism is a mismatch between per-position fidelity and training value. A target can be close to
-a deep policy in KL yet remain too self-referential to teach the next network. Because the proxy succeeded and Elo
-failed, this is one of the project's clearest demonstrations that proxy success does not imply better online
-learning or playing strength
-([negative result](../analysis/adaptive-search-budget-negative-result-20260901.md)).
+The first attempt asked whether search could stop when the visit leader looked uncatchable. An audit of completed
+trees found apparent room: an optimistic reconstruction suggested that a rule requiring at least 75% of the cheap
+budget might remove 15.3% of cheap-search visits, or 6.38% of all nominal limits if full searches saved nothing.
+But the records contained final visit distributions, not the intermediate traces needed to identify when the leader
+first became safe. They also omitted enough state to reconstruct retained visits and forced-playout-pruned targets.
+The apparent saving was therefore an oracle-like opportunity estimate, not an observed stopping result.
 
-## Learned early stopping
+A wider offline study found a deeper problem. The marginal value of search was not monotone in visit concentration:
+very diffuse and already-decided positions gained little, while moderately concentrated but contested positions
+gained most. Simple concentration thresholds tended to stop in the very region where more search was useful. The
+rule-based approach was audited and declined before an online strength match; it should not be described as an
+implemented algorithm that lost Elo ([termination audit](../benchmarks/adaptive-search-termination-r3-20260813/README.md)).
 
-Learned stopping moved the decision inside search so it could observe the tree. The decisive comparison copied a
-trained checkpoint and rebuilt replay, then forked byte-identical arms. The strongest stopping arm skipped 14% of
-nominal search but reduced generation time by only about 3%, because self-play overlapped training and the removed
-work was mostly slack. Paired strength differences were unresolved and economically too small to measure in the
-available horizon. This is negative online-learning and throughput evidence from a strong shared-state control, not
-proof that stopping is
-universally useless ([conclusion](../analysis/adaptive-search-conclusion-20260904.md)).
+The next allocator replaced the rule with a learned prediction. An auxiliary head estimated, for several candidate
+budgets, the divergence between that budget's policy and a deep-search policy. A calibrated corrector incorporated
+root observables, and a dual variable kept average spend near its target. Deep labels, replay persistence, model
+publication, native budget selection, safety gates, and telemetry were all implemented. Mechanically, the system
+worked. At approximately matched mean spend it captured about 23% of the available policy-divergence headroom; its
+mean target fidelity resembled roughly 1.18 times uniform search at 0.967 times the spend. It also behaved plausibly,
+assigning more work to contested positions.
 
-## Parallelism and batch fill
+Learning nevertheless deteriorated. Repeated online attempts trailed comparable non-adaptive training by roughly
+60–100 ladder Elo. More than a third of positions received an average budget fraction near 0.36, and almost 9%
+received one eighth of baseline search. Those shallow policies were close to the network's own prior yet were
+trained at full weight. The likely failure was therefore objective mismatch: closeness to a deep policy at the
+current position does not measure how much a target will improve the next network. That mediation remains a
+hypothesis, but the central result does not: the controller improved its stated proxy and still produced worse
+learning ([analysis](../analysis/adaptive-search-budget-negative-result-20260901.md),
+[frozen-trunk probe](../benchmarks/adaptive-search-budget-probe-rtx4070super-20260827/README.md)).
 
-Multiple simulations per root increase schedulable inference and aggregate searches per second. Virtual loss and
-stale sibling decisions mean they are not mathematically identical to serial search. The first final-era sweep was
-later qualified because its batch cap did not bind in the intended regime. The batch-1600 rerun passed its divergence
-acceptance test under the corrected load. Both records remain useful: one shows the danger of transferring a result
-across serving regimes; the other supports the actual high-fill conclusion
-([sweep](../benchmarks/parallel-searches-sweep-rtx4070s-20260906/README.md),
-[rerun](../benchmarks/parallel-searches-rerun-batch1600-rtx4070s-20260906/README.md)).
+The final adaptive system moved the decision inside search, where a learned stopper could observe the evolving tree
+rather than predict difficulty in advance. Its decisive test started from the same checkpoint, optimizer, and
+rebuilt replay state for every arm. The most aggressive setting skipped about 14% of nominal search, and its
+internal credit-wait measurements changed in the expected direction. Yet generation cadence improved by only about
+3%. Self-play overlapped the optimizer, so most of the removed search was slack rather than critical-path work.
+Paired strength estimates were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo for the two stopping settings: neither resolved a
+strength effect. At the observed learning rate, the cadence gain was worth only about one Elo over three hours,
+below the experiment's resolution ([shared-state conclusion](../analysis/adaptive-search-conclusion-20260904.md)).
 
-Parallelism should be reported as a budget-dependent strength/latency frontier. At 1,000 searches, the terminal sweep
-measured losses of 19 Elo for four-way and 45 Elo for sixteen-way parallelism; at 100 searches, sixteen-way
-parallelism was much more damaging. It is plausible that a fixed parallel count matters less at larger budgets because
-many stale selections would eventually be visited anyway, but the project did not run the full grid needed to derive
-a universal rule. A future figure should ask how much parallelism is effectively free at each budget, not present the
-mixed-parallelism terminal operating curve as fixed-protocol search scaling.
+These studies failed for different reasons. The threshold rule lacked an identifiable safe signal. The predicted
+allocator optimized a measurable but insufficient proxy. Learned stopping saved the resource it targeted, but that
+resource was mostly off the critical path. In a non-overlapped or inference-bound system the last conclusion could
+change; nothing here proves adaptive search universally useless.
 
-## Tree reuse, FPU, forced playouts, and discount
+## Parallel leaves: buying latency with search quality
 
-The final bundle retains 60% of root visits across moves, reduced-parent-value FPU with reduction 0.2, forced
-playouts with coefficient 1.5, and a 0.99 per-ply search-value discount. Their evidence is not equal:
+Batching across many independent games is the cleanest way to feed the accelerator, but the number of active roots
+eventually runs out. The engine can then keep several leaf traversals in flight from one root. Virtual reservations
+discourage those traversals from selecting the same path, yet every selection is based on a tree that is missing the
+other in-flight results. Parallel search is therefore not serial MCTS executed faster. It exchanges fresher
+decisions for larger batches and lower latency.
 
-- tree retention has implementation and throughput rationale but no isolated final-lineage Elo arm;
-- forced playouts separate exploration from the pruned training target, following external evidence;
-- reduced-parent FPU is configured and widely motivated but not isolated here;
-- the search study did not statistically resolve a standalone value-discount benefit.
+The experiments exposed how easy it is to measure the wrong regime. An initial sweep suggested little cost per
+doubling, but its batch capacity was too small relative to the number of trees, so the configured per-root
+parallelism barely bound. A deliberately oversized-batch rerun activated the knob and estimated a steeper
+-6.4 ± 4.7 Elo per doubling. The interval still included a small effect, and the rerun was diagnostic rather than a
+production throughput configuration ([initial sweep](../benchmarks/parallel-searches-sweep-rtx4070s-20260906/README.md),
+[binding rerun](../benchmarks/parallel-searches-rerun-batch1600-rtx4070s-20260906/README.md)).
 
-They are retained recipe choices supported by mechanics and design rationale, with limited strength and proxy
-evidence—not four measured Elo multipliers.
+The tradeoff also depended on the total budget. At 1,000 searches, a terminal fixed-network sweep measured point
+losses of 19 Elo with four leaves and 45 Elo with sixteen leaves relative to serial search, while sixteen-way
+parallelism was substantially more damaging at 100 searches. The likely explanation is that a deep search will
+eventually visit more of the temporarily suboptimal leaves selected from stale state. However, only a few budget and
+parallelism combinations were measured, and the terminal strength curve itself uses different parallel counts at
+different depths. It is not a pure scaling curve from which a universal safe-parallelism law can be inferred
+([terminal evidence](../evidence/final-chess-20260923/README.md)).
 
-## Graph search and inference caching
+The retained design consequently uses bounded parallelism as a serving parameter, not a free algorithmic speedup.
+The right setting depends on available independent roots, batch capacity, total search depth, latency requirements,
+CPU load, and memory. Older results from the fast/full batching tail do not directly prescribe the topology of the
+final all-full workload.
 
-The graph branch implemented shared descendant nodes, parent-local edges, correction terms, cycle rejection,
-virtual loss, graph-aware rerooting/pruning, and exact chess history identity. Exact repetition semantics eliminated
-most apparent board transpositions. At 1,000–10,000 searches, avoidable evaluations were tiny while graph bookkeeping
-reduced throughput by about 6–9%. Higher-search tests found more hits but still lost throughput. The implementation
-was rejected for this workload on throughput and mechanics evidence, not merely left unfinished.
+## When a tree became a graph
 
-Inference caching was audited separately without merging search state. Its ideal unbounded reuse ceiling was only
-about 3.5% in the production-like mixed workload before synchronization, storage, eviction, and finite-capacity
-misses. It was audited and declined. Both decisions are preserved in the
-[archived graph/cache record](../plan/archive/chess-four-day-baseline-and-next-run-plan.md#10-transposition-graph-search-and-inference-cache-decision---rejected).
+Chess appears rich in transpositions: different move orders often reach the same board. The project tested whether
+Monte Carlo graph search could turn those transpositions into shared neural evaluations, descendants, and search
+statistics. This was a complete implementation, not a cache mislabeled as graph search. Canonical nodes held shared
+state-level information; parent/action edges retained local PUCT statistics; correction backups exposed better
+shared values to incoming edges; and the system handled trajectory reservations, cycles, rerooting, pruning, and
+capacity reclamation. An audit against both the paper and its reference implementation found and corrected a
+missing first-link backup behavior.
 
-## Not attempted
+The limiting fact was chess-state identity. Pieces and side to move are not enough: castling rights, en-passant
+state, the halfmove clock, and repetition-relevant history can change the legal result. Merging positions that differ
+on those fields would create an approximate algorithm with different game semantics. Under exact equality, most
+apparent board transpositions disappeared.
 
-Gumbel root search, sequential halving, dynamic candidate counts, and another generation of adaptive allocation
-remained proposals. They may be discussed as future alternatives but not listed as project experiments.
+At ordinary budgets, verified links were absent or negligible. After the first-link correction, only 0.0249% and
+0.1769% of neural evaluations were avoided at 1,000 and 10,000 searches, while the graph was 8.63% and 8.28% slower.
+At 30,000 and 60,000 searches, table hits rose to 2.37% and 3.46%, but avoided evaluations remained approximately
+0.0001% and 0.0348%; throughput was still 7.06% and 5.76% lower. Structural counters confirmed that shared
+descendants and statistics were active. A final strength match was unnecessary to answer the deployment question:
+exact reuse was orders of magnitude too sparse to repay the bookkeeping cost. The corrected implementation and its
+negative result are preserved with the
+[graph-search release](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/mcgs-rejected),
+including the [paper audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-paper-audit-rtx4070s-20260818/README.md).
+
+## Why inference caching found little to reuse
+
+Inference caching asked a narrower question: if an identical encoded neural input reappears under the same model,
+can its policy and value outputs be reused without sharing search state? Two investigations answered complementary
+parts of it.
+
+First, a real bounded, sharded cache was shared by the search threads within each self-play process. With eight
+processes per GPU, three search threads per process, and capacity for 1.5 million entries per process, its hit rate
+was 0.970%. Disabling the cache made game updates about 0.88% faster in the short stochastic comparison and reduced
+summed worker peak memory by about 7.12%. The implemented cache consumed memory without demonstrating a speedup
+([implemented-cache benchmark](../benchmarks/self-play-mcts-node-arena-20260720/README.md)).
+
+A later audit measured the upper bound available to a wider cache before building one. An unbounded tracker shared
+across one search executor observed exact encoded inputs but deliberately evaluated every position. With diverse
+starts and production-style progression, repeats were 1.33% at 150 searches, about 4.24% at 800, and about 3.5% in
+the mixed workload; same-batch duplicates were essentially absent. Following retained trees for several moves
+raised the rate only to roughly 4%. The tracker itself cost about 3.65% throughput and grew without bound. A real
+cache would additionally pay for output storage, synchronization, eviction, and device transfers while retaining
+fewer entries.
+
+This audit also corrected a useful false lead. Reusing a small fixed opening suite and automatically restarting
+finished games had produced spectacular apparent repeat rates—98.5% in one harness—but those repetitions were
+artifacts of the benchmark, not representative self-play. Once the workload was repaired, the opportunity vanished.
+The wider design was therefore declined before implementation; the distinction matters because it was not itself
+benchmarked as a production cache. The preserved
+[opportunity audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
+and the earlier implementation together support the decision more strongly than either alone.
+
+## The retained search design
+
+The selected system returned to fixed visits, but not to a bare or naive search. It uses PUCT, reduced-parent-value
+first-play urgency, root noise and temperature for self-play exploration, forced root playouts followed by pruning
+of visits that should not become policy supervision, batched native inference, a 0.99 per-ply value discount, and
+tree retention with 60% of visits carried across a played move. Every recorded move receives the current staged
+visit cap. The authoritative settings live in the
+[final chess configuration](../../py/configs/production/chess-final-config.yaml); the current mechanics are described
+in [Search and self-play](../system/search-and-self-play.md).
+
+Those ingredients do not form an additive ablation table. Search depth has direct strength and target-fidelity
+evidence. Evaluation and self-play clearly need consistent first-play-urgency semantics. Parallel leaves have a
+measured, workload-dependent quality/latency tradeoff. Root retention, forced playouts, noise, discount, and the
+exact PUCT constants are retained parts of a coherent AlphaZero-style recipe, but most lack isolated final-workload
+strength estimates.
+
+The overall conclusion is correspondingly narrow. For this diverse chess self-play workload, fixed budgets were
+strong, legible, and operationally robust. The adaptive systems either lacked a safe observable, optimized the wrong
+proxy, or removed work that did not control elapsed training time. Exact graph and cache reuse were too sparse to
+cover their overhead. Different games, a repetitive analysis service, or a non-overlapped learner could reverse
+some of those economics. They do not reverse the decision supported here: under the measured workload, the simplest
+auditable allocation was the most dependable one.
