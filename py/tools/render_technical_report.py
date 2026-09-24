@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -22,7 +23,6 @@ from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     BalancedColumns,
     Flowable,
-    HRFlowable,
     KeepTogether,
     LongTable,
     Paragraph,
@@ -51,14 +51,11 @@ SOURCE_FILES = (
 )
 PUBLIC_SOURCE_ROOT = 'https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/master/'
 PAGE_WIDTH, PAGE_HEIGHT = A4
-MARGIN = 48
+MARGIN = 61
 CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
-KIT_GREEN = colors.HexColor('#009682')
-KIT_BLUE = colors.HexColor('#4664AA')
-INK = colors.HexColor('#24282B')
-MUTED = colors.HexColor('#5C686C')
-PALE_GREEN = colors.HexColor('#ECF7F4')
-PALE_BLUE = colors.HexColor('#F1F4FA')
+QUIET_TEAL = colors.HexColor('#17625D')
+INK = colors.black
+MUTED = colors.HexColor('#444444')
 
 
 @dataclass(frozen=True)
@@ -130,11 +127,11 @@ def styles() -> dict[str, ParagraphStyle]:
     body = ParagraphStyle(
         'body',
         fontName='ReportSerif',
-        fontSize=9.1,
-        leading=11.4,
+        fontSize=9.3,
+        leading=11.1,
         textColor=INK,
         alignment=TA_JUSTIFY,
-        spaceAfter=5.5,
+        spaceAfter=4.4,
         allowWidows=0,
         allowOrphans=0,
     )
@@ -143,78 +140,87 @@ def styles() -> dict[str, ParagraphStyle]:
         'title': ParagraphStyle(
             'title',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=22,
-            leading=25.5,
+            fontName='ReportSerif-Bold',
+            fontSize=18,
+            leading=20.5,
             textColor=INK,
-            alignment=TA_LEFT,
-            spaceAfter=8,
-        ),
-        'subtitle': ParagraphStyle(
-            'subtitle',
-            parent=body,
-            fontName='ReportSans',
-            fontSize=11,
-            leading=14,
-            textColor=KIT_GREEN,
-            spaceAfter=13,
+            alignment=TA_CENTER,
+            spaceAfter=10,
         ),
         'byline': ParagraphStyle(
             'byline',
             parent=body,
-            fontName='ReportSans',
-            fontSize=9,
-            leading=12,
-            textColor=MUTED,
+            fontName='ReportSerif',
+            fontSize=11,
+            leading=13,
+            textColor=INK,
+            alignment=TA_CENTER,
+            spaceAfter=2,
+        ),
+        'contact': ParagraphStyle(
+            'contact',
+            parent=body,
+            fontSize=8.3,
+            leading=10,
+            textColor=QUIET_TEAL,
+            alignment=TA_CENTER,
             spaceAfter=16,
         ),
         'abstract_label': ParagraphStyle(
             'abstract_label',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=10,
-            textColor=KIT_GREEN,
-            spaceBefore=8,
-            spaceAfter=5,
+            fontName='ReportSerif-Bold',
+            fontSize=9.5,
+            textColor=INK,
+            alignment=TA_CENTER,
+            spaceBefore=3,
+            spaceAfter=4,
         ),
         'abstract': ParagraphStyle(
             'abstract',
             parent=body,
-            fontSize=9.7,
-            leading=12.4,
-            spaceAfter=13,
+            fontSize=9.2,
+            leading=11.2,
+            spaceAfter=11,
+        ),
+        'keywords': ParagraphStyle(
+            'keywords',
+            parent=body,
+            fontSize=9.2,
+            leading=11.2,
+            spaceAfter=9,
         ),
         'h1': ParagraphStyle(
             'h1',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=13.0,
-            leading=15.8,
-            textColor=KIT_GREEN,
-            spaceBefore=13,
-            spaceAfter=7,
+            fontName='ReportSerif-Bold',
+            fontSize=11.2,
+            leading=13,
+            textColor=INK,
+            spaceBefore=10,
+            spaceAfter=5,
             keepWithNext=True,
         ),
         'h2': ParagraphStyle(
             'h2',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=10.1,
-            leading=12.4,
-            textColor=KIT_BLUE,
-            spaceBefore=10,
-            spaceAfter=4,
+            fontName='ReportSerif-Bold',
+            fontSize=9.5,
+            leading=11.2,
+            textColor=INK,
+            spaceBefore=8,
+            spaceAfter=3,
             keepWithNext=True,
         ),
         'h3': ParagraphStyle(
             'h3',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=9.3,
-            leading=11.7,
+            fontName='ReportSerif-Bold',
+            fontSize=9.1,
+            leading=10.8,
             textColor=INK,
-            spaceBefore=7,
-            spaceAfter=3,
+            spaceBefore=6,
+            spaceAfter=2,
             keepWithNext=True,
         ),
         'list': ParagraphStyle(
@@ -223,7 +229,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leftIndent=13,
             firstLineIndent=0,
             bulletIndent=2,
-            spaceAfter=3.3,
+            spaceAfter=2.3,
         ),
         'quote': ParagraphStyle(
             'quote',
@@ -231,7 +237,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leftIndent=9,
             rightIndent=7,
             textColor=MUTED,
-            borderColor=KIT_GREEN,
+            borderColor=QUIET_TEAL,
             borderWidth=1.1,
             borderPadding=7,
             spaceBefore=5,
@@ -240,29 +246,29 @@ def styles() -> dict[str, ParagraphStyle]:
         'caption': ParagraphStyle(
             'caption',
             parent=body,
-            fontName='ReportSerif-Italic',
-            fontSize=8.2,
-            leading=10.2,
-            textColor=MUTED,
-            alignment=TA_CENTER,
-            spaceBefore=5,
-            spaceAfter=12,
+            fontName='ReportSerif',
+            fontSize=8.4,
+            leading=10.0,
+            textColor=INK,
+            alignment=TA_LEFT,
+            spaceBefore=4,
+            spaceAfter=9,
         ),
         'table_cell': ParagraphStyle(
             'table_cell',
             parent=body,
-            fontSize=8.2,
-            leading=10.0,
+            fontSize=7.9,
+            leading=9.4,
             alignment=TA_LEFT,
             spaceAfter=0,
         ),
         'table_header': ParagraphStyle(
             'table_header',
             parent=body,
-            fontName='ReportSans-Bold',
-            fontSize=7.7,
-            leading=9.2,
-            textColor=colors.white,
+            fontName='ReportSerif-Bold',
+            fontSize=7.9,
+            leading=9.4,
+            textColor=INK,
             alignment=TA_LEFT,
             spaceAfter=0,
         ),
@@ -304,7 +310,7 @@ def inline_markup(tokens: list[Token], source: Path) -> str:
                 rendered.append(f'<font face="Courier" size="8">{escape(token.content)}</font>')
             case 'link_open':
                 href = source_link(source, token.attrGet('href') or '')
-                rendered.append(f'<link href="{escape(href, quote=True)}" color="#4664AA">')
+                rendered.append(f'<link href="{escape(href, quote=True)}" color="#17625D">')
             case 'link_close':
                 rendered.append('</link>')
             case 'softbreak':
@@ -338,17 +344,15 @@ def make_table(rows: list[list[str]], report_styles: dict[str, ParagraphStyle]) 
     ]
     table = LongTable(cells, colWidths=table_widths(len(rows[0])), repeatRows=1, hAlign='CENTER')
     commands: list[tuple[object, ...]] = [
-        ('BACKGROUND', (0, 0), (-1, 0), KIT_GREEN),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ('LINEBELOW', (0, 0), (-1, 0), 0.7, KIT_GREEN),
-        ('LINEBELOW', (0, 1), (-1, -1), 0.25, colors.HexColor('#DCE6E3')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('LINEABOVE', (0, 0), (-1, 0), 0.7, INK),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.4, INK),
+        ('LINEBELOW', (0, -1), (-1, -1), 0.7, INK),
     ]
-    for row_index in range(2, len(rows), 2):
-        commands.append(('BACKGROUND', (0, row_index), (-1, row_index), PALE_GREEN))
     table.setStyle(TableStyle(commands))
     return table
 
@@ -368,7 +372,7 @@ def parse_table(
         elif token.type == 'tr_close':
             rows.append(current_row)
         position += 1
-    return ContentBlock(make_table(rows, report_styles), full_width=True), position + 1
+    return ContentBlock(KeepTogether([make_table(rows, report_styles)]), full_width=True), position + 1
 
 
 def parse_markdown(
@@ -403,13 +407,13 @@ def parse_markdown(
                     if image_path is None:
                         raise ValueError(f'Image has no source in {source}')
                     maximum_height = (
-                        245
+                        220
                         if image_path
                         in {
                             'figures/final-training-loss-and-rate.svg',
                             'figures/final-training-volume-and-throughput.svg',
                         }
-                        else 345
+                        else 275
                     )
                     figure = VectorFigure((source.parent / image_path).resolve(), maximum_height)
                     caption_text = escape(images[0].content)
@@ -423,6 +427,7 @@ def parse_markdown(
                     ):
                         caption_text = inline_markup(tokens[following_position + 1].children or [], source)
                         position = following_position
+                    caption_text = re.sub(r'^(Figure [\w.]+[.:])', r'<b>\1</b>', caption_text)
                     caption = Paragraph(caption_text, report_styles['caption'])
                     blocks.append(ContentBlock(KeepTogether([Spacer(1, 8), figure, caption]), full_width=True))
                 else:
@@ -500,14 +505,9 @@ def draw_page(canvas: Canvas, document: SimpleDocTemplate) -> None:
     canvas.setAuthor('Bertil Braun')
     canvas.setSubject('Compute-constrained AlphaZero-style chess technical report')
     page = document.page
-    canvas.setStrokeColor(KIT_GREEN)
-    canvas.setLineWidth(0.7)
-    canvas.line(MARGIN, PAGE_HEIGHT - 34, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 34)
-    canvas.setFont('ReportSans', 7.5)
-    canvas.setFillColor(MUTED)
-    canvas.drawString(MARGIN, 33, 'Engineering Efficient Self-Play Chess · research report')
-    canvas.setFillColor(KIT_BLUE)
-    canvas.drawRightString(PAGE_WIDTH - MARGIN, 33, str(page))
+    canvas.setFont('ReportSerif', 9)
+    canvas.setFillColor(INK)
+    canvas.drawCentredString(PAGE_WIDTH / 2, 29, str(page))
     canvas.restoreState()
 
 
@@ -527,22 +527,24 @@ def build_report(output: Path) -> None:
         pagesize=A4,
         leftMargin=MARGIN,
         rightMargin=MARGIN,
-        topMargin=46,
-        bottomMargin=48,
+        topMargin=60,
+        bottomMargin=51,
         title='Engineering Efficient Self-Play Chess',
         author='Bertil Braun',
     )
     story: list[Flowable] = [
-        Paragraph('Engineering Efficient Self-Play Chess', report_styles['title']),
         Paragraph(
-            'Search, replay, architecture, and throughput under limited training compute',
-            report_styles['subtitle'],
+            'Engineering Efficient Self-Play Chess: Search, Replay, and Throughput Under Limited Compute',
+            report_styles['title'],
         ),
-        Paragraph('Bertil Braun · September 2026 · Technical report', report_styles['byline']),
-        HRFlowable(width='100%', thickness=2, color=KIT_GREEN, spaceAfter=10),
+        Paragraph('Bertil Braun', report_styles['byline']),
+        Paragraph('contact@bertil-braun.de', report_styles['contact']),
         Paragraph('Abstract', report_styles['abstract_label']),
         Paragraph(escape(abstract_text()), report_styles['abstract']),
-        HRFlowable(width='100%', thickness=0.5, color=KIT_BLUE, spaceAfter=11),
+        Paragraph(
+            '<b>Keywords:</b> AlphaZero, chess, self-play, Monte Carlo tree search, replay, inference',
+            report_styles['keywords'],
+        ),
     ]
     pending: list[Flowable] = []
     for filename in SOURCE_FILES:
