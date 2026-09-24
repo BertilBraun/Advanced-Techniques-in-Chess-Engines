@@ -17,6 +17,7 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
+    ValueResidualTargetConfiguration,
 )
 
 
@@ -138,6 +139,8 @@ def _objective_settings_at(
                 name = f'{index}-future-search-value-ply-{ply_offset}'
             case IrreversibleProgressTargetConfiguration(horizon_plies=horizon_plies, loss_weight=loss_weight):
                 name = f'{index}-irreversible-progress-{horizon_plies}'
+            case ValueResidualTargetConfiguration(loss_weight=loss_weight):
+                name = f'{index}-value-residual'
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 name = f'{index}-legal-moves'
         settings.append(

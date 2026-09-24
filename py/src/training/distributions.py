@@ -129,6 +129,7 @@ def _auxiliary_distribution(
         'remaining_game_length',
         'future_search_value',
         'irreversible_progress',
+        'value_residual',
         'legal_moves',
     ],
 ) -> AuxiliaryTrainingDistribution:
@@ -146,9 +147,11 @@ def _auxiliary_distribution(
                 prediction=_floats(eligible_predictions),
                 absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
             )
-        case 'future_search_value' | 'irreversible_progress':
+        case 'future_search_value' | 'irreversible_progress' | 'value_residual':
             eligible_predictions = prediction[eligible].squeeze(1)
-            if kind == 'irreversible_progress':
+            # These two report a magnitude in [0, 1] and are squashed before the loss, so the
+            # telemetry has to squash them too or the recorded error is not the trained one.
+            if kind in ('irreversible_progress', 'value_residual'):
                 eligible_predictions = torch.sigmoid(eligible_predictions)
             eligible_targets = target[eligible].squeeze(1)
             return ScalarAuxiliaryTrainingDistribution(

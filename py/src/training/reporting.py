@@ -31,6 +31,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
+    ValueResidualHeadLayout,
 )
 from src.training.telemetry import (
     completed_game_length_telemetry,
@@ -334,5 +335,7 @@ def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
             return f'{index}-future-search-value-ply-{ply_offset}'
         case IrreversibleProgressHeadLayout(horizon_plies=horizon_plies):
             return f'{index}-irreversible-progress-{horizon_plies}'
+        case ValueResidualHeadLayout():
+            return f'{index}-value-residual'
         case LegalMovesHeadLayout():
             return f'{index}-legal-moves'
