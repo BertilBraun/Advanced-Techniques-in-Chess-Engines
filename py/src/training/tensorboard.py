@@ -67,7 +67,7 @@ def _self_play_settings_at(
         ScheduledSetting('settings/self_play/dirichlet_epsilon', search.dirichlet_epsilon.value_at(model_generation)),
         ScheduledSetting('settings/self_play/dirichlet_alpha', search.dirichlet_alpha.value_at(model_generation)),
         ScheduledSetting(
-            'settings/self_play/exploration_constant', search.exploration_constant.value_at(model_generation)
+            'settings/self_play/exploration_constant', search.resolved_exploration_constant(model_generation)
         ),
         ScheduledSetting(
             'settings/self_play/retained_root_visit_fraction',
