@@ -125,6 +125,8 @@ class Arguments:
     smolgen_compressed_size: int
     smolgen_hidden_size: int
     smolgen_generated_size: int
+    num_value_channels: int
+    value_fc_size: int
     optimizer_kind: OptimizerKind
     floor_fraction: float
     policy_bottleneck_rank: int
@@ -259,8 +261,8 @@ def student_architecture(arguments: Arguments) -> NetworkConfiguration:
                 hidden_size=arguments.hidden_size,
                 residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
                 policy_head=student_policy_head(arguments),
-                num_value_channels=2,
-                value_fc_size=48,
+                num_value_channels=arguments.num_value_channels,
+                value_fc_size=arguments.value_fc_size,
             )
         case NetworkKind.ATTENTION:
             return AttentionNetworkParams(
@@ -271,8 +273,8 @@ def student_architecture(arguments: Arguments) -> NetworkConfiguration:
                 dropout=0.0,
                 attention_bias=student_attention_bias(arguments),
                 policy_head=student_policy_head(arguments),
-                num_value_channels=2,
-                value_fc_size=48,
+                num_value_channels=arguments.num_value_channels,
+                value_fc_size=arguments.value_fc_size,
             )
 
 
@@ -826,6 +828,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--smolgen-compressed-size', default=8, type=int)
     parser.add_argument('--smolgen-hidden-size', default=32, type=int)
     parser.add_argument('--smolgen-generated-size', default=32, type=int)
+    parser.add_argument('--num-value-channels', default=2, type=int)
+    parser.add_argument('--value-fc-size', default=48, type=int)
     parser.add_argument(
         '--optimizer',
         default=OptimizerKind.ADAMW.value,
@@ -886,6 +890,8 @@ def parse_arguments() -> Arguments:
         smolgen_compressed_size=namespace.smolgen_compressed_size,
         smolgen_hidden_size=namespace.smolgen_hidden_size,
         smolgen_generated_size=namespace.smolgen_generated_size,
+        num_value_channels=namespace.num_value_channels,
+        value_fc_size=namespace.value_fc_size,
         optimizer_kind=OptimizerKind(namespace.optimizer),
         floor_fraction=namespace.floor_fraction,
         policy_bottleneck_rank=namespace.policy_bottleneck_rank,
