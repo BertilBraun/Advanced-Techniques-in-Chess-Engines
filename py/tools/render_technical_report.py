@@ -1,38 +1,17 @@
-"""Render the evidence-linked Markdown report as a two-column review PDF."""
+"""Build the Markdown report with the Voice-Light two-column LaTeX layout."""
 
 from __future__ import annotations
 
 import argparse
 import re
-from dataclasses import dataclass
-from html import escape
+import shutil
+import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from reportlab.graphics import renderPDF
-from reportlab.graphics.shapes import Drawing, Group, String
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import (
-    BalancedColumns,
-    BaseDocTemplate,
-    Flowable,
-    Frame,
-    KeepTogether,
-    LongTable,
-    PageBreak,
-    PageTemplate,
-    Paragraph,
-    Spacer,
-    TableStyle,
-)
 from svglib.svglib import svg2rlg
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -57,577 +36,431 @@ APPENDIX_FILES = (
     'appendix-c-supporting-comparisons.md',
     'appendix-d-reproducibility.md',
 )
-PAGE_WIDTH, PAGE_HEIGHT = A4
-MARGIN = 16 * mm
-COLUMN_GAP = 7 * mm
-CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
-QUIET_TEAL = colors.HexColor('#17625D')
-INK = colors.black
-MUTED = colors.HexColor('#444444')
+PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
+\usepackage[a4paper,top=18mm,bottom=20mm,left=16mm,right=16mm,columnsep=7mm]{geometry}
+\usepackage{newtxtext,newtxmath}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{placeins}
+\usepackage{balance}
+\definecolor{vlteal}{HTML}{16615A}
+\definecolor{vltealdark}{HTML}{0E4742}
+\hypersetup{colorlinks=true,linkcolor=vltealdark,citecolor=vltealdark,urlcolor=vlteal,
+  pdftitle={Engineering Efficient Self-Play Chess},pdfauthor={Bertil Braun}}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.55em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.15em}{0.45em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.3em}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\columnsep}{7mm}
+\setlist[itemize]{leftmargin=1.25em,itemsep=0.08em,topsep=0.25em}
+\setlist[enumerate]{leftmargin=1.35em,itemsep=0.12em,topsep=0.25em}
+\captionsetup{font=small,labelfont=bf}
+\title{\textbf{Engineering Efficient Self-Play Chess: Search, Replay, and\\Throughput Under Limited Compute}}
+\author{Bertil Braun\\
+  \small \href{mailto:contact@bertil-braun.de}{contact@bertil-braun.de}}
+\date{}
+\begin{document}
+\twocolumn[{
+\begin{@twocolumnfalse}
+\maketitle
+\vspace{-1.8em}
+\begin{abstract}
+"""
+POST_ABSTRACT = r"""\end{abstract}
+\vspace{0.45em}
+\noindent\textbf{Keywords:} AlphaZero, chess, self-play, Monte Carlo tree search, replay,
+GPU inference, quantization, model growth, fixed-node evaluation
+\vspace{1.0em}
+\end{@twocolumnfalse}
+}]
+"""
+SPECIAL_CHARACTERS = {
+    '\\': r'\textbackslash{}',
+    '{': r'\{',
+    '}': r'\}',
+    '#': r'\#',
+    '$': r'\$',
+    '%': r'\%',
+    '&': r'\&',
+    '_': r'\_',
+    '^': r'\textasciicircum{}',
+    '~': r'\textasciitilde{}',
+    '±': r'\ensuremath{\pm}',
+    '×': r'\ensuremath{\times}',
+    '−': r'\ensuremath{-}',
+    '→': r'\ensuremath{\rightarrow}',
+    '–': '--',
+    '—': '---',
+    '“': '``',
+    '”': "''",
+}
+CITATION = re.compile(r'(?<!\[)\[(1[0-2]|[1-9])\](?!\])')
+PLAIN_CAPTION = re.compile(r'^(Figure\s+[0-9A-D.]+)\s*[.:-]\s*')
+MARKDOWN = MarkdownIt('commonmark').enable('table')
 
 
-@dataclass(frozen=True)
-class ContentBlock:
-    flowable: Flowable
-    full_width: bool = False
+def escape_tex(value: str, *, citations: bool = True) -> str:
+    """Escape prose while preserving only numbered public-source citations."""
+    fragments: list[str] = []
+    start = 0
+    matches = CITATION.finditer(value) if citations else ()
+    for match in matches:
+        fragments.append(''.join(SPECIAL_CHARACTERS.get(char, char) for char in value[start : match.start()]))
+        fragments.append(r'\cite{ref' + match.group(1) + '}')
+        start = match.end()
+    fragments.append(''.join(SPECIAL_CHARACTERS.get(char, char) for char in value[start:]))
+    return ''.join(fragments)
 
 
-class VectorFigure(Flowable):
-    def __init__(self, source: Path, maximum_height: float = 345) -> None:
-        super().__init__()
-        drawing = svg2rlg(str(source))
-        if drawing is None or drawing.width <= 0 or drawing.height <= 0:
-            raise ValueError(f'Cannot render SVG figure: {source}')
-        normalize_figure_fonts(drawing)
-        self.drawing: Drawing = drawing
-        self.maximum_height = maximum_height
-        self.scale_factor = 1.0
-        self.width = drawing.width
-        self.height = drawing.height
-        self.hAlign = 'CENTER'
-
-    def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
-        self.scale_factor = min(
-            available_width / self.drawing.width,
-            self.maximum_height / self.drawing.height,
-            1.0,
-        )
-        self.width = self.drawing.width * self.scale_factor
-        self.height = self.drawing.height * self.scale_factor
-        return self.width, self.height
-
-    def draw(self) -> None:
-        self.canv.saveState()
-        self.canv.scale(self.scale_factor, self.scale_factor)
-        renderPDF.draw(self.drawing, self.canv, 0, 0)
-        self.canv.restoreState()
-
-
-def normalize_figure_fonts(group: Drawing | Group) -> None:
-    for item in group.contents:
-        if isinstance(item, String):
-            item.fontName = 'ReportSans-Bold' if 'bold' in item.fontName.lower() else 'ReportSans'
-        elif isinstance(item, Group):
-            normalize_figure_fonts(item)
-
-
-def register_fonts() -> None:
-    font_directory = Path('C:/Windows/Fonts')
-    for name, filename in (
-        ('ReportSerif', 'times.ttf'),
-        ('ReportSerif-Bold', 'timesbd.ttf'),
-        ('ReportSerif-Italic', 'timesi.ttf'),
-        ('ReportSerif-BoldItalic', 'timesbi.ttf'),
-        ('ReportSans', 'arial.ttf'),
-        ('ReportSans-Bold', 'arialbd.ttf'),
-    ):
-        pdfmetrics.registerFont(TTFont(name, str(font_directory / filename)))
-    pdfmetrics.registerFontFamily(
-        'ReportSerif',
-        normal='ReportSerif',
-        bold='ReportSerif-Bold',
-        italic='ReportSerif-Italic',
-        boldItalic='ReportSerif-BoldItalic',
-    )
-
-
-def styles() -> dict[str, ParagraphStyle]:
-    body = ParagraphStyle(
-        'body',
-        fontName='ReportSerif',
-        fontSize=10,
-        leading=12,
-        textColor=INK,
-        alignment=TA_JUSTIFY,
-        firstLineIndent=10,
-        spaceAfter=0,
-        allowWidows=0,
-        allowOrphans=0,
-    )
-    return {
-        'body': body,
-        'body_first': ParagraphStyle('body_first', parent=body, firstLineIndent=0),
-        'title': ParagraphStyle(
-            'title',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=17.3,
-            leading=20,
-            textColor=INK,
-            alignment=TA_CENTER,
-            firstLineIndent=0,
-            spaceAfter=16,
-        ),
-        'byline': ParagraphStyle(
-            'byline',
-            parent=body,
-            fontName='ReportSerif',
-            fontSize=11,
-            leading=13,
-            textColor=INK,
-            alignment=TA_CENTER,
-            firstLineIndent=0,
-            spaceAfter=2,
-        ),
-        'contact': ParagraphStyle(
-            'contact',
-            parent=body,
-            fontSize=8.3,
-            leading=10,
-            textColor=QUIET_TEAL,
-            alignment=TA_CENTER,
-            firstLineIndent=0,
-            spaceAfter=16,
-        ),
-        'abstract_label': ParagraphStyle(
-            'abstract_label',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=9.5,
-            textColor=INK,
-            alignment=TA_CENTER,
-            firstLineIndent=0,
-            spaceBefore=3,
-            spaceAfter=4,
-        ),
-        'abstract': ParagraphStyle(
-            'abstract',
-            parent=body,
-            fontSize=9.2,
-            leading=11.2,
-            firstLineIndent=0,
-            spaceAfter=11,
-        ),
-        'keywords': ParagraphStyle(
-            'keywords',
-            parent=body,
-            fontSize=9.2,
-            leading=11.2,
-            firstLineIndent=0,
-            spaceAfter=9,
-        ),
-        'h1': ParagraphStyle(
-            'h1',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=12,
-            leading=14,
-            textColor=INK,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceBefore=10,
-            spaceAfter=5,
-            keepWithNext=True,
-        ),
-        'h2': ParagraphStyle(
-            'h2',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=10,
-            leading=12,
-            textColor=INK,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceBefore=8,
-            spaceAfter=3,
-            keepWithNext=True,
-        ),
-        'h3': ParagraphStyle(
-            'h3',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=10,
-            leading=12,
-            textColor=INK,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceBefore=6,
-            spaceAfter=2,
-            keepWithNext=True,
-        ),
-        'list': ParagraphStyle(
-            'list',
-            parent=body,
-            alignment=TA_LEFT,
-            leftIndent=13,
-            firstLineIndent=0,
-            bulletIndent=2,
-            spaceAfter=2.3,
-        ),
-        'quote': ParagraphStyle(
-            'quote',
-            parent=body,
-            leftIndent=9,
-            rightIndent=7,
-            textColor=MUTED,
-            firstLineIndent=0,
-            borderColor=QUIET_TEAL,
-            borderWidth=1.1,
-            borderPadding=7,
-            spaceBefore=5,
-            spaceAfter=8,
-        ),
-        'caption': ParagraphStyle(
-            'caption',
-            parent=body,
-            fontName='ReportSerif',
-            fontSize=8.4,
-            leading=10.0,
-            textColor=INK,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceBefore=4,
-            spaceAfter=9,
-        ),
-        'table_cell': ParagraphStyle(
-            'table_cell',
-            parent=body,
-            fontSize=7.9,
-            leading=9.4,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceAfter=0,
-        ),
-        'table_header': ParagraphStyle(
-            'table_header',
-            parent=body,
-            fontName='ReportSerif-Bold',
-            fontSize=7.9,
-            leading=9.4,
-            textColor=INK,
-            alignment=TA_LEFT,
-            firstLineIndent=0,
-            spaceAfter=0,
-        ),
-    }
-
-
-def source_link(source: Path, href: str) -> str:
-    if source.name == 'references-publication.md' and href.startswith(('https://', 'http://')):
-        return href
-    raise ValueError(f'Hyperlink outside the publication bibliography: {source}: {href}')
-
-
-def inline_markup(tokens: list[Token], source: Path) -> str:
-    rendered: list[str] = []
+def inline_tex(tokens: list[Token], *, bibliography: bool = False) -> str:
+    parts: list[str] = []
+    links: list[str] = []
     for token in tokens:
         match token.type:
             case 'text':
-                rendered.append(escape(token.content))
-            case 'strong_open':
-                rendered.append('<b>')
-            case 'strong_close':
-                rendered.append('</b>')
-            case 'em_open':
-                rendered.append('<i>')
-            case 'em_close':
-                rendered.append('</i>')
+                parts.append(escape_tex(token.content, citations=not bibliography))
             case 'code_inline':
-                rendered.append(f'<font face="Courier" size="8">{escape(token.content)}</font>')
+                parts.append(r'\texttt{' + escape_tex(token.content, citations=False) + '}')
+            case 'strong_open':
+                parts.append(r'\textbf{')
+            case 'em_open':
+                parts.append(r'\emph{')
+            case 'strong_close' | 'em_close':
+                parts.append('}')
             case 'link_open':
-                href = source_link(source, token.attrGet('href') or '')
-                rendered.append(f'<link href="{escape(href, quote=True)}" color="#17625D">')
+                if not bibliography:
+                    raise ValueError('External links in report prose must be bibliography citations.')
+                address = token.attrGet('href')
+                if address is None or urlparse(address).scheme not in {'https', 'http'}:
+                    raise ValueError(f'Unsupported bibliography link: {address}')
+                links.append(address)
+                parts.append(r'\href{' + address.replace('%', r'\%') + '}{')
             case 'link_close':
-                rendered.append('</link>')
-            case 'softbreak':
-                rendered.append(' ')
-            case 'hardbreak':
-                rendered.append('<br/>')
-            case 'html_inline':
-                rendered.append(escape(token.content))
+                links.pop()
+                parts.append('}')
+            case 'softbreak' | 'hardbreak':
+                parts.append(' ')
             case 'image':
-                rendered.append(escape(token.content))
+                raise ValueError('Images must occupy their own Markdown paragraph.')
             case _:
-                if token.content:
-                    rendered.append(escape(token.content))
-    return ''.join(rendered)
+                raise ValueError(f'Unsupported inline Markdown token: {token.type}')
+    if links:
+        raise ValueError('Unclosed Markdown hyperlink.')
+    return ''.join(parts)
 
 
-def table_widths(column_count: int) -> list[float]:
-    if column_count == 2:
-        return [CONTENT_WIDTH * 0.26, CONTENT_WIDTH * 0.74]
-    if column_count == 4:
-        return [CONTENT_WIDTH * fraction for fraction in (0.16, 0.30, 0.33, 0.21)]
-    return [CONTENT_WIDTH / column_count] * column_count
+def abstract_tex() -> str:
+    source = (REPORT_ROOT / '00-abstract.md').read_text(encoding='utf-8')
+    content = source.split('## Abstract', maxsplit=1)[1].strip()
+    return escape_tex(' '.join(content.split()))
 
 
-def make_table(rows: list[list[str]], report_styles: dict[str, ParagraphStyle]) -> LongTable:
-    if not rows or any(len(row) != len(rows[0]) for row in rows):
-        raise ValueError('Malformed Markdown table')
-    cells = [
-        [Paragraph(cell, report_styles['table_header' if row_index == 0 else 'table_cell']) for cell in row]
-        for row_index, row in enumerate(rows)
-    ]
-    table = LongTable(cells, colWidths=table_widths(len(rows[0])), repeatRows=1, hAlign='CENTER')
-    commands: list[tuple[object, ...]] = [
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('LINEABOVE', (0, 0), (-1, 0), 0.7, INK),
-        ('LINEBELOW', (0, 0), (-1, 0), 0.4, INK),
-        ('LINEBELOW', (0, -1), (-1, -1), 0.7, INK),
-    ]
-    table.setStyle(TableStyle(commands))
-    return table
+def convert_figure(source: Path, build_directory: Path) -> str:
+    resolved = source.resolve()
+    if not resolved.is_relative_to(REPORT_ROOT.parent):
+        raise ValueError(f'Figure escapes documentation root: {source}')
+    output = build_directory / 'figures' / f'{resolved.stem}.pdf'
+    output.parent.mkdir(parents=True, exist_ok=True)
+    drawing = svg2rlg(str(resolved))
+    if drawing is None:
+        raise ValueError(f'Cannot read figure: {source}')
+    renderPDF.drawToFile(drawing, str(output))
+    return output.as_posix()
 
 
-def parse_table(
-    tokens: list[Token], start: int, source: Path, report_styles: dict[str, ParagraphStyle]
-) -> tuple[ContentBlock, int]:
+def caption_tex(value: str) -> str:
+    match = PLAIN_CAPTION.match(value)
+    if match is None:
+        return r'\caption{' + escape_tex(value.strip('*')) + '}'
+    label = match.group(1).removeprefix('Figure ').rstrip('.')
+    body = value[match.end() :].strip().replace('**', '')
+    return (
+        r'\renewcommand{\thefigure}{'
+        + label
+        + '}'
+        + r'\caption{'
+        + escape_tex(body)
+        + '}'
+        + r'\label{fig:'
+        + label
+        + '}'
+    )
+
+
+def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path) -> str:
+    address = image.attrGet('src')
+    if address is None:
+        raise ValueError('Figure has no source path.')
+    figure_path = convert_figure(source.parent / address, build_directory)
+    caption_text = caption.content.replace('\n', ' ').strip()
+    if caption_text.startswith('**'):
+        caption_text = caption_text[2:]
+        caption_text = caption_text.replace('**', '')
+    return (
+        '\\begin{figure*}[!t]\n'
+        '\\centering\n'
+        r'\includegraphics[width=0.92\textwidth,height=0.38\textheight,keepaspectratio]{'
+        + figure_path
+        + '}\n'
+        + caption_tex(caption_text)
+        + '\n\\end{figure*}\n'
+    )
+
+
+def parse_table(tokens: list[Token], start: int) -> tuple[list[list[str]], int]:
     rows: list[list[str]] = []
-    current_row: list[str] = []
-    position = start + 1
-    while tokens[position].type != 'table_close':
-        token = tokens[position]
+    row: list[str] = []
+    index = start + 1
+    while tokens[index].type != 'table_close':
+        token = tokens[index]
         if token.type == 'tr_open':
-            current_row = []
-        elif token.type == 'inline':
-            current_row.append(inline_markup(token.children or [], source))
+            row = []
         elif token.type == 'tr_close':
-            rows.append(current_row)
-        position += 1
-    return ContentBlock(KeepTogether([make_table(rows, report_styles)]), full_width=True), position + 1
+            rows.append(row)
+        elif token.type in {'th_open', 'td_open'}:
+            content = tokens[index + 1]
+            if content.type != 'inline':
+                raise ValueError('Expected a Markdown table cell.')
+            row.append(inline_tex(content.children or []))
+        index += 1
+    return rows, index + 1
 
 
-def parse_markdown(
-    source: Path, report_styles: dict[str, ParagraphStyle], content: str | None = None
-) -> list[ContentBlock]:
-    markdown = source.read_text(encoding='utf-8') if content is None else content
-    tokens = MarkdownIt('commonmark').enable('table').parse(markdown)
-    blocks: list[ContentBlock] = []
-    list_depth = 0
-    ordered_counters: list[int | None] = []
-    in_quote = False
-    after_heading = False
-    position = 0
-    while position < len(tokens):
-        token = tokens[position]
+def table_tex(rows: list[list[str]], *, appendix: bool) -> str:
+    columns = len(rows[0])
+    if any(len(row) != columns for row in rows):
+        raise ValueError('Inconsistent Markdown table width.')
+    specification = '@{}' + 'l' * columns + '@{}'
+    environment = 'table*'
+    lines = [r'\begin{center}' if appendix else r'\begin{table*}[!t]']
+    lines.append(r'\centering\small' if not appendix else r'\small')
+    if appendix:
+        lines.append(r'\resizebox{\columnwidth}{!}{%')
+    lines.extend([r'\begin{tabular}{' + specification + '}', r'\toprule'])
+    for row_index, row in enumerate(rows):
+        lines.append(' & '.join(row) + r' \\')
+        if row_index == 0:
+            lines.append(r'\midrule')
+    lines.extend([r'\bottomrule', r'\end{tabular}'])
+    if appendix:
+        lines.append('}')
+    lines.append(r'\end{center}' if appendix else r'\end{' + environment + '}')
+    return '\n'.join(lines) + '\n'
+
+
+def appendix_a_tex(build_directory: Path) -> str:
+    source = REPORT_ROOT / APPENDIX_FILES[0]
+    tokens = MARKDOWN.parse(source.read_text(encoding='utf-8'))
+    paragraphs = [tokens[index + 1] for index, token in enumerate(tokens) if token.type == 'paragraph_open']
+    if len(paragraphs) != 6:
+        raise ValueError('Unexpected Appendix A structure.')
+    introduction, first_image, first_caption, second_image, second_caption, conclusion = paragraphs
+    figures: list[str] = []
+    for image_token, caption in ((first_image, first_caption), (second_image, second_caption)):
+        image = (image_token.children or [])[0]
+        address = image.attrGet('src')
+        if address is None:
+            raise ValueError('Appendix A image has no source.')
+        path = convert_figure(source.parent / address, build_directory)
+        body = PLAIN_CAPTION.sub('', caption.content.replace('\n', ' '), count=1)
+        figures.append(
+            r'\begin{minipage}[t]{0.48\textwidth}'
+            + '\n'
+            + r'\centering\includegraphics[width=\linewidth,height=0.28\textheight,keepaspectratio]{'
+            + path
+            + '}\n'
+            + r'\captionof{figure}{'
+            + escape_tex(body)
+            + '}\n'
+            + r'\end{minipage}'
+        )
+    return (
+        r'\twocolumn[{'
+        + '\n'
+        + r'\begin{@twocolumnfalse}'
+        + '\n'
+        + r'\section{Training diagnostics}\label{app:A}'
+        + '\n'
+        + inline_tex(introduction.children or [])
+        + '\n\n'
+        + r'\noindent '
+        + figures[0]
+        + r'\hfill'
+        + '\n'
+        + figures[1]
+        + '\n'
+        + r'\vspace{0.7em}'
+        + '\n'
+        + r'\end{@twocolumnfalse}'
+        + '\n'
+        + '}]\n'
+        + inline_tex(conclusion.children or [])
+        + '\n\n'
+    )
+
+
+def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str, source: Path) -> str:
+    if level == 1:
+        if appendix:
+            title = re.sub(r'^Appendix [A-D]\.\s*', '', title)
+            return r'\section{' + escape_tex(title) + r'}\label{app:' + appendix_letter + '}' + '\n'
+        heading = re.sub(r'^([0-9]+[A-C]?)\.\s*', '', title)
+        prefix = re.match(r'^([0-9]+[A-C]?)\.', title)
+        if prefix:
+            number = prefix.group(1)
+        elif source.name == '05a-three-failures.md':
+            number = '5A'
+        else:
+            raise ValueError(f'Main report section is not numbered: {source}')
+        return (
+            r'\renewcommand{\thesection}{'
+            + number
+            + '}'
+            + '\n'
+            + r'\section{'
+            + escape_tex(heading)
+            + r'}\label{sec:'
+            + source.stem
+            + '}'
+            + '\n'
+        )
+    if level == 2:
+        return r'\subsection{' + escape_tex(title) + '}' + '\n'
+    return r'\subsubsection{' + escape_tex(title) + '}' + '\n'
+
+
+def markdown_tex(source: Path, build_directory: Path, *, appendix: bool = False) -> str:
+    tokens = MARKDOWN.parse(source.read_text(encoding='utf-8'))
+    lines: list[str] = []
+    index = 0
+    appendix_letter = source.name[len('appendix-')].upper() if appendix else ''
+    while index < len(tokens):
+        token = tokens[index]
         match token.type:
             case 'heading_open':
-                heading = tokens[position + 1]
-                level = token.tag
-                style_name = level if level in {'h1', 'h2', 'h3'} else 'h3'
-                blocks.append(
-                    ContentBlock(Paragraph(inline_markup(heading.children or [], source), report_styles[style_name]))
+                content = tokens[index + 1]
+                if content.type != 'inline':
+                    raise ValueError('Expected heading text.')
+                lines.append(
+                    section_tex(
+                        content.content,
+                        appendix=appendix,
+                        level=int(token.tag[1]),
+                        appendix_letter=appendix_letter,
+                        source=source,
+                    )
                 )
-                after_heading = True
-                position += 3
+                index += 3
             case 'paragraph_open':
-                inline = tokens[position + 1]
-                children = inline.children or []
-                images = [child for child in children if child.type == 'image']
-                if len(images) == 1 and all(
-                    child.type == 'image' or (child.type == 'text' and not child.content.strip()) for child in children
-                ):
-                    image_path = images[0].attrGet('src')
-                    if image_path is None:
-                        raise ValueError(f'Image has no source in {source}')
-                    maximum_height = (
-                        450
-                        if image_path
-                        in {
-                            'figures/final-training-loss-and-rate.svg',
-                            'figures/final-training-volume-and-throughput.svg',
-                        }
-                        else 235
-                        if image_path == 'figures/final-search-curve.svg'
-                        else 275
-                    )
-                    figure = VectorFigure((source.parent / image_path).resolve(), maximum_height)
-                    caption_text = escape(images[0].content)
-                    following_position = position + 3
-                    if (
-                        following_position + 2 < len(tokens)
-                        and tokens[following_position].type == 'paragraph_open'
-                        and tokens[following_position + 1].type == 'inline'
-                        and tokens[following_position + 1].content.lstrip('*').startswith('Figure ')
-                        and tokens[following_position + 2].type == 'paragraph_close'
-                    ):
-                        caption_text = inline_markup(tokens[following_position + 1].children or [], source)
-                        position = following_position
-                    caption_text = re.sub(r'^(Figure [\w.]+[.:])', r'<b>\1</b>', caption_text)
-                    caption = Paragraph(caption_text, report_styles['caption'])
-                    blocks.append(ContentBlock(KeepTogether([Spacer(1, 8), figure, caption]), full_width=True))
+                content = tokens[index + 1]
+                if content.type != 'inline':
+                    raise ValueError('Expected paragraph text.')
+                children = content.children or []
+                if len(children) == 1 and children[0].type == 'image':
+                    next_index = index + 3
+                    if next_index >= len(tokens) or tokens[next_index].type != 'paragraph_open':
+                        raise ValueError(f'Figure has no caption: {source}')
+                    caption = tokens[next_index + 1]
+                    lines.append(figure_tex(children[0], caption, source, build_directory))
+                    index = next_index + 3
                 else:
-                    content = inline_markup(children, source)
-                    if content.strip():
-                        style_name = (
-                            'quote' if in_quote else 'list' if list_depth else 'body_first' if after_heading else 'body'
-                        )
-                        if content.lstrip().startswith('<b>Figure'):
-                            style_name = 'caption'
-                        bullet = None
-                        if list_depth:
-                            counter = ordered_counters[-1]
-                            if counter is None:
-                                bullet = '•'
-                            elif source.name == 'references-publication.md':
-                                bullet = f'[{counter}]'
-                            else:
-                                bullet = f'{counter}.'
-                        blocks.append(ContentBlock(Paragraph(content, report_styles[style_name], bulletText=bullet)))
-                        after_heading = False
-                position += 3
-            case 'table_open':
-                block, position = parse_table(tokens, position, source, report_styles)
-                blocks.append(block)
+                    lines.append(inline_tex(children) + '\n\n')
+                    index += 3
             case 'bullet_list_open':
-                list_depth += 1
-                ordered_counters.append(None)
-                position += 1
+                lines.append(r'\begin{itemize}' + '\n')
+                index += 1
             case 'ordered_list_open':
-                list_depth += 1
-                ordered_counters.append(0)
-                position += 1
+                lines.append(r'\begin{enumerate}' + '\n')
+                index += 1
+            case 'bullet_list_close':
+                lines.append(r'\end{itemize}' + '\n')
+                index += 1
+            case 'ordered_list_close':
+                lines.append(r'\end{enumerate}' + '\n')
+                index += 1
             case 'list_item_open':
-                if ordered_counters and ordered_counters[-1] is not None:
-                    ordered_counters[-1] += 1
-                position += 1
-            case 'bullet_list_close' | 'ordered_list_close':
-                list_depth -= 1
-                ordered_counters.pop()
-                position += 1
-            case 'blockquote_open':
-                in_quote = True
-                position += 1
-            case 'blockquote_close':
-                in_quote = False
-                position += 1
-            case 'fence' | 'code_block':
-                blocks.append(
-                    ContentBlock(
-                        Paragraph(
-                            f'<font face="Courier" size="8">{escape(token.content).replace(chr(10), "<br/>")}</font>',
-                            report_styles['quote'],
-                        )
-                    )
-                )
-                position += 1
+                lines.append(r'\item ')
+                index += 1
+            case 'list_item_close':
+                lines.append('\n')
+                index += 1
+            case 'table_open':
+                rows, index = parse_table(tokens, index)
+                lines.append(table_tex(rows, appendix=appendix))
+            case 'paragraph_close':
+                index += 1
             case _:
-                position += 1
-    return blocks
+                raise ValueError(f'Unsupported Markdown block token: {token.type} in {source}')
+    return ''.join(lines)
 
 
-def append_column_content(story: list[Flowable], pending: list[Flowable]) -> None:
-    if pending:
-        story.append(
-            BalancedColumns(
-                pending[:],
-                nCols=2,
-                needed=58,
-                innerPadding=COLUMN_GAP,
-                leftPadding=0,
-                rightPadding=0,
-                topPadding=0,
-                bottomPadding=0,
-            )
-        )
-        pending.clear()
+def bibliography_tex() -> str:
+    source = REPORT_ROOT / 'references-publication.md'
+    tokens = MARKDOWN.parse(source.read_text(encoding='utf-8'))
+    entries = [token for token in tokens if token.type == 'inline' and token.children and token.content]
+    entries = entries[1:]
+    if len(entries) != 12:
+        raise ValueError(f'Expected 12 references, found {len(entries)}.')
+    lines = [r'\begin{thebibliography}{12}']
+    for number, entry in enumerate(entries, start=1):
+        lines.append(r'\bibitem{ref' + str(number) + '} ' + inline_tex(entry.children or [], bibliography=True))
+    lines.append(r'\end{thebibliography}')
+    return '\n'.join(lines) + '\n'
 
 
-def draw_page(canvas: Canvas, document: BaseDocTemplate) -> None:
-    canvas.saveState()
-    canvas.setTitle('Engineering Efficient Self-Play Chess')
-    canvas.setAuthor('Bertil Braun')
-    canvas.setSubject('Compute-constrained AlphaZero-style chess technical report')
-    page = document.page
-    canvas.setFont('ReportSerif', 9)
-    canvas.setFillColor(INK)
-    canvas.drawCentredString(PAGE_WIDTH / 2, 29, str(page))
-    canvas.restoreState()
-
-
-def abstract_text() -> str:
-    source = REPORT_ROOT / '00-abstract.md'
-    lines = source.read_text(encoding='utf-8').splitlines()
-    abstract_start = lines.index('## Abstract') + 1
-    return ' '.join(line.strip() for line in lines[abstract_start:] if line.strip())
+def find_tectonic() -> Path:
+    executable = shutil.which('tectonic')
+    if executable:
+        return Path(executable)
+    bundled = REPOSITORY_ROOT / 'tmp' / 'pdfs' / 'tectonic' / 'bin' / 'tectonic.exe'
+    if bundled.exists():
+        return bundled
+    raise ValueError('Tectonic is required to build the report PDF. Install it and retry.')
 
 
 def build_report(output: Path) -> None:
-    register_fonts()
-    report_styles = styles()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    document = BaseDocTemplate(
-        str(output),
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=18 * mm,
-        bottomMargin=20 * mm,
-        title='Engineering Efficient Self-Play Chess',
-        author='Bertil Braun',
-    )
-    frame = Frame(
-        MARGIN,
-        20 * mm,
-        CONTENT_WIDTH,
-        PAGE_HEIGHT - 38 * mm,
-        id='article',
-        leftPadding=0,
-        rightPadding=0,
-        topPadding=0,
-        bottomPadding=0,
-    )
-    document.addPageTemplates([PageTemplate(id='article', frames=[frame], onPage=draw_page)])
-    story: list[Flowable] = [
-        Spacer(1, 23),
-        Paragraph(
-            'Engineering Efficient Self-Play Chess: Search, Replay, and Throughput Under Limited Compute',
-            report_styles['title'],
-        ),
-        Paragraph('Bertil Braun', report_styles['byline']),
-        Paragraph('contact@bertil-braun.de', report_styles['contact']),
-        Paragraph('Abstract', report_styles['abstract_label']),
-        Paragraph(escape(abstract_text()), report_styles['abstract']),
-        Paragraph(
-            '<b>Keywords:</b> AlphaZero, chess, self-play, Monte Carlo tree search, replay, GPU inference, quantization, model growth, fixed-node evaluation',
-            report_styles['keywords'],
-        ),
-    ]
-    pending: list[Flowable] = []
+    build_directory = REPOSITORY_ROOT / 'tmp' / 'pdfs' / 'latex-build'
+    build_directory.mkdir(parents=True, exist_ok=True)
+    parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
-        for block in parse_markdown(REPORT_ROOT / filename, report_styles):
-            if block.full_width:
-                append_column_content(story, pending)
-                story.append(block.flowable)
-            else:
-                pending.append(block.flowable)
-    reference_styles = report_styles | {
-        'list': ParagraphStyle(
-            'reference_list',
-            parent=report_styles['list'],
-            fontSize=7.9,
-            leading=9.1,
-            spaceAfter=1.3,
-        )
-    }
-    for block in parse_markdown(REPORT_ROOT / 'references-publication.md', reference_styles):
-        pending.append(block.flowable)
-    append_column_content(story, pending)
-    story.append(PageBreak())
-    for appendix_index, filename in enumerate(APPENDIX_FILES):
-        if appendix_index:
-            append_column_content(story, pending)
-            story.append(PageBreak())
-        for block in parse_markdown(REPORT_ROOT / filename, report_styles):
-            if block.full_width:
-                append_column_content(story, pending)
-                story.append(block.flowable)
-            else:
-                pending.append(block.flowable)
-    append_column_content(story, pending)
-    document.build(story)
+        parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
+    parts.extend(
+        [
+            r'\FloatBarrier' + '\n',
+            bibliography_tex(),
+            r'\clearpage' + '\n',
+            r'\appendix' + '\n',
+            r'\renewcommand{\thefigure}{A.\arabic{figure}}\setcounter{figure}{0}' + '\n',
+            appendix_a_tex(build_directory),
+        ]
+    )
+    for filename in APPENDIX_FILES[1:]:
+        parts.append(r'\FloatBarrier' + '\n')
+        parts.append(markdown_tex(REPORT_ROOT / filename, build_directory, appendix=True))
+    parts.append(r'\end{document}' + '\n')
+    latex_source = build_directory / 'technical-report-review.tex'
+    latex_source.write_text(''.join(parts), encoding='utf-8')
+    command = [str(find_tectonic()), str(latex_source), '--outdir', str(build_directory), '--keep-logs']
+    subprocess.run(command, check=True, cwd=REPOSITORY_ROOT)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(build_directory / 'technical-report-review.pdf', output)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        '--output',
-        type=Path,
-        default=REPOSITORY_ROOT / 'output' / 'pdf' / 'technical-report-review.pdf',
+        '--output', type=Path, default=REPOSITORY_ROOT / 'output' / 'pdf' / 'technical-report-review.pdf'
     )
     arguments = parser.parse_args()
     build_report(arguments.output.resolve())

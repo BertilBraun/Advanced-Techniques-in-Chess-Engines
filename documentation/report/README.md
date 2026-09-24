@@ -54,6 +54,8 @@ instructions remain under [`documentation/operations/`](../operations/README.md)
 does not authorize compute, deployment, stopping, or deletion.
 
 Build the PDF from the repository root with
-`uv run --group publication python .\py\tools\render_technical_report.py`. The generated review copy is
-`output/pdf/technical-report-review.pdf`; Markdown remains the editable source. Figure SVGs remain vector artwork in
-the PDF. The paper does not use repository-file hyperlinks as substitutes for methods or results.
+`uv run --group publication python .\py\tools\render_technical_report.py` after installing
+[Tectonic](https://tectonic-typesetting.github.io/en-US/install.html). The generated review copy is
+`output/pdf/technical-report-review.pdf`; Markdown remains the editable source. The PDF uses the same two-column
+LaTeX geometry and font as the Voice-Light report, with clickable numbered citations and vector figures. The paper
+does not use repository-file hyperlinks as substitutes for methods or results.
