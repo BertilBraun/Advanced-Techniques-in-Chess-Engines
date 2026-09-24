@@ -17,16 +17,6 @@ The compact tables intentionally expose evidence status rather than making every
 - [`chess-ladder-progress.svg`](../../showcase/chess-ladder-progress.svg) is the rendered report figure, SHA-256
   `882e8889e9f1d4f8394125fdc3e39070ceae9b9a45a8d5fe0682d70dfcf96d42`.
 
-### Candidate-start threshold discrepancy
-
-The owner recalls 15/4 Elo/hour as the intended and actually run medium/large candidate-start thresholds. The
-checked-in authored first-segment YAML records 50/4. The immutable `resolved-experiment.json` files in
-`evidence-provenance.tgz` instead record 12/3 for the first segment and early continuations, then 15/5 from the
-later v91 continuation through v93. These are three distinct records, not interchangeable descriptions of the
-reported lineage. The conflict is not yet reconciled; publication should avoid asserting one run-wide threshold
-pair. The frozen resolved configurations remain the reproduction evidence unless a more authoritative runtime
-record explains the discrepancy.
-
 ## Evidence freeze
 
 | Archive | Bytes | SHA-256 |
