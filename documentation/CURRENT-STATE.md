@@ -15,8 +15,9 @@ fixed-node Stockfish 13 anchors, not FIDE ratings or ratings from an unrestricte
 selection rationale, training trajectory, student result, and limitations.
 
 The tail evidence archive now checksum-covers every reported teacher and student result. Both distilled-student
-training runs and their scheduled matches are complete. Remaining publication work concerns archive-derived volume
-and cost accounting, the non-headline figures, and report prose rather than missing strength results.
+training runs and their scheduled matches are complete. The selected-checkpoint training trajectory and narrow
+accepted-lineage cost are also reconciled. Remaining publication work concerns wider actor/search and rejection
+telemetry where recoverable, optional figures, and editorial review rather than missing strength results.
 
 ## Final recipe and exact reproduction
 
@@ -53,20 +54,21 @@ for the reported checkpoint rather than treating future edits to the living reci
 | Teacher evaluation matrix | **Verified** | Ten 100-game rows and the parallelism sweep are checksum-covered in the [evidence index](evidence/final-chess-20260923/README.md) |
 | 100,000-search headline: 3,251 [3,206, 3,297] | **Verified** | Second deep anchor agrees within four Elo; both result manifests are captured |
 | Accepted-lineage trajectory | **Publication curve complete** | Final recipe: 180 observations through 2.5 days, endpoint 2,372.2, peak 2,407.6; later experiments excluded by scope |
-| Cross-campaign improvement | **Retrospective calculation complete** | About +74 Elo on a matched three-rung estimator, with approximately ±15 transfer sensitivity; preserve a standalone derivation before publication |
+| Cross-campaign improvement | **Retrospective calculation and sensitivity complete** | About +74 Elo on a matched three-rung estimator, with approximately ±15 transfer sensitivity; [standalone derivation](evidence/final-chess-20260923/plateau-comparison.csv) retained |
 | First distilled student | **Verified** | 36,621 steps (7.500 replay epochs); 2,683 [2,637, 2,731] at 10,000 searches |
 | Longer distilled student | **Verified** | 110,000 steps (22.528 replay epochs); 2,697 [2,640, 2,753] at 10,000 searches and an unbracketed 2,873 [2,819, 2,935] at 100,000 |
 | $43.20 training figure | **Narrow derived measure** | 60 accepted-lineage hours at $0.72/h; not total spend |
 
 ## Publication work still open
 
-- Reconcile total games, admitted positions, replay occupancy, discarded compute, and actual end-to-end spend.
-- Preserve the matched-estimator plateau calculation as a standalone machine-readable derivation.
-- Generate the remaining training-dynamics and deployment-fidelity figures; the cross-campaign ladder figure is
-  complete.
-- Verify that the public download and deployed model match the reported checkpoint and artifact hashes.
-- Complete editorial and evidence-link review of the updated root README and technical report.
-- Complete the narrative technical report and choose explicit code and model/data licenses.
+- Reconcile wider actor/search rates, rejected data, and stage timing where the local archive permits it. The
+  selected-checkpoint games, positions, presentations, optimizer steps, replay occupancy, and training dynamics are
+  already recorded; total project spend is intentionally not claimed.
+- Add optional deployment-fidelity or mechanism figures only where they clarify a supported claim.
+- Complete the bibliography, editorial, visual, and evidence-link review of the drafted technical report, then
+  inspect a rendered edition if one is produced.
+- The public model card, aliases, checksum index, and MIT license have been checked. The project owner confirms the
+  live site's deployed artifact is current; keep that confirmation distinct from the frozen run hashes.
 
 ## Reader path
 

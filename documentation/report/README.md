@@ -38,7 +38,7 @@ Wider node throughput remains open; total project spend is intentionally not a r
 
 | Area | Status | Authority |
 | --- | --- | --- |
-| Narrative chapters and five figures | Opening, three failures, and reader path owner-reviewed; other scientific and visual review remains | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
+| Narrative chapters and six report figures | Opening, three failures, and reader path owner-reviewed; other scientific and visual review remains | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
 | Archive-derived training dynamics and throughput | Selected-checkpoint counters and figures complete; wider throughput open | [Completion plan](publication-plan.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
 | Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 7](07-final-run-results.md) |

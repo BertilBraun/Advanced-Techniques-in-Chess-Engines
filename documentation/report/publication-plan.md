@@ -2,7 +2,7 @@
 
 This file is the completion contract for turning the evidence-linked narrative draft into a final publication.
 Terminal strength, selected-checkpoint training-volume counters, and the headline figures are complete. Wider
-throughput/rejection accounting, some optional figures, release metadata, and editorial review remain open. Total
+throughput/rejection accounting, some optional figures, and editorial review remain open. Total
 project spend is deliberately out of scope; only the narrow accepted-lineage effective cost is reported.
 
 ## Narrative scope
@@ -32,7 +32,7 @@ project spend is deliberately out of scope; only the narrow accepted-lineage eff
 | Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |
 | Replay/restart/auxiliary choices improved strength | Isolated online-learning or playing-strength ablation, if any | “Retained in the final bundle” |
 | Resignation was safe and useful | Threshold history, continuation outcomes, false-nonloss bound, saved work | “Calibrated with continuation auditing” |
-| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Final ONNX identity is verified on Hugging Face; release metadata and aliases remain open |
+| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Final ONNX, model card, aliases, and checksum index are verified on Hugging Face; the owner confirms the live deployment is current |
 
 ## Candidate supporting tables
 
@@ -95,7 +95,8 @@ fixed table or figure count.
    produced. Markdown remains the editable source.
 6. Verify the public Hugging Face model card, aliases, checksum index, and live-site artifact identity. The model
    card now matches the archived 10,000-search parallelism and paired-bootstrap confidence intervals; the final
-   ONNX, aliases, checksum index, and MIT metadata are present. Verify the live site's deployed artifact separately.
+   ONNX, aliases, checksum index, and MIT metadata are present. The owner confirms the live site's deployed artifact
+   is current; this is an owner confirmation, not a second archived hash audit.
 7. The owner's MIT decision is recorded in the repository [license](../../LICENSE) and the
    [model-repository license commit](https://huggingface.co/BertilBraun/alphazero-chess/commit/6c068a15bdfaec6b39536e7dc681a55b13f0837e).
 
