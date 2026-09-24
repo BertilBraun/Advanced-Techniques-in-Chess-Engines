@@ -1,17 +1,16 @@
 # Owner review guide
 
 You do **not** need to review the full source dossiers. Repository-visible facts, implementation details, benchmark
-transcriptions, and source links have already been audited. This guide isolates the decisions that still need project-
-owner memory or judgment.
+transcriptions, and source links have already been audited. This guide records decisions that needed project-owner
+memory or judgment.
 
-Answer inline with `yes`, `no — ...`, or one or two sentences. If an answer is unknown, say so; the report will retain
-the evidence boundary instead of inventing a conclusion.
+All questions below have been answered. Unknown historical measurements remain marked as unknown rather than being
+reconstructed from memory.
 
 ## Minimum useful pass
 
-The Priority 1 owner-memory pass, Priority 2 causal review, and Priority 3 editorial scope review are complete. Their
-answers and evidence limits are recorded below. The remaining owner questions concern only final-result presentation.
-You do not need to open any linked dossier unless a summary looks wrong.
+The owner-memory, causal, editorial-scope, and final-result presentation passes are complete. Their answers and
+evidence limits are recorded below. You do not need to open any linked dossier unless a summary looks wrong.
 
 ## Priority 1 — facts only the project owner can recover
 
@@ -147,11 +146,12 @@ The owner review of these decisions is complete.
 ## What you do not need to review
 
 You do not need to check source paths, benchmark transcription, input-plane enumeration, process ownership, replay
-schema, configuration constants, or the full evidence ledgers. You also do not need to review final prose yet.
+schema, configuration constants, or the full evidence ledgers. For the next review, focus on the
+[concise opening](../01-motivation-and-scope.md), [three failure studies](../05a-three-failures.md), and the figures
+rather than the full draft.
 
 The canonical configuration issue is resolved: its progressive-candidate gate now has the corresponding evaluation
 definition and the file loads successfully. Exact historical reproduction still requires the resolved configuration,
 source revision, and artifact hashes frozen in the evidence record.
 
-The next useful owner pass is a short narrative outline and selected figures, not the underlying 5,000 lines of
-source notes.
+Detailed copy-editing and appendix checks can follow once the narrative and figures are accepted.
