@@ -52,7 +52,7 @@ def test_figure_caption_uses_latex_counter_instead_of_manual_number() -> None:
     )
 
 
-def test_appendix_table_has_caption_and_readable_width() -> None:
+def test_appendix_table_has_caption_without_upscaling_type() -> None:
     output = table_tex(
         [['Heading', 'Value'], ['Item', '1']],
         source=Path('appendix-c-supporting-comparisons.md'),
@@ -60,4 +60,6 @@ def test_appendix_table_has_caption_and_readable_width() -> None:
         appendix=True,
     )
     assert r'\caption{Parallel-search strength and wall time}' in output
-    assert r'\resizebox{0.87\textwidth}{!}{%' in output
+    assert r'\centering\normalsize' in output
+    assert r'\setlength{\tabcolsep}{9pt}' in output
+    assert r'\resizebox' not in output

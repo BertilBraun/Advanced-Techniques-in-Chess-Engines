@@ -37,7 +37,7 @@ headline and does not compare raw peaks. Repeating the arithmetic with only the 
 2.5-day windows gives **+75.8 Elo**; the conclusion is not driven by the later points omitted from the plot. The
 plateau arithmetic and its transfer assumption are given in Appendix B.
 
-![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
+![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
 Figure 8: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
 training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The
@@ -67,6 +67,11 @@ These are selected-lineage counters, not totals for every experiment or every ga
 cumulative position scalar is float32 in TensorBoard, so its final few integer digits are not meaningful. Appendix A
 shows the training diagnostics and clarifies the boundary of each count.
 
+The network-evaluation total is estimated rather than counted. Using a conservative 100 searched plies per completed
+game and roughly 600 simulations per ply gives about 195 billion search simulations across 3.25 million games,
+rounded to roughly 200 billion in the abstract. Most require a neural-network evaluation; terminal leaves and reuse
+make this an approximate scale measure, not an exact forward-pass counter.
+
 Across 480 small-model quanta, median measured trainer throughput was 16,977 samples/s; across 337 medium-model
 quanta it was 11,194. Model shape, schedule, and concurrent workload all differed, so this is not an isolated
 model-size effect.
@@ -84,7 +89,7 @@ Marco Meloni's fixed-node Stockfish 13 benchmark [9],
 which connects Stockfish through Fruit 2.2.1 to the historical SSDF scale. The resulting values are benchmark Elo,
 not FIDE ratings or estimates on a current unrestricted-engine list.
 
-![Final model playing strength across measured search budgets](figures/final-search-curve.svg)
+![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
 
 Figure 9: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
 measured rung at each budget. Vertical bars are the reported 95% confidence intervals. The categorical horizontal

@@ -60,7 +60,8 @@ Build the PDF from the repository root with
 LaTeX geometry and font as the Voice-Light report, with clickable numbered citations and vector figures. The paper
 does not use repository-file hyperlinks as substitutes for methods or results.
 
-To regenerate the larger-label training figures used in Appendix A, run
-`uv run --group publication python .\py\tools\render_final_training_dynamics.py --paper-only` first. This leaves the
-original evidence figures unchanged. The appendices switch to one column so the diagnostics and dense tables remain
-readable.
+To regenerate the title-free paper plots while preserving the original showcase and evidence figures, run
+`uv run --group publication python .\py\tools\render_ladder_progression.py --paper-only`,
+`uv run --group publication python .\py\tools\render_final_search_curve.py --paper-only`, and
+`uv run --group publication python .\py\tools\render_final_training_dynamics.py --paper-only` before building the
+PDF. The appendices switch to one column so the diagnostics and dense tables remain readable.

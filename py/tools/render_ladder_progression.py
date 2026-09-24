@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,7 @@ PUBLICATION_DATA_PATH = (
     REPOSITORY_ROOT / 'documentation' / 'evidence' / 'final-chess-20260923' / 'ladder-elo-report-trimmed.json'
 )
 FIGURE_PATH = REPOSITORY_ROOT / 'documentation' / 'showcase' / 'chess-ladder-progress.svg'
+REPORT_FIGURE_PATH = REPOSITORY_ROOT / 'documentation' / 'report' / 'figures' / 'chess-ladder-progress-paper.svg'
 
 
 class LadderPoint(BaseModel):
@@ -156,7 +158,7 @@ def plot_series(axes: Axes, series: PublicationSeries, color: str) -> None:
     axes.plot(days, bias_corrected_ema(elos), color=color, linewidth=2.35, label=series.label)
 
 
-def render_figure(publication: PublicationExport, path: Path) -> None:
+def render_figure(publication: PublicationExport, path: Path, *, paper: bool = False) -> None:
     plt.rcParams.update(
         {
             'figure.dpi': 110,
@@ -180,17 +182,18 @@ def render_figure(publication: PublicationExport, path: Path) -> None:
     for specification, series in zip(SERIES_SPECIFICATIONS, publication.series, strict=True):
         plot_series(axes, series, specification.color)
 
-    axes.set_title(
-        '64-search ladder Elo across training campaigns',
-        loc='left',
-        pad=10,
-        color='#202020',
-    )
+    if not paper:
+        axes.set_title(
+            '64-search ladder Elo across training campaigns',
+            loc='left',
+            pad=10,
+            color='#202020',
+        )
     axes.legend(
         loc='lower right',
         ncol=1,
     )
-    figure.subplots_adjust(left=0.10, right=0.98, top=0.93, bottom=0.12)
+    figure.subplots_adjust(left=0.10, right=0.98, top=0.98 if paper else 0.93, bottom=0.12)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(
         path,
@@ -204,6 +207,9 @@ def render_figure(publication: PublicationExport, path: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--paper-only', action='store_true', help='Render the title-free report plot only.')
+    arguments = parser.parse_args()
     source = load_source(SOURCE_PATH)
     publication = PublicationExport(
         source_sha256=source_sha256(SOURCE_PATH),
@@ -211,9 +217,12 @@ def main() -> None:
         time_axis='effective training seconds',
         series=tuple(select_publication_series(source, specification) for specification in SERIES_SPECIFICATIONS),
     )
-    with PUBLICATION_DATA_PATH.open('w', encoding='utf-8', newline='\n') as publication_file:
-        publication_file.write(publication.model_dump_json(indent=2, exclude_none=True) + '\n')
-    render_figure(publication, FIGURE_PATH)
+    if arguments.paper_only:
+        render_figure(publication, REPORT_FIGURE_PATH, paper=True)
+    else:
+        with PUBLICATION_DATA_PATH.open('w', encoding='utf-8', newline='\n') as publication_file:
+            publication_file.write(publication.model_dump_json(indent=2, exclude_none=True) + '\n')
+        render_figure(publication, FIGURE_PATH)
 
 
 if __name__ == '__main__':

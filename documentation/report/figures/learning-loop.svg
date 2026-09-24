@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 90 1200 670" role="img" aria-labelledby="title description">
   <title id="title">The chess self-play learning loop</title>
   <desc id="description">Python coordinates native C++ self-play, replay, distributed training, TensorRT inference, and paired Stockfish evaluation. The published model returns to self-play.</desc>
   <defs>
@@ -10,20 +10,16 @@
     </marker>
     <style>
       text { font-family: "Segoe UI", Inter, Arial, sans-serif; fill: #182b3d; }
-      .heading { font-size: 26px; font-weight: 700; }
-      .subtitle { font-size: 17px; fill: #344c58; }
       .card-title { font-size: 22px; font-weight: 700; }
       .body { font-size: 16px; }
       .small { font-size: 15px; fill: #344c58; }
       .label { font-size: 16px; font-weight: 600; fill: #33485e; }
+      .feedback-label { font-size: 16px; font-weight: 600; fill: #a85b25; }
       .path { fill: none; stroke: #33485e; stroke-width: 3; marker-end: url(#arrow); }
       .feedback { fill: none; stroke: #c27030; stroke-width: 3; stroke-dasharray: 8 6; marker-end: url(#feedback-arrow); }
     </style>
   </defs>
   <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
-  <text x="50" y="50" class="heading">One learning loop, one shared compute budget</text>
-  <text x="50" y="77" class="subtitle">Throughput matters when it delivers more useful positions and measurable strength per hour.</text>
-
   <rect x="355" y="108" width="490" height="82" rx="12" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="600" y="142" text-anchor="middle" class="card-title">Python orchestration</text>
   <text x="600" y="168" text-anchor="middle" class="body">configuration · generations · publication · evaluation cadence</text>
@@ -33,7 +29,8 @@
   <text x="75" y="307" class="body">many interleaved chess games</text>
   <text x="75" y="334" class="body">tree selection and backup</text>
   <text x="75" y="361" class="body">visit policy and game result</text>
-  <text x="75" y="397" class="small">Native ownership keeps Python off the search hot path.</text>
+  <text x="75" y="390" class="small">Native ownership keeps Python</text>
+  <text x="75" y="408" class="small">off the search hot path.</text>
 
   <rect x="440" y="260" width="320" height="140" rx="14" fill="#e0efe4" stroke="#4d8d62" stroke-width="3"/>
   <text x="465" y="299" class="card-title">Replay and curriculum</text>
@@ -65,18 +62,19 @@
   <rect x="830" y="520" width="320" height="130" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="855" y="559" class="card-title">Published model</text>
   <text x="855" y="589" class="body">QAT checkpoint → verified ONNX</text>
-  <text x="855" y="617" class="small">The deployed artifact feeds the next games.</text>
+  <text x="855" y="607" class="small">The deployed artifact feeds</text>
+  <text x="855" y="627" class="small">the next games.</text>
   <path d="M 990 420 V 520" class="path"/>
   <path d="M 1150 585 H 1175 V 213 H 210 V 240" class="path"/>
-  <text x="1037" y="211" class="label">model refresh</text>
+  <text x="1037" y="198" class="label">model refresh</text>
 
   <rect x="440" y="520" width="320" height="130" rx="14" fill="#f2e6d9" stroke="#a87853" stroke-width="3"/>
   <text x="465" y="559" class="card-title">Paired evaluation</text>
   <text x="465" y="589" class="body">native search versus Stockfish</text>
   <text x="465" y="617" class="small">strength and uncertainty by protocol</text>
   <path d="M 830 585 H 760" class="path"/>
-  <path d="M 600 520 V 455 H 405 V 205 H 600 V 190" class="feedback"/>
-  <text x="421" y="473" class="label" fill="#a85b25">Elo feedback</text>
+  <path d="M 600 650 V 675 H 20 V 196 H 600 V 190" class="feedback"/>
+  <text x="423" y="666" class="feedback-label">Elo feedback</text>
 
   <path d="M 390 190 V 225" stroke="#8bb1d6" stroke-width="2" stroke-dasharray="5 5"/>
   <path d="M 600 190 V 245" stroke="#8bb1d6" stroke-width="2" stroke-dasharray="5 5"/>

@@ -197,7 +197,7 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
     figure_path = convert_figure(source.parent / address, build_directory)
     caption_text = caption.content.replace('\n', ' ').strip()
     if appendix:
-        environment, placement, width, height = 'figure', 'H', '0.98', '0.50'
+        environment, placement, width, height = 'figure', 'H', '0.76', '0.38'
     elif source.name == '07-final-run-results.md':
         environment, placement, width, height = 'figure*', '!t', '0.87', '0.36'
     else:
@@ -243,16 +243,14 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
     if appendix:
         caption = TABLE_CAPTIONS[(source.name, table_number)]
         lines.append(r'\caption{' + escape_tex(caption) + r'}\label{tab:' + source.stem + '-' + str(table_number) + '}')
-        lines.append(r'\renewcommand{\arraystretch}{1.15}')
-        lines.append(r'\resizebox{0.87\textwidth}{!}{%')
+        lines.append(r'\setlength{\tabcolsep}{9pt}')
+        lines.append(r'\renewcommand{\arraystretch}{1.1}')
     lines.extend([r'\begin{tabular}{' + specification + '}', r'\toprule'])
     for row_index, row in enumerate(rows):
         lines.append(' & '.join(row) + r' \\')
         if row_index == 0:
             lines.append(r'\midrule')
     lines.extend([r'\bottomrule', r'\end{tabular}'])
-    if appendix:
-        lines.append('}')
     lines.append(r'\end{' + environment + '}')
     return '\n'.join(lines) + '\n'
 
@@ -361,10 +359,11 @@ def bibliography_tex() -> str:
     entries = entries[1:]
     if len(entries) != 12:
         raise ValueError(f'Expected 12 references, found {len(entries)}.')
-    lines = [r'\begin{thebibliography}{12}']
+    lines = [r'\begingroup\small', r'\begin{thebibliography}{12}']
     for number, entry in enumerate(entries, start=1):
         lines.append(r'\bibitem{ref' + str(number) + '} ' + inline_tex(entry.children or [], bibliography=True))
     lines.append(r'\end{thebibliography}')
+    lines.append(r'\endgroup')
     return '\n'.join(lines) + '\n'
 
 
@@ -383,6 +382,8 @@ def build_report(output: Path) -> None:
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
+        if filename == '05a-three-failures.md':
+            parts.append(r'\FloatBarrier' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
     parts.extend(
         [

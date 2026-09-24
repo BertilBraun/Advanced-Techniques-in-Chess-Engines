@@ -1,30 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title description">
   <title id="title">Late-game target poisoning and its two-stage repair</title>
   <desc id="description">A four-stage feedback loop connects absent searched endgame rows, weak conversion, more capped games, and unreliable cutoff targets that train the same weakness. Two repair steps replace the cutoff target with a full-search root value and restore fully searched endgame rows.</desc>
   <defs>
-    <marker id="failure-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8443C"/>
-    </marker>
-    <marker id="repair-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#16786F"/>
-    </marker>
     <filter id="soft-shadow" x="-10%" y="-20%" width="120%" height="150%">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#15243A" flood-opacity="0.12"/>
     </filter>
   </defs>
 
-  <rect width="1200" height="640" fill="#FFFFFF"/>
-
-  <text x="50" y="49" fill="#15243A" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="27" font-weight="600">
-    Late-game target poisoning
-  </text>
-  <text x="50" y="78" fill="#526070" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16">
-    A search-saving tail became a self-reinforcing training-data defect.
-  </text>
-
-  <text x="50" y="117" fill="#8E3934" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="1.2">
-    FAILURE LOOP
-  </text>
+  <rect width="1200" height="480" fill="#FFFFFF"/>
+  <g transform="translate(0,-115)">
 
   <g filter="url(#soft-shadow)">
     <rect x="50" y="140" width="245" height="124" rx="12" fill="#FFF1EF" stroke="#E0A19C" stroke-width="1.5"/>
@@ -35,54 +19,52 @@
 
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
     <circle cx="78" cy="168" r="15" fill="#A8443C"/>
-    <text x="78" y="173" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">1</text>
-    <text x="88" y="198" fill="#15243A" font-size="18" font-weight="600">
-      <tspan x="78" dy="0">Searched endgame</tspan>
-      <tspan x="78" dy="24">rows are absent</tspan>
+    <text x="78" y="174" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">1</text>
+    <text x="78" y="210" fill="#15243A" font-size="25" font-weight="600">
+      <tspan x="78" dy="0">No searched</tspan>
+      <tspan x="78" dy="30">endgame rows</tspan>
     </text>
-    <text x="78" y="248" fill="#526070" font-size="13">Cheap-search tails are not admitted.</text>
 
     <circle cx="363" cy="168" r="15" fill="#A8443C"/>
-    <text x="363" y="173" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">2</text>
-    <text x="373" y="198" fill="#15243A" font-size="18" font-weight="600">
-      <tspan x="363" dy="0">Conversion remains</tspan>
-      <tspan x="363" dy="24">weak</tspan>
+    <text x="363" y="174" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">2</text>
+    <text x="363" y="210" fill="#15243A" font-size="25" font-weight="600">
+      <tspan x="363" dy="0">Conversion stays</tspan>
+      <tspan x="363" dy="30">weak</tspan>
     </text>
-    <text x="363" y="248" fill="#526070" font-size="13">Winning positions drift instead of ending.</text>
 
     <circle cx="648" cy="168" r="15" fill="#A8443C"/>
-    <text x="648" y="173" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">3</text>
-    <text x="658" y="198" fill="#15243A" font-size="18" font-weight="600">
+    <text x="648" y="174" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">3</text>
+    <text x="648" y="210" fill="#15243A" font-size="25" font-weight="600">
       <tspan x="648" dy="0">More games reach</tspan>
-      <tspan x="648" dy="24">the ply cap</tspan>
+      <tspan x="648" dy="30">the ply cap</tspan>
     </text>
-    <text x="648" y="248" fill="#526070" font-size="13">The unresolved tail ends by cutoff.</text>
 
     <circle cx="933" cy="168" r="15" fill="#A8443C"/>
-    <text x="933" y="173" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">4</text>
-    <text x="943" y="198" fill="#15243A" font-size="18" font-weight="600">
-      <tspan x="933" dy="0">Cutoff targets are</tspan>
-      <tspan x="933" dy="24">unreliable</tspan>
+    <text x="933" y="174" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">4</text>
+    <text x="933" y="210" fill="#15243A" font-size="25" font-weight="600">
+      <tspan x="933" dy="0">Cutoff targets</tspan>
+      <tspan x="933" dy="30">are unreliable</tspan>
     </text>
-    <text x="933" y="248" fill="#526070" font-size="13">One value propagates through the game.</text>
   </g>
 
-  <g fill="none" stroke="#A8443C" stroke-width="2.5" marker-end="url(#failure-arrow)">
-    <path d="M 299 202 L 327 202"/>
-    <path d="M 584 202 L 612 202"/>
-    <path d="M 869 202 L 897 202"/>
-    <path d="M 1028 269 C 1028 344, 456 344, 456 271"/>
+  <g fill="none" stroke="#A8443C" stroke-width="2.5">
+    <path d="M 299 202 H 315"/>
+    <path d="M 584 202 H 600"/>
+    <path d="M 869 202 H 885"/>
+    <path d="M 1028 270 V 342 H 170 V 280"/>
   </g>
-  <rect x="580" y="317" width="330" height="31" rx="15.5" fill="#FFFFFF"/>
-  <text x="745" y="338" text-anchor="middle" fill="#8E3934" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600">
+  <g fill="#A8443C">
+    <polygon points="314,195 328,202 314,209"/>
+    <polygon points="599,195 613,202 599,209"/>
+    <polygon points="884,195 898,202 884,209"/>
+    <polygon points="163,281 170,267 177,281"/>
+  </g>
+  <text x="600" y="326" text-anchor="middle" fill="#8E3934" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">
     trains and reinforces the same weakness
   </text>
 
   <line x1="50" y1="389" x2="1150" y2="389" stroke="#D9DEE5" stroke-width="1"/>
-  <text x="50" y="425" fill="#11675F" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="1.2">
-    TWO-STAGE REPAIR
-  </text>
-
+  <g transform="translate(0,-25)">
   <g filter="url(#soft-shadow)">
     <rect x="50" y="447" width="520" height="140" rx="14" fill="#EDF8F6" stroke="#86C9C2" stroke-width="1.5"/>
     <rect x="630" y="447" width="520" height="140" rx="14" fill="#EDF8F6" stroke="#86C9C2" stroke-width="1.5"/>
@@ -90,27 +72,28 @@
 
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
     <circle cx="87" cy="482" r="20" fill="#16786F"/>
-    <text x="87" y="488" text-anchor="middle" fill="#FFFFFF" font-size="15" font-weight="600">1</text>
-    <text x="122" y="480" fill="#15243A" font-size="20" font-weight="600">Full search at the cut position</text>
-    <text x="122" y="507" fill="#526070" font-size="15">
-      <tspan x="122" dy="0">Replace the heuristic cutoff label with a searched</tspan>
-      <tspan x="122" dy="22">root value.</tspan>
+    <text x="87" y="489" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">1</text>
+    <text x="122" y="480" fill="#15243A" font-size="24" font-weight="600">Full search at the cut</text>
+    <text x="122" y="510" fill="#526070" font-size="20">
+      <tspan x="122" dy="0">Replace the cutoff heuristic with a</tspan>
+      <tspan x="122" dy="24">searched root value.</tspan>
     </text>
-    <line x1="122" y1="556" x2="162" y2="556" stroke="#16786F" stroke-width="3" marker-end="url(#repair-arrow)"/>
-    <text x="176" y="561" fill="#11675F" font-size="14" font-weight="600">repairs target provenance</text>
+    <line x1="122" y1="556" x2="158" y2="556" stroke="#16786F" stroke-width="3"/>
+    <polygon points="157,549 171,556 157,563" fill="#16786F"/>
+    <text x="184" y="562" fill="#11675F" font-size="20" font-weight="600">repairs target provenance</text>
 
     <circle cx="667" cy="482" r="20" fill="#16786F"/>
-    <text x="667" y="488" text-anchor="middle" fill="#FFFFFF" font-size="15" font-weight="600">2</text>
-    <text x="702" y="480" fill="#15243A" font-size="20" font-weight="600">Fully search the endgame tail</text>
-    <text x="702" y="507" fill="#526070" font-size="15">
-      <tspan x="702" dy="0">Admit properly searched conversion positions to</tspan>
-      <tspan x="702" dy="22">replay again.</tspan>
+    <text x="667" y="489" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="600">2</text>
+    <text x="702" y="480" fill="#15243A" font-size="24" font-weight="600">Fully search the endgame</text>
+    <text x="702" y="510" fill="#526070" font-size="20">
+      <tspan x="702" dy="0">Restore searched conversion</tspan>
+      <tspan x="702" dy="24">positions to replay.</tspan>
     </text>
-    <line x1="702" y1="556" x2="742" y2="556" stroke="#16786F" stroke-width="3" marker-end="url(#repair-arrow)"/>
-    <text x="756" y="561" fill="#11675F" font-size="14" font-weight="600">breaks the loop at its source</text>
+    <line x1="702" y1="556" x2="738" y2="556" stroke="#16786F" stroke-width="3"/>
+    <polygon points="737,549 751,556 737,563" fill="#16786F"/>
+    <text x="764" y="562" fill="#11675F" font-size="20" font-weight="600">breaks the loop at its source</text>
+  </g>
   </g>
 
-  <text x="1150" y="618" text-anchor="end" fill="#7A8491" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12">
-    Search eligibility, replay admission, and terminal-value provenance must be designed together.
-  </text>
+  </g>
 </svg>

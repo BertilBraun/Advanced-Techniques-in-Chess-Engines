@@ -1,6 +1,8 @@
 """Render the selected chess model's terminal search curve from frozen results."""
+
 from __future__ import annotations
 
+import argparse
 import csv
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +14,7 @@ from matplotlib.figure import Figure
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = REPOSITORY_ROOT / 'documentation/evidence/final-chess-20260923/evaluation-results.csv'
 FIGURE_PATH = REPOSITORY_ROOT / 'documentation/report/figures/final-search-curve.svg'
+PAPER_FIGURE_PATH = REPOSITORY_ROOT / 'documentation/report/figures/final-search-curve-paper.svg'
 CONDITION_PAIRS = (
     ('policy_vs_1k', 'policy_vs_2k'),
     ('search100_p1_vs_10k', 'search100_p1_vs_5k'),
@@ -84,7 +87,7 @@ def configure_axes(axes: Axes) -> None:
     axes.tick_params(colors='#34495b', length=0, pad=8)
 
 
-def render_figure(pairs: tuple[SearchConditionPair, ...], path: Path) -> None:
+def render_figure(pairs: tuple[SearchConditionPair, ...], path: Path, *, paper: bool = False) -> None:
     plt.rcParams.update(
         {
             'font.family': 'Segoe UI',
@@ -152,9 +155,13 @@ def render_figure(pairs: tuple[SearchConditionPair, ...], path: Path) -> None:
             fontsize=10,
             fontweight='semibold',
         )
-    axes.set_title('Final model: playing strength across search budgets', loc='left', pad=17, color='#203444')
-    axes.legend(loc='lower right', frameon=False, fontsize=9)
-    figure.subplots_adjust(left=0.10, right=0.98, top=0.91, bottom=0.20)
+    if paper:
+        axes.legend(loc='upper left', frameon=False, fontsize=9)
+        figure.subplots_adjust(left=0.10, right=0.98, top=0.97, bottom=0.20)
+    else:
+        axes.set_title('Final model: playing strength across search budgets', loc='left', pad=17, color='#203444')
+        axes.legend(loc='lower right', frameon=False, fontsize=9)
+        figure.subplots_adjust(left=0.10, right=0.98, top=0.91, bottom=0.20)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(
         path,
@@ -168,7 +175,11 @@ def render_figure(pairs: tuple[SearchConditionPair, ...], path: Path) -> None:
 
 
 def main() -> None:
-    render_figure(read_estimates(SOURCE_PATH), FIGURE_PATH)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--paper-only', action='store_true', help='Render the title-free paper variant only.')
+    arguments = parser.parse_args()
+    figure_path = PAPER_FIGURE_PATH if arguments.paper_only else FIGURE_PATH
+    render_figure(read_estimates(SOURCE_PATH), figure_path, paper=arguments.paper_only)
 
 
 if __name__ == '__main__':
