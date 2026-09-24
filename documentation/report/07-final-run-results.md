@@ -59,9 +59,30 @@ from a function-preserving widening of the parent. The corrected larger model re
 through the plateau during its limited continuation. This does not identify the limiting factor: longer training,
 post-growth optimization, target quality, replay composition, and useful additional capacity remain confounded.
 
-The selected checkpoint records 408,500 completed optimizer steps. With the configured global batch of 2,048 this
-corresponds to **836,608,000 training presentations**. Final games, admitted positions, replay occupancy, and
-resume-reconciled reuse remain to be derived from the archives.
+The selected checkpoint records **408,500 completed optimizer steps**. With the configured global batch of 2,048
+this corresponds to **836,608,000 training presentations**. The frozen coordinator events cover all 817 contiguous
+training quanta on that path. Summing their per-quantum ingested-game counters gives **3,249,647 completed games**;
+the credit ledger ends at approximately **209.15 million net materialized positions**, or about **4.00 training
+presentations per net materialized position**. Replay held **16 million live rows** at the selected checkpoint.
+These are selected-lineage counters, not totals for every experiment or every game generated on the node. The
+cumulative position scalar is float32 in TensorBoard, so its final few integer digits are not meaningful. The
+[tracked trajectory and extraction method](../evidence/final-chess-20260923/README.md#training-volume-extraction)
+preserve the boundary of each count.
+
+![Training losses and learning rate through the selected checkpoint](figures/final-training-loss-and-rate.svg)
+
+Figure 7.2: Total, policy, and WDL training losses are shown with an 11-quantum moving average over faint raw
+observations. The dashed line marks the small-to-medium active-model transition at 240,000 optimizer steps. Loss
+levels across different model stages are optimization diagnostics, not paired playing-strength measurements. The
+active learning rate fell from about 0.10 to 0.0266 by selection.
+
+![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput.svg)
+
+Figure 7.3: Per-quantum ingested completed games, net materialized positions, live replay occupancy, and training
+samples per second share an optimizer-step axis. The active small model's median measured trainer throughput was
+16,977 samples/s across 480 quanta; the medium model's was 11,194 across 337 quanta. The stage comparison is
+descriptive: model shape, training schedule, and concurrent workload differ, so the gap is not an isolated model-size
+effect. The charts stop at the selected checkpoint and exclude later capacity experiments.
 
 The narrow cost attached to the selected checkpoint is **$43.20**, calculated as 60 accepted-lineage hours at
 `$0.72/h`. It excludes the reverted work, later growth experiment, distillation, evaluation, and idle rental time.
@@ -86,7 +107,7 @@ not FIDE ratings or estimates on a current unrestricted-engine list.
 
 ![Final model playing strength across measured search budgets](figures/final-search-curve.svg)
 
-Figure 7.2: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
+Figure 7.4: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
 measured rung at each budget. Vertical bars are the reported 95% confidence intervals. The categorical horizontal
 axis keeps policy-only play visible alongside the searched conditions; it does not imply equal compute spacing.
 Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes
@@ -148,10 +169,13 @@ The terminal result matrix and headline search curve are complete. The publicati
 analysis of:
 
 1. Detailed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
-2. Total, policy, WDL, and auxiliary losses alongside learning rate and optimizer step.
-3. Games, fresh positions, training presentations, replay occupancy/age, and trainer/self-play throughput.
+2. Auxiliary losses and replay-age distributions, if they materially change the interpretation of the retained
+   training curves.
+3. Resume-reconciled self-play/search rates and rejection or quarantine totals not captured by the selected
+   checkpoint's coordinator counters.
 4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
-5. A cost view that separates accepted training, discarded work, distillation, evaluation, and idle rental time.
+5. An explicit cost boundary: $43.20 covers accepted-lineage effective time only; discarded work, distillation,
+   evaluation, and idle rental time remain excluded rather than estimated without full billing records.
 
 The root README uses only the reconciled results and figures above. Additional plots and accounting must distinguish
 measured archive-derived quantities from fields that remain unreconciled.

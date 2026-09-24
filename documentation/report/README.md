@@ -11,9 +11,9 @@ work is presented as the throughput foundation for self-play learning rather tha
 > and figures still need focused review. The [narrative outline](narrative-outline.md) tracks the argument and figure
 > opportunities; publication also needs the archive-derived analyses in the [completion plan](publication-plan.md).
 
-The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength, cost,
-and training-volume fields remain centralized in [Final-run results](07-final-run-results.md). Cost and volume claims
-that still require archive reconciliation remain explicitly marked rather than inferred from live dashboards.
+The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength,
+selected-checkpoint training volume, and cost fields remain centralized in [Final-run results](07-final-run-results.md).
+Wider node throughput remains open; total project spend is intentionally not a report claim.
 
 ## Reader path
 
@@ -39,7 +39,7 @@ that still require archive reconciliation remain explicitly marked rather than i
 | Area | Status | Authority |
 | --- | --- | --- |
 | Narrative chapters and five figures | Opening, three failures, and reader path owner-reviewed; other scientific and visual review remains | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
-| Archive-derived training dynamics, throughput, and total cost | Not yet reconciled | [Completion plan](publication-plan.md) |
+| Archive-derived training dynamics and throughput | Selected-checkpoint counters and figures complete; wider throughput open | [Completion plan](publication-plan.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
 | Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 7](07-final-run-results.md) |
 | External bibliography | Working list | [Bibliography](bibliography.md); entries marked “verify” need publication-pass checks |

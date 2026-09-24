@@ -68,7 +68,8 @@ value quality can affect search without changing policy argmax.
 - Policy-only Elo cannot be compared with searched Elo without retaining each opponent rung and candidate protocol.
 - A policy match does not isolate the policy head: the trunk, representation, legal mask, deployment precision, and
   training distribution all contribute.
-- The terminal direct-policy result for the final model has not yet been run.
+- The final direct-policy result is complete: 1,658 benchmark Elo through the float TorchScript artifact. It is a
+  separate serving path from searched INT8 TensorRT play.
 
 ### Sources
 
@@ -99,11 +100,11 @@ noise and forced playouts. Every quoted result must retain:
 - opening manifest and hash;
 - game count, colour pairing, maximum plies, and adjudication behavior.
 
-Small fixed search, currently 64 visits in scheduled evaluation, is cheap enough to track throughout training. It is
-a regression and progression instrument, not a terminal-strength ceiling. Deep terminal matches at approximately
-10,000 and 80,000 visits previously showed that the same frozen network remained search-scalable far beyond the
-scheduled ladder. The final suite should again include a moderate/deep budget and a much deeper budget, with the
-exact values frozen before launch rather than copied uncritically from the earlier suite.
+Small fixed search, 64 visits in scheduled evaluation, is cheap enough to track throughout training. It is a
+regression and progression instrument, not a terminal-strength ceiling. Earlier deep matches at approximately
+10,000 and 80,000 visits showed that one frozen network remained search-scalable far beyond the scheduled ladder.
+The completed final suite measured policy-only play and 100, 1,000, 10,000, and 100,000 searches per move, retaining
+the opponent rung, parallelism, backend, and uncertainty for each condition.
 
 ### Opponent selection
 
@@ -127,8 +128,8 @@ result to backend speed and hardware.
 - Saturated batched throughput is not single-game response latency. The earlier 80,000-visit timing result used 50
   simultaneous positions per GPU and averaged 5.31 seconds per position; that is a service-rate measurement.
 - A fixed visit count can still inherit retained work in self-play, but match evaluation creates fresh roots.
-- The final model's fixed-search and deep-search results, selected Stockfish rungs, timings, and intervals remain
-  pending.
+- The final fixed- and deep-search results, selected Stockfish rungs, timings, and intervals are in the
+  [result record](../../results/final-chess-run.md).
 
 ### Sources
 
@@ -227,8 +228,9 @@ The smoother must not be presented with the raw pointwise confidence interval or
 
 ### Cross-generation progression figure
 
-The intended final figure compares representative historical checkpoints with the completed final training lineage
-at the shared 64-search ladder protocol. Before plotting:
+The tracked figure compares representative historical checkpoints with the completed final training lineage at a
+nominal 64-search ladder. The fitter changed across campaigns, so the figure is descriptive and the matched-estimator
+plateau audit carries the quantitative comparison. Its construction rules were:
 
 1. reconstruct cumulative active time across continuations;
 2. verify identical ladder definitions and correct any known evaluation-path defects;
@@ -242,11 +244,12 @@ understated the absolute level by roughly 550–600 Elo and saturated as the mod
 64-search curve can demonstrate engineering progress under one fixed instrument, while terminal deep-search matches
 must carry the final absolute-strength claim.
 
-### Unknowns
+### Remaining boundary
 
-- Final-run points are still arriving and no terminal checkpoint is frozen.
-- The shared-protocol audit for every historical point in the intended figure is not yet complete.
-- The eventual smoother, if any, and its display uncertainty have not been selected.
+The figure uses the established bias-corrected 0.95 EMA and the final lineage's exact 2.5-day cutoff. A complete
+point-by-point shared-estimator reconstruction across every older campaign is not available, so adjacent displayed
+curves do not establish exact Elo differences. The [matched-estimator plateau audit](#retrospective-matched-estimator-audit)
+is the report's cross-campaign quantitative result.
 
 ### Sources
 
@@ -657,6 +660,7 @@ Before a numerical result enters the report, record:
    optimizer cadence, or learning cadence;
 10. every known confound, failed gate, unavailable raw artifact, and non-isolated component.
 
-Final checkpoint selection, policy-only strength, fixed- and deep-search results, distillation results, and the
-cross-generation progression figure are complete. Archive-derived training-dynamics plots, reconciled self-play and
-replay totals, and full cost accounting remain pending.
+Final checkpoint selection, policy-only strength, fixed- and deep-search results, distillation results, the
+cross-generation progression figure, and selected-checkpoint training dynamics and replay counters are complete.
+Wider node-wide self-play/search rates remain distinct from those coordinator counters. The report deliberately
+omits total project spend rather than constructing it from incomplete billing records.

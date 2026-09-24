@@ -1,8 +1,9 @@
 # Publication plan
 
 This file is the completion contract for turning the evidence-linked narrative draft into a final publication.
-Terminal strength and the headline figures are complete; archive-derived training-volume analysis, additional
-figures, release metadata, and editorial review remain open.
+Terminal strength, selected-checkpoint training-volume counters, and the headline figures are complete. Wider
+throughput/rejection accounting, some optional figures, release metadata, and editorial review remain open. Total
+project spend is deliberately out of scope; only the narrow accepted-lineage effective cost is reported.
 
 ## Narrative scope
 
@@ -25,8 +26,8 @@ figures, release metadata, and editorial review remain open.
 | Final model strength | Frozen checkpoint, paired terminal matches, raw games, CI, exact calibration | Report the completed matrix with its protocol limits |
 | Improvement over the previous four-day baseline | Same protocol or explicit normalization, both artifact identities | Compare only matched ladder conditions |
 | Superhuman play | Calibrated fixed-node result with scale caveat and protocol | Use “benchmark Elo,” not FIDE or universal engine rating |
-| Training cost | Start/stop/downtime audit, node price, exclusions | `$43.20` is accepted-lineage effective cost, not actual billed project spend |
-| Training volume | Reconciled replay/coordinator/trainer counters | No dashboard snapshot |
+| Training cost | Accepted-lineage duration, configured node price, explicit exclusions | `$43.20` is accepted-lineage effective cost, not actual billed project spend; no total-spend claim |
+| Training volume | Selected-checkpoint coordinator trajectory and credit ledger; wider node totals separately scoped | Report 3.25 million ingested games, about 209.15 million net materialized positions, and 836.608 million presentations with counter boundaries |
 | INT8 enabled more data | Backend usage, matched backend-throughput results, admitted replay and generation rates | “Designed to improve throughput” |
 | Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |
 | Replay/restart/auxiliary choices improved strength | Isolated online-learning or playing-strength ablation, if any | “Retained in the final bundle” |
@@ -37,8 +38,8 @@ figures, release metadata, and editorial review remain open.
 
 1. **Final result summary:** policy-only, 64, 10,000, and chosen high-search condition with opponent, games, W/D/L,
    score, benchmark Elo/CI, latency, parallelism, and artifact ID.
-2. **Run identity:** revision, resolved config hash, archive hash, hardware/runtime, dates, effective duration, cost,
-   and exclusions.
+2. **Run identity:** revision, resolved config hash, archive hash, hardware/runtime, dates, effective duration, narrow
+   effective cost, and exclusions.
 3. **Training volume:** games, admitted positions, presentations, optimizer steps, effective reuse, final replay
    occupancy, and rejection/quarantine totals.
 4. **Stage history:** model stage, visit stage, wall-clock interval, optimizer interval, actor/trainer throughput,
@@ -82,8 +83,9 @@ fixed table or figure count.
 
 ## Completion pass
 
-1. Finish archive-derived games, admitted-position, replay, throughput, training-curve, and cost reconciliation;
-   retain explicit gaps where records do not permit it.
+1. Finish wider self-play/search-rate, rejection, and stage-time reconciliation beyond the now-tracked
+   selected-checkpoint game, replay, trainer-throughput, loss, and learning-rate series; retain explicit gaps where
+   records do not permit it. Do not attempt to estimate total project spend from incomplete rental records.
 2. Check every quantitative and causal claim against the source artifact and keep proxy, throughput, and Elo results
    distinct. The terminal matrix, headline search curve, and root README result are already integrated.
 3. Add figures where they clarify the mechanism, then review visual hierarchy, captions, and accessibility in a

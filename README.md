@@ -43,9 +43,11 @@ protocol and uncertainty in detail, including the independent parallel-search sw
 The accepted final training lineage spans **2.5 effective days** and its selected checkpoint records **408,500
 optimizer steps** at a global batch of 2,048: **836.6 million training presentations**. Its narrow effective
 training cost is **$43.20** at the recorded **$0.72/hour**. That is not total project spending: it excludes reverted
-work, later capacity experiments, distillation, evaluation, and idle rental time. Final games, unique admitted
-positions, replay occupancy, and total expenditure have not been reconciled from the archives and are not inferred
-here.
+work, later capacity experiments, distillation, evaluation, and idle rental time. The selected-checkpoint coordinator
+record covers **3.25 million ingested completed games**, about **209.15 million net materialized positions**, and a
+**16-million-row live replay**. These are not totals for all project experiments; total expenditure remains
+unreconciled. The [evidence index](documentation/evidence/final-chess-20260923/README.md#training-volume-extraction)
+defines each counter.
 
 ![64-search ladder Elo across five chess training campaigns](documentation/showcase/chess-ladder-progress.svg)
 

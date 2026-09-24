@@ -1,6 +1,13 @@
 metric,value,unit,evidence_status,note
 selected_checkpoint,1026,generation,captured,checkpoint manifest and model bundle
 selected_checkpoint_optimizer_steps,408500,steps,captured,QAT state in checkpoint manifest
+selected_checkpoint_logged_quanta,817,quanta,derived_from_captured_tensorboard,contiguous coordinator steps 1 through 817 ending at optimizer step 408500
+selected_checkpoint_ingested_completed_games,3249647,games,derived_from_captured_tensorboard,sum of per-quantum self_play/completed_games scalars; excludes un-ingested or post-checkpoint games
+selected_checkpoint_net_materialized_positions,209153744,positions,captured_tensorboard_approximate,credit/materialized_samples at optimizer step 408500; TensorBoard float32 scalar has limited integer precision
+selected_checkpoint_replay_live_rows,16000000,positions,captured_tensorboard,replay/live_rows at optimizer step 408500
+selected_checkpoint_observed_reuse,4.000,presentations_per_net_materialized_position,derived,836608000 presentations divided by approximate 209153744 net materialized positions
+small_stage_median_trainer_throughput,16977.4,samples_per_second,derived_from_captured_tensorboard,median of 480 per-quantum training throughput scalars through optimizer step 240000
+medium_stage_median_trainer_throughput,11193.8,samples_per_second,derived_from_captured_tensorboard,median of 337 per-quantum training throughput scalars from optimizer step 240500 through 408500
 configured_global_batch_size,2048,positions_per_step,repository_config,canonical readable recipe
 derived_training_presentations,836608000,presentations,derived,optimizer steps multiplied by configured global batch size
 selected_checkpoint_effective_time,60,hours,captured_export,accepted-lineage stitched time

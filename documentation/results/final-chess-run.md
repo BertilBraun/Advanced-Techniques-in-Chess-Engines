@@ -172,12 +172,15 @@ interval scale, so the student and teacher ratings must not be compared as a per
 
 ## Publication work still open
 
-The verified result and headline ladder figure are ready for the root README. The full report and release still need:
+The verified result, headline ladder figure, and selected-checkpoint training counters are ready for the root README
+and report. The full report and release still need:
 
-- reconcile total self-play games, accepted positions, replay occupancy, and resume-safe training counters;
+- reconcile any self-play/search-rate and rejection totals beyond the selected-checkpoint
+  [coordinator extraction](../evidence/final-chess-20260923/README.md#training-volume-extraction);
 - distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
-- generate the loss, learning-rate, throughput, replay, quantization-fidelity, and transition figures from the
-  checksum-covered archives;
+- assess whether auxiliary-loss, replay-age, quantization-fidelity, and transition figures add evidence beyond the
+  completed [loss](../report/figures/final-training-loss-and-rate.svg) and
+  [volume/throughput](../report/figures/final-training-volume-and-throughput.svg) figures;
 - finish the in-progress Hugging Face model-card, alias, checksum, and live-deployment update around the already
   hash-matched final ONNX;
 - choose and publish the code and model/data licenses.
