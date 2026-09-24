@@ -41,6 +41,12 @@ dev = [
     "pytest",
     "ruff",
 ]
+publication = [
+    "markdown-it-py",
+    "pypdf",
+    "reportlab",
+    "svglib",
+]
 
 [tool.uv]
 package = false
