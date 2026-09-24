@@ -107,8 +107,9 @@ rather than predict difficulty in advance. Its decisive test started from the sa
 rebuilt replay state for every arm. The most aggressive setting skipped about 14% of nominal search, and its
 internal credit-wait measurements changed in the expected direction. Yet generation cadence improved by only about
 3%. Self-play overlapped the optimizer, so most of the removed search was slack rather than critical-path work.
-Paired strength estimates were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo (standard errors) for the two stopping settings: neither resolved a
-strength effect. At the observed learning rate, the cadence gain was worth only about one Elo over three hours,
+The paired strength differences, calculated as baseline minus stopper, were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo
+(standard errors) for the two settings: neither resolved a strength effect. At the observed learning rate, the cadence
+gain was worth only about one Elo over three hours,
 below the experiment's resolution.
 
 The failures have different boundaries: the threshold rule lacked an identifiable safe signal; the predicted

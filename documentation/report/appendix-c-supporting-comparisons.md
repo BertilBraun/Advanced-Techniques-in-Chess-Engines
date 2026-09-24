@@ -40,7 +40,8 @@ parallelism with budget and must be read as an operating curve.
 The learned pre-search allocator captured about 23% of available deep-policy-divergence headroom at nearly matched
 spend but trailed non-adaptive online training by roughly 60–100 ladder Elo. A later in-search stopper skipped about
 14% of nominal simulations, yet improved generation cadence by only about 3% under actor/trainer overlap. Its
-paired strength differences (+1.7 ± 9.9 and −4.2 ± 10.1 Elo, standard errors) did not resolve an effect.
+paired strength differences, calculated as baseline minus stopper (+1.7 ± 9.9 and −4.2 ± 10.1 Elo, standard
+errors), did not resolve an effect.
 
 Exact graph search avoided only 0.0249% and 0.1769% of neural evaluations at 1,000 and 10,000 searches while being
 8.63% and 8.28% slower. A bounded inference cache shared inside each self-play process had a 0.970% hit rate;
