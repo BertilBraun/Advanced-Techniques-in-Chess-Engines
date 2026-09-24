@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.self_play.configuration import (
     BatchedInferenceParams,
     SdpaBackend,
@@ -11,6 +12,7 @@ from src.self_play.configuration import (
     TensorRtQatFloatTemplate,
     TensorRtQatTemplate,
     TensorRtTemplatePrecision,
+    alphazero_exploration_constant,
 )
 from src.training.quantization.configuration import QatCheckpointPhase
 
@@ -182,3 +184,39 @@ def test_tensorrt_template_identities_must_be_unique() -> None:
                 ),
             )
         )
+
+
+def test_fixed_exploration_constant_ignores_the_visit_budget() -> None:
+    search = SelfPlaySearchParams.model_validate(_search_params_payload())
+
+    assert search.resolved_exploration_constant(0) == pytest.approx(1.5)
+    assert search.resolved_exploration_constant(30) == pytest.approx(1.5)
+
+
+def test_automatic_exploration_constant_follows_the_visit_budget() -> None:
+    payload = _search_params_payload() | {'exploration_constant': 'auto'}
+    search = SelfPlaySearchParams.model_validate(payload)
+
+    assert search.resolved_exploration_constant(0) == pytest.approx(alphazero_exploration_constant(200))
+    assert search.resolved_exploration_constant(30) == pytest.approx(alphazero_exploration_constant(600))
+    assert search.resolved_exploration_constant(0) < search.resolved_exploration_constant(30)
+
+
+def test_automatic_exploration_constant_matches_the_evaluation_path() -> None:
+    payload = _search_params_payload() | {'exploration_constant': 'auto'}
+    search = SelfPlaySearchParams.model_validate(payload)
+
+    assert search.resolved_exploration_constant(30) == pytest.approx(
+        EvaluationSearchConfiguration.model_validate(
+            {
+                'searches_per_move': 600,
+                'parallel_searches': 1,
+                'exploration_constant': 'auto',
+                'inference': {
+                    'inference_workers': 1,
+                    'inference_batch_size': 64,
+                    'outstanding_batches_per_worker': 1,
+                },
+            }
+        ).resolved_exploration_constant
+    )

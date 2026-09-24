@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from math import isclose, isfinite
+from math import isclose, isfinite, log
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
@@ -201,14 +201,32 @@ FirstPlayUrgencyConfiguration: TypeAlias = Annotated[
 ]
 
 
+# AlphaZero scales its PUCT constant with the visit count rather than fixing it; see the pseudocode
+# accompanying Silver et al. (2018).
+_ALPHAZERO_EXPLORATION_BASE = 19652.0
+_ALPHAZERO_EXPLORATION_INIT = 1.25
+
+
+def alphazero_exploration_constant(searches_per_move: int) -> float:
+    numerator = searches_per_move + _ALPHAZERO_EXPLORATION_BASE + 1.0
+    return log(numerator / _ALPHAZERO_EXPLORATION_BASE) + _ALPHAZERO_EXPLORATION_INIT
+
+
 class SelfPlaySearchParams(FrozenModel):
     baseline_visits: IntegerGenerationSchedule
     virtual_loss_weight: float = Field(default=1.0, ge=0.0, le=1.0)
     dirichlet_epsilon: FloatGenerationSchedule
     dirichlet_alpha: FloatGenerationSchedule
-    exploration_constant: FloatGenerationSchedule
+    exploration_constant: Literal['auto'] | FloatGenerationSchedule
     first_play_urgency: FirstPlayUrgencyConfiguration
     forced_playouts: ForcedPlayoutConfiguration
+
+    def resolved_exploration_constant(self, model_generation: int) -> float:
+        # 'auto' follows the AlphaZero schedule at whatever visit budget is in force that generation,
+        # which is what the evaluation path has always used.
+        if self.exploration_constant == 'auto':
+            return alphazero_exploration_constant(self.baseline_visits.value_at(model_generation))
+        return self.exploration_constant.value_at(model_generation)
 
     @model_validator(mode='after')
     def validate_scheduled_values(self) -> SelfPlaySearchParams:
@@ -218,7 +236,9 @@ class SelfPlaySearchParams(FrozenModel):
             raise ValueError('Dirichlet epsilon must remain in [0, 1].')
         if any(value <= 0.0 for value in defined_schedule_values(self.dirichlet_alpha)):
             raise ValueError('Dirichlet alpha must remain positive.')
-        if any(value <= 0.0 for value in defined_schedule_values(self.exploration_constant)):
+        if self.exploration_constant != 'auto' and any(
+            value <= 0.0 for value in defined_schedule_values(self.exploration_constant)
+        ):
             raise ValueError('Exploration constant must remain positive.')
         return self
 
@@ -386,7 +406,7 @@ class SelfPlayConfiguration(FrozenModel):
             baseline_visits=search.baseline_visits.value_at(model_generation),
             virtual_loss_weight=search.virtual_loss_weight,
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
-            exploration_constant=search.exploration_constant.value_at(model_generation),
+            exploration_constant=search.resolved_exploration_constant(model_generation),
             first_play_urgency=search.first_play_urgency.resolve(model_generation),
             dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),
             dirichlet_epsilon=search.dirichlet_epsilon.value_at(model_generation),
