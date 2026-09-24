@@ -79,7 +79,7 @@ fixed table or figure count.
 - raw terminal match games and result summaries;
 - plot extraction scripts or recorded commands;
 - synchronized final model card, aliases, checksum index, and download identity;
-- explicit code and model license decision.
+- explicit code and model license decision (MIT for original project code, documentation, and final model artifacts).
 
 ## Completion pass
 
@@ -93,9 +93,11 @@ fixed table or figure count.
 4. Pin mutable external documentation and complete bibliography metadata.
 5. Validate links and anchors after the topic-first chapter rewrite, then render and inspect a PDF edition if one is
    produced. Markdown remains the editable source.
-6. Verify the public Hugging Face model card, aliases, checksum index, and live-site artifact identity. The owner is
-   updating those external surfaces; repository prose must not imply that they are already synchronized.
-7. Record the code and model/data license decision before making redistribution claims.
+6. Verify the public Hugging Face model card, aliases, checksum index, and live-site artifact identity. The model
+   card, final ONNX, aliases, checksum index, and MIT metadata are present; correct the card's 10,000-search
+   parallelism and confidence-interval endpoints against the archived result manifests, then verify the live site.
+7. The owner's MIT decision is recorded in the repository [license](../../LICENSE) and the
+   [model-repository license commit](https://huggingface.co/BertilBraun/alphazero-chess/commit/6c068a15bdfaec6b39536e7dc681a55b13f0837e).
 
 ## Review gates
 

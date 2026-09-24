@@ -195,7 +195,8 @@ the final recipe at 2.5 days and the previous four-day baseline at 3.0 days whil
 provenance. The abstract, conclusion, and headline README claims are no longer waiting for terminal evaluation.
 
 Publication work that remains is narrower: reconcile wider actor/search and rejection telemetry where the local
-archive permits it; settle the operational timing definition for the parallel-search speedup; finish optional
-figures and editorial review; verify release metadata, the public model card and live artifact; and record the
-owner's code/model licensing decision. The [publication plan](../publication-plan.md) tracks these gates. Missing
+archive permits it; retain the two-source timing ranges for the parallel-search speedup; finish optional
+figures and editorial review; correct the public model card's evaluation details and verify the live artifact.
+The owner's MIT decision is recorded in the repository and model repository. The
+[publication plan](../publication-plan.md) tracks these gates. Missing
 causal ablations must remain limitations, not be inferred from the bundled final result.

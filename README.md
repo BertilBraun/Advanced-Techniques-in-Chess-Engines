@@ -105,5 +105,7 @@ The same native engine powers [browser play](documentation/operations/web-play.m
 measured checkpoint; check their artifact identities before equating a live game with the reported result.
 
 The [documentation index](documentation/README.md) separates current guidance, benchmark evidence, plans, and
-history. This repository currently has no top-level software or model license; inspect that status before
-redistributing code or weights.
+history. Original project code and documentation are available under the [MIT License](LICENSE). Third-party
+dependencies, reference material, and externally sourced data retain their own terms; the license does not replace
+their notices. The final model artifacts are also MIT-licensed on
+[Hugging Face](https://huggingface.co/BertilBraun/alphazero-chess).

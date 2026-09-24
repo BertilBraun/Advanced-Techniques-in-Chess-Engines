@@ -42,6 +42,11 @@ This chapter intentionally does not duplicate commands from current operational 
 [experiment platform](../operations/experiment-platform.md), [run control](../operations/run-control.md), and
 [result export](../operations/experiment-result-export.md) documents are the executable authorities.
 
+Original project code and documentation, including this report, are available under the repository
+[MIT License](../../LICENSE). The published final model artifacts carry the same license in the
+[Hugging Face model repository](https://huggingface.co/BertilBraun/alphazero-chess). External dependencies,
+reference sources, and third-party data retain their own terms.
+
 ## Reproducing evaluation
 
 Use the preserved checkpoint and inference artifact rather than re-exporting it with a newer toolchain. Reuse the
