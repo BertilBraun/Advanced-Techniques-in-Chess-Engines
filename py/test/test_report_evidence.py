@@ -8,6 +8,7 @@ from tools.check_report_links import check_link, heading_slug
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 TRAJECTORY_PATH = REPOSITORY_ROOT / 'documentation/evidence/final-chess-20260923/training-trajectory.csv'
+PLATEAU_PATH = REPOSITORY_ROOT / 'documentation/evidence/final-chess-20260923/plateau-comparison.csv'
 
 
 @pytest.mark.parametrize(
@@ -40,3 +41,12 @@ def test_final_training_trajectory_reaches_selected_checkpoint() -> None:
     assert int(rows[-1]['optimizer_steps']) == 408_500
     assert int(rows[-1]['consumed_presentations']) == 836_608_000
     assert int(rows[-1]['replay_live_rows']) == 16_000_000
+
+
+def test_matched_plateau_and_clean_cutoff_sensitivity() -> None:
+    with PLATEAU_PATH.open(encoding='utf-8', newline='') as source:
+        rows = list(csv.DictReader(source))
+    assert [row['window'] for row in rows] == ['original_retrospective', 'publication_cutoff_sensitivity']
+    assert [int(row['previous_count']) for row in rows] == [59, 15]
+    assert [int(row['final_count']) for row in rows] == [86, 37]
+    assert [float(row['matched_difference']) for row in rows] == pytest.approx([74.1271, 75.7593])

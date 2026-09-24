@@ -35,7 +35,10 @@ A retrospective plateau comparison on the same three-rung estimator places the p
 and the final recipe at 2,358.0 Elo: **+74.1 Elo**, with an approximately **±15 Elo transfer/sensitivity allowance**.
 The allowance reflects uncertainty in transferring the estimator correction; it is not a game-level bootstrap
 confidence interval. The report therefore uses **about +74 Elo under a matched estimator** as the cross-campaign
-headline and does not compare raw peaks.
+headline and does not compare raw peaks. Repeating the arithmetic with only the report figure's clean 3.0- and
+2.5-day windows gives **+75.8 Elo**; the conclusion is not driven by the later points omitted from the plot. The
+[recomputable plateau table](../evidence/final-chess-20260923/README.md#matched-estimator-plateau-check) retains both
+windows and the transfer assumption.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 

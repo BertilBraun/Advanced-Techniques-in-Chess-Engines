@@ -306,8 +306,10 @@ must therefore be checked against rung transitions before it is interpreted as l
   lineage.
 - The operator retrospective supplied on 2026-09-23 was checked against those archives where the underlying result
   manifests were available.
-- The matched-estimator calculation and rung-event audit are not yet committed as a standalone machine-readable
-  derivation. Publication should preserve the calculation inputs and script rather than cite this dossier alone.
+- The [matched-estimator calculation](../../evidence/final-chess-20260923/README.md#matched-estimator-plateau-check)
+  now has a committed arithmetic derivation for both the original plateau windows and the clean-cutoff sensitivity
+  check. The 35-boundary transfer summary remains sourced from the operator recap rather than an independently
+  reconstructed raw-rung table.
 
 ## Transferable failure study: late-game target poisoning
 
