@@ -85,8 +85,8 @@ made the earlier loss comparison systematically favorable to the candidate and a
 
 The completed capacity study also grew the trained 14×160 network into 19×176 while preserving its function, then
 recovered deployment fidelity through QAT. The larger continuation reached parity but did not establish a stronger
-plateau. The reported checkpoint is therefore the 14×160 model. This result says that capacity was not the immediate
-bottleneck under this recipe; it does not establish a general limit on larger networks.
+plateau. The reported checkpoint is therefore the 14×160 model. The limited continuation cannot distinguish
+insufficient training or post-growth optimization from a target, replay, or capacity limit.
 
 ## Training-time and terminal evaluation
 
