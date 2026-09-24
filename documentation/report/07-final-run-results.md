@@ -84,6 +84,14 @@ not FIDE ratings or estimates on a current unrestricted-engine list.
 | 10,000 | 0.520 vs 100,000 nodes | **3,114 [3,065, 3,163]** | +189 |
 | 100,000 | 0.530 vs 200,000 nodes | **3,251 [3,206, 3,297]** | +137 |
 
+![Final model playing strength across measured search budgets](figures/final-search-curve.svg)
+
+Figure 7.2: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
+measured rung at each budget. Vertical bars are the reported 95% confidence intervals. The categorical horizontal
+axis keeps policy-only play visible alongside the searched conditions; it does not imply equal compute spacing.
+Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes
+with budget, so this is a measured operating curve rather than an isolated node-budget experiment.
+
 Search therefore adds 1,593 benchmark Elo from policy-only play to the deepest measured condition, with diminishing
 returns at each decade. The 100,000-search estimate is unusually well anchored: an independent 100,000-node opponent
 gives 3,247 Elo, only four points below the 200,000-node result. That local agreement supports the top headline, but

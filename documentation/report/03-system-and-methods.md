@@ -7,6 +7,12 @@ learn within the available wall-clock budget. The report therefore describes the
 search, batching, inference, replay, and training ownership—while leaving topology sweeps and recovery machinery to
 the linked engineering record.
 
+![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
+
+Figure 3.1. A published model returns to batched native self-play; searched positions become replay targets for the
+trainer. Paired evaluation measures the published checkpoint and feeds selection decisions back to Python. The
+diagram shows ownership and data flow, not the number or scheduling of every worker.
+
 The system has one native implementation of the latency-sensitive path and one typed orchestration layer:
 
 - [`cpp/`](../../cpp/README.md) owns chess and Go state, legal actions, encodings, batched inference, MCTS, self-play,
