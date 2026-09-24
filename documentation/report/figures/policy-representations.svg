@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="760" viewBox="0 0 1320 760" role="img" aria-labelledby="title description">
+  <title id="title">Three chess policy representations</title>
+  <desc id="description">A comparison of a dense reduced-action head, a spatial move-plane head, and the retained from-to attention head. The retained head scores origin and destination squares before gathering 1,880 canonical actions, avoiding a learned action-sized projection.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#667085"/>
+    </marker>
+    <pattern id="board" width="18" height="18" patternUnits="userSpaceOnUse">
+      <rect width="18" height="18" fill="#f8fafc"/>
+      <rect width="9" height="9" fill="#dbe4ee"/>
+      <rect x="9" y="9" width="9" height="9" fill="#dbe4ee"/>
+    </pattern>
+    <pattern id="matrix" width="9" height="9" patternUnits="userSpaceOnUse">
+      <rect width="9" height="9" fill="#eef6ff" stroke="#d5e5f5" stroke-width="0.7"/>
+    </pattern>
+    <style>
+      .page { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #d0d5dd; stroke-width: 1.5; }
+      .selected { fill: #f4f8ff; stroke: #2878bd; stroke-width: 2.5; }
+      .box { fill: #ffffff; stroke: #98a2b3; stroke-width: 1.5; }
+      .accent-box { fill: #eaf3ff; stroke: #2878bd; stroke-width: 1.6; }
+      .muted-box { fill: #f2f4f7; stroke: #98a2b3; stroke-width: 1.2; }
+      .plane-a { fill: #dcecff; stroke: #4b89c6; stroke-width: 1.2; }
+      .plane-b { fill: #ecf4fd; stroke: #79a6d2; stroke-width: 1.2; }
+      .plane-c { fill: #f7fbff; stroke: #9cbddb; stroke-width: 1.2; }
+      .arrow { fill: none; stroke: #667085; stroke-width: 1.7; marker-end: url(#arrow); }
+      .accent-arrow { fill: none; stroke: #2878bd; stroke-width: 2.2; marker-end: url(#arrow); }
+      .title { font: 600 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
+      .subtitle { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; }
+      .panel-title { font: 600 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
+      .panel-kicker { font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #2878bd; letter-spacing: 1.2px; }
+      .label { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344054; }
+      .small { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; }
+      .tiny { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }
+      .number { font: 600 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
+      .accent { fill: #175b91; }
+      .mono { font: 500 13px ui-monospace, SFMono-Regular, Consolas, monospace; fill: #344054; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1320" height="760"/>
+  <text class="title" x="60" y="54">Three ways to predict a chess move</text>
+  <text class="subtitle" x="60" y="82">All paths supervise the same legal search policy; the learned output geometry is what changes.</text>
+
+  <rect class="panel" x="50" y="112" width="390" height="560" rx="14"/>
+  <text class="panel-title" x="78" y="153">Dense reduced-action</text>
+  <text class="small" x="78" y="177">Compress the board, then learn every action logit.</text>
+  <rect x="88" y="215" width="90" height="90" fill="url(#board)" stroke="#667085" stroke-width="1.5"/>
+  <text class="label" x="133" y="329" text-anchor="middle">trunk field</text>
+  <text class="tiny" x="133" y="347" text-anchor="middle">8 × 8 squares</text>
+  <path class="arrow" d="M186 260 H228"/>
+  <rect class="box" x="238" y="222" width="120" height="76" rx="8"/>
+  <text class="label" x="298" y="251" text-anchor="middle">1 × 1 conv</text>
+  <text class="small" x="298" y="272" text-anchor="middle">flatten</text>
+  <path class="arrow" d="M298 306 V364"/>
+  <rect class="box" x="116" y="374" width="258" height="82" rx="8"/>
+  <text class="label" x="245" y="406" text-anchor="middle">learned action-sized projection</text>
+  <text class="mono" x="245" y="432" text-anchor="middle">features → 1,880 logits</text>
+  <path class="arrow" d="M245 464 V510"/>
+  <rect class="muted-box" x="146" y="520" width="198" height="54" rx="8"/>
+  <text class="label" x="245" y="552" text-anchor="middle">legal-action mask</text>
+  <line x1="78" y1="605" x2="412" y2="605" stroke="#d0d5dd"/>
+  <text class="number" x="78" y="638">483,680</text>
+  <text class="small" x="181" y="637">head parameters</text>
+  <text class="tiny" x="78" y="657">Controlled convolutional comparison</text>
+
+  <rect class="panel" x="465" y="112" width="390" height="560" rx="14"/>
+  <text class="panel-title" x="493" y="153">Spatial move planes</text>
+  <text class="small" x="493" y="177">Predict move geometry at every origin square.</text>
+  <rect x="493" y="216" width="82" height="82" fill="url(#board)" stroke="#667085" stroke-width="1.5"/>
+  <text class="label" x="534" y="320" text-anchor="middle">trunk field</text>
+  <path class="arrow" d="M583 257 H624"/>
+  <rect class="plane-c" x="651" y="230" width="86" height="86"/>
+  <rect class="plane-b" x="641" y="220" width="86" height="86"/>
+  <rect class="plane-a" x="631" y="210" width="86" height="86"/>
+  <line x1="646" y1="225" x2="702" y2="281" stroke="#4b89c6" stroke-width="3"/>
+  <circle cx="674" cy="253" r="5" fill="#175b91"/>
+  <text class="label" x="674" y="338" text-anchor="middle">76 × 8 × 8</text>
+  <text class="tiny" x="674" y="356" text-anchor="middle">rays · knights · promotions</text>
+  <path class="arrow" d="M674 365 V401"/>
+  <rect class="box" x="497" y="411" width="326" height="96" rx="8"/>
+  <text class="label" x="660" y="440" text-anchor="middle">two tested interfaces</text>
+  <text class="mono" x="660" y="465" text-anchor="middle">gather → 1,880 actions</text>
+  <text class="mono" x="660" y="488" text-anchor="middle">direct → 4,864 plane cells</text>
+  <path class="arrow" d="M660 515 V545"/>
+  <rect class="muted-box" x="561" y="555" width="198" height="54" rx="8"/>
+  <text class="label" x="660" y="587" text-anchor="middle">legal-action mask</text>
+  <line x1="493" y1="628" x2="827" y2="628" stroke="#d0d5dd"/>
+  <text class="tiny" x="493" y="650">No single comparable head count: implementations differed.</text>
+
+  <rect class="selected" x="880" y="112" width="390" height="560" rx="14"/>
+  <text class="panel-kicker" x="908" y="143">RETAINED</text>
+  <text class="panel-title" x="908" y="172">From-to attention</text>
+  <text class="small" x="908" y="196">Factor each move into origin and destination.</text>
+  <rect x="908" y="224" width="78" height="78" fill="url(#board)" stroke="#2878bd" stroke-width="1.8"/>
+  <circle cx="941" cy="257" r="6" fill="#175b91"/>
+  <circle cx="968" cy="239" r="6" fill="#7ab4e3"/>
+  <text class="label" x="947" y="322" text-anchor="middle">64 square tokens</text>
+  <path class="accent-arrow" d="M994 263 H1018 V241 H1030"/>
+  <path class="accent-arrow" d="M1018 263 V294 H1030"/>
+  <rect class="accent-box" x="1040" y="220" width="88" height="42" rx="7"/>
+  <text class="label" x="1084" y="246" text-anchor="middle">queries</text>
+  <rect class="accent-box" x="1040" y="273" width="88" height="42" rx="7"/>
+  <text class="label" x="1084" y="299" text-anchor="middle">keys</text>
+  <path d="M1128 241 H1148 V268 M1128 294 H1148 V268" fill="none" stroke="#2878bd" stroke-width="2.2"/>
+  <path class="accent-arrow" d="M1148 268 H1160"/>
+  <rect x="1169" y="224" width="72" height="72" fill="url(#matrix)" stroke="#2878bd" stroke-width="1.7"/>
+  <line x1="1182" y1="281" x2="1227" y2="236" stroke="#175b91" stroke-width="3"/>
+  <text class="label" x="1205" y="322" text-anchor="middle">64 × 64 scores</text>
+  <path class="accent-arrow" d="M1075 338 V385"/>
+  <rect class="accent-box" x="930" y="395" width="290" height="76" rx="8"/>
+  <text class="label" x="1075" y="425" text-anchor="middle">fixed gather + promotion offsets</text>
+  <text class="mono" x="1075" y="451" text-anchor="middle">square pairs → 1,880 logits</text>
+  <path class="accent-arrow" d="M1075 479 V520"/>
+  <rect class="accent-box" x="976" y="530" width="198" height="54" rx="8"/>
+  <text class="label accent" x="1075" y="562" text-anchor="middle">legal-action mask</text>
+  <line x1="908" y1="605" x2="1242" y2="605" stroke="#b8d5ee"/>
+  <text class="number accent" x="908" y="638">51,072</text>
+  <text class="small" x="998" y="637">head parameters</text>
+  <text class="tiny" x="908" y="657">No learned 1,880-way output matrix</text>
+
+  <text class="tiny" x="660" y="718" text-anchor="middle">Schematic, not to scale. Parameter counts use the same controlled convolutional trunk.</text>
+</svg>

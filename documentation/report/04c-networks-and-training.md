@@ -17,6 +17,15 @@ draw states distinguishable, but their individual strength contributions were no
 The chess interface defines 1,880 canonical actions, but an action table does not determine how a network should
 predict them. The project implemented three materially different policy families.
 
+![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
+
+**Figure 4C.1 — Policy representation changes the learned output geometry.** Dense heads learn an action-sized
+projection, move-plane heads preserve spatial move types, and the retained from-to head scores square pairs before a
+fixed gather. The parameter counts are from the same controlled convolutional-trunk comparison; no count is shown for
+the plane family because its implementations and external interfaces differed. The diagram is architectural, not a
+playing-strength comparison. Source:
+[attention viability study](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md).
+
 The first used a conventional dense reduced-action head: a small spatial projection was flattened and mapped
 directly to the 1,880 logits. Two-, four-, and eight-channel projections were explored, along with spatial reduction
 and low-rank final maps. A rank-96 variant reduced a roughly 484,000-parameter head to about 207,000 parameters while
