@@ -19,12 +19,7 @@ near 0.80. The active learning rate fell from about 0.10 to 0.0266 by selection.
 
 Figure A.2: Four panels separate per-quantum completed games, cumulative net materialized positions, live replay
 occupancy, and training samples per second on the same optimizer-step axis. The separate replay scale exposes its
-capacity steps. The small model's median measured trainer throughput was 16,977 samples/s
-across 480 quanta; the medium model's was 11,194 across 337. Model shape, schedule, and concurrent workload differ,
-so the gap is not an isolated model-size effect.
-
-The coordinator's per-quantum ingested-game counters sum to 3,249,647 completed games. The credit ledger ends at
-approximately 209.15 million net materialized positions, or 4.00 presentations per net position. Replay held
-16 million live rows at the selected checkpoint; cumulative positions and live occupancy are different quantities.
-The cumulative TensorBoard position scalar uses float32, so its final few integer digits are not meaningful. These
-counts apply to the selected lineage, not to all experiments or all generated games.
+capacity steps: 209.15 million net positions were materialized, while 16 million rows were live at selection. The
+small model's median measured trainer throughput was 16,977 samples/s across 480 quanta; the medium model's was
+11,194 across 337. Model shape, schedule, and concurrent workload differ, so the gap is not an isolated model-size
+effect. All panels describe the selected lineage, whose coordinator counters sum to 3,249,647 completed games.

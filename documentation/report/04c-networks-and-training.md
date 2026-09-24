@@ -1,22 +1,21 @@
 # 4.3. Choosing what the network predicts
 
-The network had to satisfy two objectives that are easy to conflate. It had to learn useful chess representations
-from self-play, and it had to evaluate thousands of search leaves cheaply enough that those representations improved
-within the available wall-clock budget. The resulting design was not selected by parameter count alone. Policy
-representation, trunk structure, auxiliary supervision, quantization, and model growth were all tested against the
-same end-to-end constraint.
+A network that fits self-play targets well but evaluates too slowly leaves the search without enough games to learn
+from. The retained design therefore joins two requirements: useful chess representations and inexpensive leaf
+evaluation. Policy geometry, global context, auxiliary targets, quantization, and model size each affected that
+balance. The evidence below distinguishes controlled component tests from the strength of the assembled system.
 
-The retained architecture receives a 52-plane, side-to-move-canonical chess representation; some earlier comparisons
-used a 29-plane encoder, so their absolute results are not input-matched to the final model. The 52 planes include pieces, castling
-rights, en passant, checks, repetition state, the eight most recent moves, material counts, and the fifty-move
-counter. File reflection is the only training augmentation; it mirrors the action targets and exchanges kingside
-and queenside castling planes. These rule-sensitive inputs are necessary to keep positions with different legal or
-draw states distinguishable, but their individual strength contributions were not ablated.
+The model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks, repetition,
+the eight most recent moves, material counts, and the fifty-move counter. File reflection is the only augmentation;
+it also mirrors action targets and exchanges kingside and queenside castling planes. Rule-sensitive planes prevent
+positions with different legal or draw states from becoming indistinguishable. Their individual strength effects
+were not ablated. Some component comparisons used an older 29-plane input, so their absolute scores are not
+input-matched to the final model.
 
 ## Three policy representations
 
-The chess interface defines 1,880 canonical actions, but an action table does not determine how a network should
-predict them. The project implemented three materially different policy families.
+The retained chess interface defines 1,880 canonical actions. Three implemented policy families represented move
+logits differently: a dense action projection, spatial move planes, and scores for origin--destination square pairs.
 
 ![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
@@ -26,72 +25,59 @@ fixed gather. The parameter counts are from the same controlled convolutional-tr
 the plane family because its implementations and external interfaces differed. The diagram is architectural, not a
 playing-strength comparison.
 
-The first used a conventional dense reduced-action head: a small spatial projection was flattened and mapped
-directly to the 1,880 logits. Two-, four-, and eight-channel projections were explored, along with spatial reduction
-and low-rank final maps. A rank-96 variant reduced a roughly 484,000-parameter head to about 207,000 parameters while
-reportedly matching its immediate baseline. The underlying result bundle has not been recovered, however, so the
-individual dense variants cannot support a reconstructed quantitative ranking. Dense heads nevertheless trained
-successful models and should be described as superseded, not disproven.
+The **dense head** flattened a small spatial projection into 1,880 logits. Its tested variants changed projection
+width, spatial reduction, and the rank of the final map. A rank-96 variant reduced head size from roughly 484,000 to
+207,000 parameters and was recorded as matching its immediate baseline. The result bundle is unavailable, so those
+variants cannot be ranked quantitatively here. Dense heads trained successful models; they were superseded, not
+shown intrinsically weak.
 
-The second family represented moves spatially. Its 76 planes comprised 56 sliding directions, eight knight moves,
-and 12 promotions. One implementation gathered the canonical action logits from this tensor; another exposed all
-4,864 plane-square cells as the action interface and normalized only the legal cells. The native mapping was checked
-over 83,651 moves without a discrepancy, and controlled inference showed that the larger interface itself was not
-the source of the observed slowdown. A repaired convolutional plane head reached 2.1828 held-out policy
-cross-entropy after roughly 2,500 supervised steps, compared with 2.0824 for the dense control, while still improving
-more quickly. That shortened comparison did not establish convergence. The owner also recalls a plane-policy model
-learning more slowly and being retired after online self-play, but the corresponding result artifact—and even the
-recalled plane count—has not been identified. The structured-plane family is therefore technically validated but
-empirically underdetermined, not a quantified negative result.
+The **move-plane head** represented 56 sliding directions, eight knight moves, and 12 promotions in 76 spatial
+planes. One implementation gathered 1,880 canonical logits from the plane tensor; another exposed all 4,864
+plane-square cells and normalized only legal moves. Native mapping checks covered 83,651 moves without a
+discrepancy, and inference controls did not attribute the slowdown to the larger action interface. In a short
+supervised comparison, the repaired plane head reached 2.1828 held-out policy cross-entropy after about 2,500
+steps versus 2.0824 for the dense control, while its curve was still improving faster. Neither convergence nor a
+clean online strength comparison was established. An online plane-head trial was also retired after slower learning
+and weaker play, but its result artifact and exact representation have not been recovered. The plane approach is
+technically viable; its relative playing strength remains unquantified.
 
-The retained from-to head preserves square structure without predicting a mostly empty plane tensor. It projects the
+The retained **from-to head** preserves square structure without predicting a mostly empty plane tensor. It projects the
 64 trunk squares into query and key vectors, scores all origin-destination pairs, and gathers the canonical actions
 through a fixed table. A separate projection adds queen, rook, and bishop offsets for promotions; en passant and the
 canonical castling encoding remain ordinary square pairs. On the controlled convolutional trunk, this head used
 51,072 parameters rather than 483,680 for the dense alternative.
 
-Holding that trunk fixed, the from-to head improved the held-out policy gap by 0.0298 nats, with a paired 95%
-interval of 0.0285--0.0311. Widening the trunk after recovering those parameters added only 0.0018 nats in the three
-measured cells, although the missing fourth cell prevents a full factorial conclusion. The serving cost was modest
-at production scale: approximately 1.9% of batch-512 forward throughput and 9% at batch 64. These measurements made
-the from-to head the best-supported policy choice, but they came from a shortened, single-seed teacher-data study,
-not an isolated long self-play match. Cross-entropy differences are reported as such and are not converted into an
-invented Elo gain. The shortened teacher-data protocol limits the comparison's playing-strength interpretation.
-
-The owner remembers roughly ten policy-head comparisons, including an online plane-head trial that trained more
-slowly and underperformed. The full result bundle has not been recovered; the preserved plane implementation has 76
-planes while the recollection names 96. That result remains qualitative and the two descriptions should not be
-silently equated.
+Holding that trunk fixed, the from-to head improved the held-out policy gap by 0.0298 nats (paired 95% interval
+0.0285--0.0311). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
+the missing fourth cell prevents a full factorial conclusion. The head cost approximately 1.9% of batch-512
+forward throughput and 9% at batch 64. This is the strongest head-specific evidence in the project, though it is a
+short, single-seed teacher-data comparison, not an isolated self-play Elo ablation. We therefore report the policy
+fit improvement without converting it into a playing-strength estimate.
 
 ## Convolution, attention, and global context
 
-The retained trunk is convolutional. Its residual tower shares one feature field among the policy, value, and
-training-only heads. Full sharing was an invariant throughout the implemented research programme; no split
-policy/value trunk was tested. The earlier impression that such a comparison existed arose from oversized policy
-heads, including a second policy-shaped auxiliary, consuming much of a small model's capacity. Head capacity and
-trunk separation are different questions.
+The retained convolutional residual tower is shared by policy, value, and training-only heads. The project did not
+test separate policy and value trunks. On the smallest networks, an oversized dense policy head and a second
+policy-shaped auxiliary consumed a large fraction of the parameters; that was a head-capacity problem, not a
+trunk-sharing experiment.
 
-Pure attention trunks were implemented with 64 square tokens, learned row and column embeddings, pre-normalized
-self-attention, and GELU feed-forward blocks. Packed query/key/value projection replaced the generic attention
-module. No-bias, learned relative-offset, and input-dependent Smolgen-style attention biases were implemented, though
-only the no-bias and Smolgen choices received a preserved efficacy comparison. A CNN-attention hybrid was proposed
+Pure attention trunks used 64 square tokens, learned row and column embeddings, pre-normalized self-attention, and
+GELU feed-forward blocks. No-bias, relative-offset, and input-dependent Smolgen-style attention biases were
+implemented; only no-bias and Smolgen received a preserved efficacy comparison. A CNN-attention hybrid was proposed
 but not built.
 
-Early comparisons were invalidated by different generation-zero policy shapes and by runtime and precision
-confounds. After bootstrap calibration and a matched policy head repaired the comparison, the convolutional model
-beat bare attention by 0.0060 nats on held-out teacher data. Smolgen produced the best attention cell, but much of the
-apparent improvement attributed to attention actually came from replacing its dense policy head: on the attention
-trunk, the from-to head improved the held-out gap by 0.1573 nats. Attention also used substantially more memory and
-served more slowly in the relevant batches. The project therefore retained convolution for this workload; it did
-not establish that attention is generally unsuitable for chess.
+Once bootstrap policy shape, head, runtime, and precision were controlled, the convolutional trunk beat bare
+attention by 0.0060 nats on held-out teacher data. Smolgen gave the best attention cell, but the larger effect was
+head choice: replacing the dense head on the attention trunk with from-to improved the held-out gap by 0.1573
+nats. Attention also consumed more memory and served more slowly at the relevant batches. Convolution won this
+workload; the comparison does not establish a general limit of attention in chess.
 
-Local convolution is supplemented by a global-pooling residual module every second block. After the first
-convolution, one quarter of the channels supply board-wide means and maxima that are projected back as biases on the
-local features. Squeeze-excitation was also implemented and used historically. The owner recalls global pooling
-learning faster without a clear difference at convergence, but no result artifact has been recovered. Its retention
-is motivated by system experience and external KataGo evidence, not by a standalone chess Elo claim. It also leaves
-floating-point islands in the quantized graph, illustrating that useful context and serving efficiency were not
-always aligned.
+Local convolution receives global context every second residual block: board-wide means and maxima from one
+quarter of the channels are projected back as biases on local features. Squeeze-excitation was another implemented
+context mechanism. Global pooling appeared to learn faster, with no clear final-strength difference, but the
+comparison artifact is unavailable. Its retention draws on that experience and the KataGo precedent, not an
+isolated chess Elo result. It also creates floating-point islands in the quantized graph: useful context and
+inference efficiency did not align perfectly.
 
 ## Value and training-only heads
 
@@ -102,36 +88,31 @@ parameters and reduced measured training throughput by 1.31%, while improving to
 short seed and slightly worsening WDL loss. This justified keeping the smaller head, not a claim that its capacity is
 universally optimal. Likewise, the earlier scalar-to-WDL transition has no preserved isolated strength comparison.
 
-The final training graph also predicts the later player's policy at a configured ply offset and normalized remaining
-game length. Their loss weights are 0.15 and 0.1 respectively. The next-policy target lives in the future state's own
-side-to-move action space and receives its own legality and symmetry transformations. Both heads are stripped from
-the serving artifact. Wiring, eligibility, masking, gradients, symmetry, and checkpoint behavior were tested, but no
-long matched online ablation isolates either objective. Legal-move prediction and several proposed search or board
-state auxiliaries were not retained. During debugging, auxiliaries were also removed precautionarily without being
-shown harmful; their final inclusion is an assembled-recipe choice rather than a causal Elo result.
+Training also predicts a later player's policy at a configured ply offset and normalized remaining game length,
+with loss weights 0.15 and 0.1. The later-policy target uses the future state's own side-to-move action space,
+legality mask, and symmetry transformation. Both heads are removed from the serving artifact. Their target wiring,
+masking, gradients, and checkpoint behavior were tested, but neither objective has a long matched self-play
+ablation. Other auxiliaries were set aside while debugging potential interference, not shown harmful. Their
+inclusion in the final recipe should not be read as an isolated Elo gain.
 
 ## Bootstrap and optimization controls
 
-Initialization is part of self-play because the untrained network creates the first search priors and therefore the
-first replay targets. In an early architecture comparison, the attention policy placed only about 0.11 of its mass
-on the top three moves while the convolutional control was effectively one-hot. Neither extreme was meaningful
-chess knowledge, and their different concentrations changed the data each model generated. The retained bootstrap
-path uses architecture-appropriate initialization, deterministic construction, a small final policy projection, and
-calibration on 516 encoded positions from the evaluation dataset toward a common policy shape. These positions
-calibrate numerical behavior; their human-game origin is not supervised pretraining or a source of chess targets.
-Calibration controls concentration; it does not make an initial policy knowledgeable. A separate audit also found that the configured random seed had not originally
-reached model construction, so supposedly matched arms began from different tensors. Corrected comparisons now treat
-seed propagation and bootstrap shape as reproducibility requirements rather than hyperparameter wins.
+Initialization shapes the first search priors and, through them, the first self-play targets. In an initial
+architecture comparison, the attention policy put only about 0.11 probability mass on its top three moves while
+the convolutional control was effectively one-hot. Neither extreme represented chess knowledge, but each induced
+different data. The retained bootstrap uses architecture-appropriate initialization, deterministic construction,
+a small final policy projection, and calibration on 516 encoded positions toward a common policy concentration.
+Those positions set numerical scale, not supervised chess targets. A seed-propagation defect also made nominally
+matched arms start from different tensors; corrected comparisons treat seed and policy shape as controls, not
+strength improvements.
 
-The optimizer changed alongside the quantized architecture. AdamW trained earlier successful models and was
-superseded rather than disproven. Frozen-replay screens showed that Nesterov SGD could train the quantization-aware
-network stably and helped select warm-up, learning-rate, and folding behavior. Delayed folding improved the
-historical pre-fold schedule, and higher post-fold rates improved short-horizon replay fitting within the tested
-range. The production schedule was not a literal copy of the best short screen: the authoritative model remains
-pre-fold until one million optimizer steps, and the deployment copy inherits the main linear learning rate. Frequent
-gradient clipping in several screens did not prevent learning, but neither did it establish that the threshold was
-optimal. These are controlled optimization diagnostics; online playing strength belongs to the complete trained
-system. These short frozen-replay screens informed, but did not independently validate, the final online recipe.
+The retained quantization-aware optimizer is Nesterov SGD. Frozen-replay screens showed stable fitting and informed
+warm-up, learning-rate, and folding choices; they did not measure online Elo. The selected run ended at 408,500
+optimizer steps, below its configured one-million-step folding trigger: the trainable model remained pre-fold, and
+folding was performed on a deployment copy. Delayed folding and higher post-fold rates helped short-horizon replay
+fitting in separate screens; they were not a phase of the reported training run. AdamW had trained successful
+earlier models and was superseded, not disproven. Frequent gradient clipping did not prevent learning in those
+screens, but its threshold was not shown optimal.
 
 ## Quantization as an architectural constraint
 
@@ -183,7 +164,7 @@ independent catch-up and growth would be needed to choose between them.
 
 ## Distillation and compact models
 
-Two earlier compression programmes asked related but distinct questions. Teacher-output imitation trained compact
+Two compression studies asked related but distinct questions. Teacher-output imitation trained compact
 students on a legal-masked policy and WDL distribution from policy-only teacher play; no search generated those
 labels. Increasing the dataset from one million to six million positions mattered more than a small capacity sweep.
 The strongest 1.33-million-parameter student trailed its teacher by 176.1 Elo at 25 searches each and by 38.4 Elo
@@ -200,7 +181,8 @@ which ignored tree work, launches, and imperfect batching and was therefore not 
 artifact was useful, but it did not replace direct training. These were separate compression protocols, not direct
 comparisons with the final teacher.
 
-A terminal compression check trained a 470,295-parameter student on the final 20-million-row replay buffer. At
+A terminal compression check trained a 470,295-parameter student on a separate frozen 20-million-row replay
+snapshot. At
 10,000 searches it reached 2,683 conditional benchmark Elo after roughly 7.5 epochs and 2,697 after roughly 23
 epochs. The 14-Elo central difference lay well inside the match intervals, while held-out policy loss had become
 nearly flat. Tripling passes over this fixed buffer therefore produced no measurable playing gain. The longer

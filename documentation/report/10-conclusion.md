@@ -1,18 +1,16 @@
 # 10. Conclusion
 
-An AlphaZero-style chess player trained from random initialization can become very strong on a tightly limited
-compute budget, provided its entire learning loop is engineered to turn GPU time into useful games, reliable
-targets, and measurable improvement. The selected 6.3-million-parameter model reached **3,251 benchmark Elo at
-100,000 searches per move** in the project's fixed-node Stockfish 13 protocol, with a **1,658 benchmark-Elo
-policy-only** result. A matched-estimator comparison places its 64-search training plateau about **74 Elo** above
-the previous baseline. These are protocol-specific measurements, not FIDE ratings or claims against unrestricted
-engines.
+In 2.5 days on one eight-GPU node, an AlphaZero-style chess system trained from random initialization produced a
+6.3-million-parameter model measuring **3,251 benchmark Elo at 100,000 searches per move** against the project's
+fixed-node Stockfish 13 ladder. Its **1,658 benchmark-Elo policy-only** result and approximately **74-Elo**
+matched-estimator gain over the previous 64-search training baseline describe different protocols. Neither is a
+FIDE rating or a claim against unrestricted engines.
 
-The result was not produced by one isolated trick. Compact structured policy prediction, a shared convolutional
-network, progressive small-to-medium sizing, searched self-play with restart-state and replay selection, and an
-INT8-capable architecture all mattered to the assembled recipe. Native tree ownership, batched inference,
-TensorRT, and distributed training made the volume of searched data feasible. The report does not infer an
-individual Elo contribution where only a component proxy or the final bundle was measured.
+The result belongs to the assembled learning loop. It combines compact structured policy prediction, a shared
+convolutional network, progressive small-to-medium sizing, searched self-play with restart-state and replay
+selection, and an INT8-capable architecture. Native tree ownership, batched inference, TensorRT, and distributed
+training made the necessary volume of searched data feasible. Component measurements explain why these choices
+were retained, but do not assign each an independent Elo contribution.
 
 The negative results sharpen that conclusion. A learned allocator produced better deep-policy fidelity but worse
 online learning. A stopper saved simulations but barely reduced wall-clock cycle time. Exact graph and neural-cache

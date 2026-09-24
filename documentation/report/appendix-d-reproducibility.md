@@ -27,10 +27,13 @@ The frozen local result record identifies these layers of provenance:
 - raw terminal match records, aggregate reports, commands, and confidence-interval method;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
-The selected hashes and evaluation values are summarized in Chapter 8 and Appendix B. The
-large run archives and some exact evaluation inputs are currently local rather than published with the Git
-repository. The public recipe and model artifact support inspection and a new run, but they are not yet a
-self-contained package for bitwise or exact-match reproduction of the reported experiment.
+Chapter 8 and Appendix B summarize model identity and evaluation values, not the full provenance hash set. The
+published INT8 ONNX has SHA-256 `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` at
+the immutable model-repository revision `dc8fccccb67ab5ec9e36267a165a9700b7dbf55f` [11]. The source release's
+evidence index [10] records additional artifact hashes. The frozen training-source revision, resolved configuration,
+large run archives, and some exact evaluation inputs remain in the local result archive. The public recipe and model
+support inspection and a new run, but are not yet a self-contained package for exact-match reproduction of the
+reported experiment.
 
 ## Reproducing the software
 

@@ -1,9 +1,8 @@
 # 6. Three failures that changed the method
 
-Most of the project can be explained by comparing alternatives without reconstructing when each experiment ran.
-Three failures are different. In each case, the order of events is part of the mechanism: an apparently reasonable
-optimization changed the data or model that the next stage consumed, the resulting failure exposed an invalid
-assumption, and the repair changed the system's acceptance criteria.
+Three plausible shortcuts failed at different boundaries: which positions entered replay, whether an inference
+engine represented its source model, and whether a larger candidate was ready to replace the active model. Their
+causal sequence matters because the apparent success signal in each case measured the wrong thing.
 
 ## Late-game target poisoning
 
@@ -23,11 +22,6 @@ game. The corruption was therefore not confined to the last position: the final 
 entire recorded trajectory. By the time the active replay buffer looked healthy, the damaging rows had already been
 evicted, while their effect on the weights and subsequent self-play distribution could remain.
 
-![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
-
-Figure 7: The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at
-its source.
-
 The repair happened in two stages. First, the cutoff stopped relying on the material heuristic and obtained a value
 from one full search at the final cut position. A controlled continuation study supported that choice: on 2,282
 early cut positions, the searched root value reduced Brier error from 0.491 to 0.444 and cross-entropy from 0.851 to
@@ -37,10 +31,14 @@ closed the data hole that a better terminal value alone could not repair. Becaus
 bundled around the same period, neither step receives an isolated Elo credit. The evidence establishes the failure
 mechanism and target-quality improvement, not a one-variable strength estimate.
 
-The broader lesson is that search eligibility, replay admission, and terminal-value provenance are one coupled
-design. Saving compute by weakening or discarding a particular part of the trajectory can make the learner least
-competent in that region, after which bootstrapping from its own weak continuation turns an efficiency optimization
-into a self-reinforcing data defect.
+![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
+
+Figure 7: The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at
+its source.
+
+Search eligibility, replay admission, and terminal-value provenance must be designed together. Weakening or
+discarding one part of a trajectory can make the model least competent there; subsequent self-play then reinforces
+the same blind spot.
 
 ## A mechanically valid but semantically invalid TensorRT refit
 
@@ -65,10 +63,9 @@ records legal-move top-one agreement, legal-policy KL, and WDL error against the
 the semantics that search actually consumes: which legal move the policy prefers, how its probability mass changes,
 and whether the value distribution remains faithful.
 
-The transferable lesson is simple: a compiler or refitter can satisfy its mechanical contract while violating the
-model's behavioral contract. Deployment artifacts must be validated as semantic models on representative inputs,
-and the exact graph, template, runtime, refit manifest, and probe results belong to the evidence for every published
-checkpoint.
+A compiler or refitter can meet its mechanical contract while violating the model's behavioral contract. Published
+artifacts therefore require representative behavioral probes alongside their graph, template, runtime, and refit
+manifest.
 
 ## Promotion from incomparable training losses
 

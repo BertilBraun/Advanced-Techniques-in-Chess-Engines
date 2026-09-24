@@ -11,6 +11,9 @@ The reported experiment is immutable. Chapter 8 and Appendices B and D identify 
 rows, and provenance boundary. These frozen facts—not a future state of the editable YAML—are the authority for
 published numbers.
 
+The reported node had eight NVIDIA GeForce RTX 4070 SUPER GPUs and 80 logical CPUs. Hardware-sensitive throughput
+comparisons in this paper refer to their stated workloads on this class of node, not a portable rate guarantee.
+
 ## Model, objective, and optimization
 
 The configured ladder contains 12×128, 14×160, and 19×176 residual CNNs. Every stage uses capped scaled
@@ -88,13 +91,9 @@ The measured curve spans policy only and 100, 1,000, 10,000, and 100,000 searche
 single-variable search-scaling experiment. Absolute values are protocol-specific benchmark Elo and must not be
 presented as FIDE ratings or unrestricted engine ratings.
 
-## What the final result establishes
+## Interpretation
 
-The terminal matches evaluate the assembled recipe. They do not allocate its strength gain among replay growth,
-restart states, auxiliary targets, resignation, progressive sizing, or any other bundled choice. Some components
-have isolated throughput, fidelity, proxy, or correctness evidence; fewer have controlled online strength ablations.
-The investigation chapters state those boundaries individually.
-
-Likewise, the `$43.20` reported cost is 60 hours of accepted-lineage time at the recorded hourly price through the
-selected checkpoint. It excludes discarded work, later capacity experiments, distillation, terminal evaluation, and
-idle rental time. It is a reproducible denominator for the reported checkpoint, not total project expenditure.
+The terminal matches evaluate this assembled recipe; they do not divide its strength among replay growth, restart
+states, auxiliary targets, resignation, progressive sizing, and the other retained choices. Chapters 4--6 state
+which components have separate strength, fidelity, throughput, or correctness evidence. Chapter 8 reports the
+selected model's outcome and the narrowly scoped training cost.

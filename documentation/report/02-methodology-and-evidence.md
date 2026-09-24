@@ -1,63 +1,66 @@
 # 2. How claims are measured
 
-The unit of evidence depends on the claim. Faster inference can support a throughput conclusion. Lower policy loss
-can show that a target is learnable. Neither by itself shows that the player became stronger. This distinction is
-especially important in a self-play system: a saved simulation can be absorbed by concurrent training, and a
-network that fits stored targets can still create a worse game distribution.
+The evidence required depends on the claim. Faster inference establishes a local throughput gain, and lower policy
+loss shows better fit to a given target. Neither demonstrates stronger play. In online self-play, concurrent training
+can absorb saved search time, while a network that fits stored positions may produce a worse distribution of new
+games. We therefore separate playing strength, learning progress, throughput, and numerical fidelity throughout the
+report.
 
 ## Playing strength
 
-The project evaluates chess models against Stockfish 13 at fixed node limits. Openings are paired: each starting
-position is played once from each colour. Every reported match identifies the candidate checkpoint and deployed
-inference artifact, candidate search budget and parallelism, opponent limit, opening suite, W/D/L count, score, and
-uncertainty interval. Appendix B presents the terminal matrix.
+The terminal chess evaluation plays the selected checkpoint against Stockfish 13 at fixed node limits. Openings are
+paired: each starting position is played once from each colour. The protocol fixes the opening suite, opponent
+version and resources, candidate artifact, search budget, and parallelism; Appendix B reports the node limit,
+W/D/L count, score, and interval for each terminal match row.
 
-Absolute ratings use Marco Meloni's fixed-node Stockfish calibration [9].
-They are **benchmark Elo** under this match protocol. They are not FIDE ratings, online ratings, or ratings against
-unrestricted contemporary engines. For each model search budget, the headline uses the opponent limit whose match
-score is closest to 0.5, reducing Elo extrapolation. Both tested limits remain visible. Their inferred ratings
-disagree most at the shallowest model budget; the data do not identify a single cause for that disagreement.
+The opponent nodes are assigned historical ratings from Marco Meloni's fixed-node Stockfish calibration [9]. The
+result is **benchmark Elo** under this protocol, not a FIDE or online rating or a ranking against unrestricted
+contemporary engines. At each model search budget, the headline uses the tested opponent whose score is nearest
+0.5, limiting extrapolation; both tested limits remain visible. Their implied ratings disagree most at shallow
+model budgets, and the available matches do not isolate why. The reported bootstrap intervals quantify match
+sampling while holding the calibration anchors fixed, so they do not include calibration uncertainty.
 
-The policy-only row uses direct masked-policy action selection through a float TorchScript export. Searched rows use
-the INT8 TensorRT deployment artifact. Those rows answer different questions and retain their artifact identities.
-The deep-search curve also changes search parallelism, so it is an operating curve rather than a controlled
-fixed-parallelism scaling law.
+The policy-only row selects legal moves directly from a float TorchScript policy export. Searched rows use the INT8
+TensorRT deployment artifact. This distinction is part of the result, not an assumption of backend equivalence.
+Search parallelism also changes along the deep-search curve; the curve describes achieved operating points, not a
+controlled fixed-parallelism scaling law.
 
 ## Learning and comparison
 
-An online learning comparison should measure playing strength over time while keeping initial model weights, replay
-contents, evaluation, and hardware workload as close as possible. When an intervention is small, independent
-from-scratch trajectories can differ more than the proposed effect. The decisive adaptive-search comparisons
-therefore forked the same model and replay state. A frozen-replay fit is useful for screening an optimizer, policy
-head, or quantization scheme, but it cannot establish self-play Elo by itself.
+To compare online learning interventions, we measure playing strength over time while matching initial weights,
+replay contents, evaluation, and hardware workload as closely as the experiment permits. Independent from-scratch
+trajectories can vary more than a small proposed effect; the decisive adaptive-search comparisons therefore started
+from the same model and replay state. Frozen-replay fits screen optimizers, policy heads, and quantization schemes,
+but cannot establish online self-play strength by themselves.
 
-The cross-campaign 64-search plot shows descriptive training trajectories. The previous baseline and final recipe
-used different ladder estimators, so the report does not subtract their plotted endpoints as a strength claim. A
-retrospective comparison on a matched three-rung estimator estimates an approximately 74-Elo final plateau gain,
-with a separate transfer sensitivity of about ±15 Elo. The latter is not a game-level confidence interval. The
-comparison boundary and transfer assumption are stated in Appendix B.
+The cross-campaign 64-search plot is descriptive. The previous baseline and final recipe used different ladder
+estimators, so subtracting their plotted endpoints would not be a valid strength comparison. A retrospective
+three-rung comparison gives an approximately 74-Elo plateau difference, subject to an approximately ±15-Elo
+estimator-transfer sensitivity. That sensitivity is not a game-level confidence interval; Appendix B gives the
+comparison boundary and transfer assumption.
 
 ## Throughput and target fidelity
 
-The report names each throughput stage: model evaluations, search simulations, completed games, admitted replay
-positions, optimizer steps, and Elo per wall-clock hour. A gain at one stage may shrink or disappear at the next.
-Batch size, concurrent games, GPU contention, search parallelism, and training overlap therefore belong with any
-rate claim. Saturated many-game service time must not be called interactive single-game latency.
+Throughput has several distinct units: model evaluations, search simulations, completed games, materialized replay
+positions, optimizer steps, and strength gained per wall-clock hour. A gain at one stage may vanish at the next.
+Rate claims therefore specify the relevant batch size, concurrent games, GPU contention, search parallelism, and
+training overlap. Saturated many-game throughput is not interactive single-game latency.
 
-Serving artifacts are checked as chess models, not merely as valid files. The TensorRT failure investigation showed
-that successful export and refit calls could still produce incorrect legal move probabilities. Fidelity checks use
-real encoded positions, legal-action masking, policy agreement and KL, and value error. A float checkpoint's match
-cannot stand in for a different INT8 artifact when INT8 is the intended deployment.
+Serving artifacts must be checked as chess models, not merely as files that load. The TensorRT refit investigation
+showed that successful export and refit calls could still yield incorrect legal-move probabilities. Fidelity checks
+therefore compare outputs on real encoded positions, including legal-action masking, policy agreement and
+Kullback–Leibler divergence, and value error. A float checkpoint's match cannot substitute for a match by the INT8
+artifact intended for deployment.
 
 ## Provenance and limits
 
-The living final configuration [10] explains the current recipe.
-The reported run additionally needs its frozen source revision, resolved configuration, checkpoint and deployment
-hashes, evaluation assets, and archived results. Appendix D distinguishes public artifacts from locally archived
-evidence. A plan records intent; only implemented code and preserved measurements support claims that
-an experiment happened.
+The living final configuration [10] explains the current recipe; it is not by itself a frozen record of the run
+reported here. Reproduction also requires the source revision, resolved configuration, selected checkpoint and
+deployment artifacts, evaluation assets, and archived results. Appendix D distinguishes public artifacts from
+locally archived evidence. A proposal or configuration records intent; implemented code and preserved measurements
+are needed to establish that an experiment happened.
 
-Many choices in the successful recipe were changed together. The report calls them *retained* when they are in that
-recipe, and gives an isolated effect only when a controlled comparison supports one. Missing historical policy-head
-artifacts and qualitative owner recollections are stated as such. The paper gives the method and measured outcome
-needed to understand each conclusion without requiring its underlying project records.
+Many choices in the final recipe changed together. We call a choice *retained* when it appears there, and attribute
+an isolated effect only where a controlled comparison supports one. Missing historical policy-head results and
+qualitative owner recollections are identified rather than converted into measurements. The methods and results
+needed for each conclusion are stated in the paper; project records provide provenance, not missing premises.

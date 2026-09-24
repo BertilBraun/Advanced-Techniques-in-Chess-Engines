@@ -1,7 +1,10 @@
 # 8. Final training and evaluation results
 
-Teacher training, the ten-row terminal matrix, the parallel-search sweep, and both distilled student experiments
-are complete and checksum-covered. The protocols and all ten terminal rows are reproduced in Appendix B.
+The selected 6.32-million-parameter chess model reached 3,251 benchmark Elo at 100,000 searches per move after
+2.5 days of final-run training. Its terminal strength is measured by paired games against a fixed-node Stockfish 13
+ladder, not by the training ladder alone. This chapter reports that operating curve, the training volume behind it,
+the matched-estimator comparison with the previous baseline, and the limits of the student and parallel-search
+results. Appendix B contains every terminal match row.
 
 ## What was selected
 
@@ -44,19 +47,10 @@ training-dynamics plots. The final recipe is cut at 2.5 days and the previous fo
 figure is descriptive; the +74.1
 Elo claim comes from the matched-estimator plateau audit rather than from subtracting its displayed endpoints.
 
-That stitched curve is not the entire compute history. It deliberately excludes two reverted branches while retaining
-their raw time in the source export:
-
-1. An early INT8 conversion collapse was detected after one ladder observation and reverted.
-2. A from-scratch capacity increase was promoted because training losses were compared across candidates that had
-   seen different numbers of examples. The larger candidate was still roughly 270 Elo weaker. Training returned to
-   the last valid checkpoint and removed 4,040,112 contaminated replay rows.
-
-The second incident changed the method, not merely the operational state. Promotion now uses a match between the
-artifacts intended for deployment rather than training-loss parity, and the tested capacity-growth recovery starts
-from a function-preserving widening of the parent. The corrected larger model reached parity but did not break
-through the plateau during its limited continuation. This does not identify the limiting factor: longer training,
-post-growth optimization, target quality, replay composition, and useful additional capacity remain confounded.
+The plotted lineage excludes reverted INT8 and capacity-promotion branches. The latter prompted the move from
+training-loss promotion to paired deployment-artifact matches, described in Chapter 6. A later function-preserving
+larger-model continuation reached parity without a demonstrated improvement. Its short horizon does not separate
+optimization difficulty, target quality, replay composition, and additional capacity.
 
 The selected checkpoint records **408,500 completed optimizer steps**. With the configured global batch of 2,048
 this corresponds to **836,608,000 training presentations**. The frozen coordinator events cover all 817 contiguous
@@ -134,8 +128,10 @@ effectively free at each budget. That frontier would require a dedicated budget-
 
 ## What the student establishes—and what it does not
 
-Both students have **470,295 parameters**, 13.4 times fewer than the teacher, and trained on the same 20-million-row
-replay snapshot. At 10,000 searches against the same 20,000-node anchor, extending training from 36,621 to 110,000
+Both students have **470,295 parameters**, 13.4 times fewer than the teacher, and trained on the same separate,
+frozen 20-million-row replay snapshot. The selected teacher checkpoint held 16 million live replay rows; the student
+snapshot is not that checkpoint's training window. At 10,000 searches against the same 20,000-node anchor,
+extending training from 36,621 to 110,000
 steps moved the estimate only from **2,683 [2,637, 2,731]** to **2,697 [2,640, 2,753]** benchmark Elo. The 14-Elo
 central change lies inside match uncertainty, while the longer student's held-out policy loss had nearly flattened.
 At 100,000 searches it reached **2,873 [2,819, 2,935]**, but that point is unbracketed. The student used TorchScript

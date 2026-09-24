@@ -382,6 +382,8 @@ def build_report(output: Path) -> None:
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
+        if filename == '08-limitations.md':
+            parts.append(r'\FloatBarrier' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
     parts.extend(
         [

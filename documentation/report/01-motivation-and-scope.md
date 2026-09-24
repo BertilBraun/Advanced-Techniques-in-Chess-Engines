@@ -1,59 +1,49 @@
 # 1. How far can efficient self-play go?
 
-An AlphaZero-style [1] chess player improves by searching its own games, learning from the resulting positions, and
-repeating that cycle with a stronger network. Each step consumes compute. Search creates targets, training absorbs
-them, and evaluation must distinguish real progress from noise. When all three share one eight-GPU node, a faster
-model forward or a cheaper search matters only if it produces stronger play sooner.
+An AlphaZero-style chess player [1] improves by searching its own games, learning from the resulting positions, and
+repeating that cycle with a stronger network. Search creates targets; replay decides which targets persist; training
+absorbs them; and evaluation must distinguish progress from noise. Under a limited budget, improving any one step
+matters only if the complete loop produces stronger play within the available time.
 
-This study asks how strong that loop can become under a very limited compute budget when the entire system is
-engineered for efficiency. The selected model was trained from random initialization using self-play, without
-human-game training targets or pretrained chess weights. Unlabeled evaluation positions were used for bootstrap
-and quantization calibration. It has 6.3 million parameters. Under the project's fixed-node Stockfish 13
-calibration it measured **1,658 benchmark Elo without search** and **3,251 benchmark Elo at 100,000 searches per
-move**. The previous four-day training baseline trails the final recipe by approximately **74 Elo** in an
-estimator-matched 64-search plateau comparison. These numbers describe the stated match protocols; they are not
-FIDE ratings or unrestricted-engine rankings. Chapter 8 gives the plotted results; Appendix B contains every
-terminal match row and interval.
+This study asks how strong that loop can become on a single eight-GPU node when the system is engineered for
+efficiency. Over **2.5 days** of training from random weights, using searched self-play rather than human-game
+training targets, the run produced a 6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
+and **3,251 benchmark Elo at 100,000 searches per move** against the project's fixed-node Stockfish 13 ladder. A
+matched-estimator comparison places it about **74 Elo** above the previous training baseline at a 64-search
+plateau. These are results under specific match protocols, not FIDE ratings or unrestricted-engine rankings. The
+terminal games and intervals appear in Chapter 8 and Appendix B.
 
-The most useful finding is the interaction among decisions. Search determines which targets are worth paying for.
-Replay determines which of those targets the learner sees again. The network representation determines both what
-can be learned and how quickly positions can be evaluated. Batching, native search, and TensorRT make enough games
-possible for those choices to matter at all. A change that improved one local proxy sometimes worsened the complete
-learning loop.
+The central lesson is that the choices interact. Search determines which targets are worth paying for; replay
+determines which targets the learner sees again; and representation affects both learning and inference cost. Native
+search, batched inference, and TensorRT provide the throughput that makes those choices consequential. Several
+plausible optimizations improved a local proxy without improving the complete learning loop.
 
 ## Scope and contributions
 
-Chess is the research subject. The same runtime supports Go on 7×7 and 9×9 boards, and a small-board baseline
-validated the shared platform. Go also supplied ideas, notably KataGo's fast and full searches [7]. The project
-briefly considered small-board Go as a cheaper
-place to tune parameters for chess. The basic loop worked, but its large first-player advantage, shorter games,
-rapidly learned value target, and apparent need for different tuning made that transfer unattractive. This is the
-project owner's qualitative rationale, not a controlled cross-game result. Go receives no separate strength claim
-in this report.
+Chess is the subject of the study. The runtime also supports 7×7 and 9×9 Go, which helped validate the shared
+platform and supplied ideas such as KataGo's fast and full searches [7]. Small-board Go was briefly considered as a
+cheaper setting for tuning chess hyperparameters. Its first-player advantage, shorter games, rapidly learned value
+target, and apparent need for different tuning made that transfer unattractive. This is the project owner's
+qualitative rationale, not a controlled cross-game finding; the report makes no Go strength claim.
 
-The report contributes:
-
-1. A fully recorded, locally auditable chess self-play run whose readable recipe starts at
-   `chess-final-config.yaml` [10]; Chapter 8 and Appendix B state the selected checkpoint and evaluation.
-2. Substantial investigations of search allocation, graph search, inference caching, policy representation,
-   model sizing, replay, restart states, resignation, auxiliary targets, and quantized serving. Each conclusion is
-   bounded by the workload and evidence actually measured.
-3. An account of the throughput path that made the experiment feasible: native C++ game and tree ownership, batched
-   GPU inference, TensorRT deployment, columnar replay, and persistent distributed training.
-4. Three failures with transferable lessons about self-play targets, deployment correctness, and model promotion.
+The report presents the training recipe and terminal evaluation, then examines the choices that shaped them:
+search allocation, graph search and caching, policy representation, model sizing, replay and restart states,
+resignation, auxiliary targets, and quantized inference. It also explains the throughput path needed to supply
+searched games and studies three failures with transferable lessons about self-play targets, deployment fidelity,
+and model promotion. The readable, living recipe begins at `chess-final-config.yaml` [10]; the reported checkpoint
+is identified separately from that configuration.
 
 The final recipe combines many changes. Its strength establishes the outcome of the assembled system, not an
-isolated Elo contribution for every retained component. The report uses paired games for playing-strength claims,
-keeps throughput and target-fidelity measurements attached to their own protocols, and labels owner recollections
-when original result artifacts are unavailable.
+isolated Elo contribution for each component. We use paired games for playing-strength claims, keep throughput and
+target-fidelity measurements tied to their own protocols, and distinguish preserved evidence from owner
+recollection when historical result artifacts are missing.
 
 A live chess demonstration is available [12], but its games are not part of the evaluation protocol.
 
 ## Reading the report
 
-Chapter 2 gives the compact measurement rules. Chapter 3
-shows the learning loop. The investigation chapters then follow the three central choices: how to spend search,
-what the network predicts, and which positions become training data. A short systems chapter explains how those
-choices were made affordable. The three failure studies lead into the integrated recipe and the final measured
-outcome. Detailed implementation history remains in the linked repository evidence rather than the paper's
-narrative.
+Chapter 2 defines how evidence is interpreted; Chapter 3 presents the learning loop. The investigation chapters
+then ask how to spend search, what the network predicts, and which positions become training data. A short systems
+chapter explains how enough games were produced. Three failure studies lead into the integrated recipe and final
+evaluation. Implementation records are available in the project repository [10], but the paper states the methods
+and results needed for its own conclusions.

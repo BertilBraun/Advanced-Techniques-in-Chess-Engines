@@ -1,17 +1,16 @@
 # 4.1. Spending search where it matters
 
-Search was the clearest way to make a fixed network play better, but also one of the most expensive parts of the
-learning loop. That made allocation an unusually attractive research target: if easy positions could be recognized
-early, their unused simulations could be moved to difficult positions or converted into more games. The project
-tested that premise at several levels, from simple stopping rules to learned controllers and a complete graph-search
-implementation. The result was not a better allocator. It was a better understanding of why the transparent fixed
-budget remained hard to beat.
+Search made a fixed network substantially stronger: in one frozen-model comparison, increasing the budget from
+200 to 1,600 visits raised its score against the same opponent from 0.318 to 0.748. The harder question was whether
+those visits could be spent more usefully during training. A cheaper move might complete a game sooner, but it may
+also create a weaker policy target or leave the accelerator underfilled. None of the tested adaptive allocators
+improved the end-to-end learning loop, and exact graph or cache reuse did not repay its overhead. The retained
+answer is a staged, fixed visit cap for every recorded move.
 
-Throughout this chapter, three outcomes are kept separate. Fixed-network playing strength asks whether search
-chooses stronger moves. Target fidelity asks whether a shallow policy resembles a deeper one. End-to-end learning
-asks whether the resulting data makes the next network improve faster. Throughput is a fourth, systems-level
-quantity. Success on any one of these axes did not guarantee success on the others. Chapter 2 states the
-measurement rules used below.
+That conclusion depends on what is measured. Fixed-network playing strength tests the moves chosen by search;
+target fidelity compares a shallow visit distribution with a deeper reference; online learning measures the next
+network; and throughput measures work completed per unit time. An improvement on one axis did not necessarily
+transfer to another. Chapter 2 defines the measurement conventions.
 
 ![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
 
@@ -27,13 +26,12 @@ win/draw/loss value; PUCT selects leaves; neural evaluations are batched across 
 up from the alternating player's perspective. A visit cap is deliberately unambiguous. It does not depend on a
 difficulty estimate, a calibrated controller, or a learned model that may become stale as training advances.
 
-The fixed-network sweep established that this simple control was valuable. Against the same opponent, score rose
-from 0.318 at 200 visits to 0.537, 0.580, 0.662, and 0.748 at 400, 600, 1,000, and 1,600 visits. Across the better
-resolved middle and deep part of the sweep, the fitted trend was about 81 Elo per doubling. Individual adjacent
-comparisons were noisy, so the monotone trend is more credible than any single increment. Search was also still
-changing the training target: at 600 visits, only 72.4% of positions selected the same best move as the network's
-own 10,000-visit reference. These measurements support spending more search when resources permit; they do not
-identify an optimal training schedule.
+Against the same opponent, score rose from 0.318 at 200 visits to 0.537, 0.580, 0.662, and 0.748 at 400, 600,
+1,000, and 1,600 visits. Across the better-resolved middle and deep part of the sweep, the fitted trend was about
+81 Elo per doubling. Individual adjacent comparisons were noisy, so the overall trend is more credible than any
+single increment. Search was still changing its policy target too: at 600 visits, only 72.4% of positions selected
+the same best move as the network's own 10,000-visit reference. These frozen-network measurements establish the
+value of search depth, not an optimal training schedule.
 
 The retained schedule therefore increased the cap in auditable stages—300, 400, 500, 600, and finally 800
 visits—rather than presenting those boundaries as independently optimized discoveries. Even this count needs care:
@@ -42,13 +40,12 @@ work performed.
 
 ## Why fast and full searches did not transfer
 
-A scheme inspired by KataGo's self-play methods [7]
-offered an appealing alternative. Most moves could use a cheap search to advance the game,
-while a random minority received a full search and became primary policy targets. In long Go games this can exchange
-some target density for many more independent terminal outcomes. Chess did not show the same bottleneck. Games were
-shorter, positions were often more decisive, and the value objective was already learning. Discarding cheap-search
-positions therefore reduced the supply of policy targets without a demonstrated compensating benefit from more
-finished games.
+A scheme inspired by KataGo's self-play methods [7] used cheap searches to advance most moves and full searches on
+a random minority, which alone became primary policy targets. The trade is attractive in 19×19 Go: long games make
+finished outcomes expensive, so cheap moves can supply more independent value targets. Chess games are shorter,
+their outcomes and positions are often clearer, and the value objective was already learning. The transferred
+recipe thus spent search on moves whose positions were discarded as primary training rows without showing that the
+extra completed games compensated for the lost policy-target density.
 
 The cheap moves were not free. With a quarter of moves searched to 600 visits and the rest to 150, the cheap moves
 still consumed 42.9% of nominal search work. Nor were they isolated from training: they selected played moves,
@@ -61,12 +58,17 @@ slots with one leaf per tree. Allowing four leaves per tree raised the average b
 throughput by roughly 20%, but it did so by making each search less serial. A policy intended to save compute thus
 created pressure to accept a search-quality tradeoff merely to keep the accelerator occupied.
 
-Most importantly, the design exposed a semantic failure at the end of games. Forcing cheap searches after a late
-ply removed searched endgame rows, while using the shallow cutoff value could propagate a weak soft target back
-through the capped game. The later cut-game repair and removal of the cheap tail addressed that failure. The project therefore
-kept KataGo's broader insight—that search cost and target eligibility are distinct choices—but superseded the
-random fast/full recipe with a full search for every recorded move. This was a systems-and-target-semantics decision,
-not a clean matched-compute Elo victory for all-full search; no such long-run ablation was preserved.
+Most importantly, a forced cheap-search tail made the endgame failure self-reinforcing. It removed searched
+endgame rows because cheap moves were not admitted as primary targets. A shallow estimate at the ply cap could then
+be propagated through many earlier rows of the same game. The original motive was reasonable—avoid filling replay
+with noisy positions from very long endings—but it also withheld the examples needed to learn conversion. One
+full search at the cut position replaced the heuristic bootstrap; later, removing the cheap tail restored searched
+endgame positions. Because multiple changes accompanied the observed recovery, the record does not isolate either
+repair as its sole cause (Chapter 6).
+
+The retained design keeps KataGo's useful distinction between search cost and target eligibility, but searches
+every recorded move to the scheduled cap. This is a systems-and-target-semantics decision, not a matched-compute
+Elo proof that all-full search always wins; no such long-run ablation was preserved.
 
 ## Three attempts to allocate search adaptively
 
@@ -109,10 +111,10 @@ Paired strength estimates were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo (standard er
 strength effect. At the observed learning rate, the cadence gain was worth only about one Elo over three hours,
 below the experiment's resolution.
 
-These studies failed for different reasons. The threshold rule lacked an identifiable safe signal. The predicted
-allocator optimized a measurable but insufficient proxy. Learned stopping saved the resource it targeted, but that
-resource was mostly off the critical path. In a non-overlapped or inference-bound system the last conclusion could
-change; nothing here proves adaptive search universally useless.
+The failures have different boundaries: the threshold rule lacked an identifiable safe signal; the predicted
+allocator improved policy fidelity but not learning; and the in-search stopper removed mostly off-critical-path
+work. A non-overlapped or inference-bound learner could change the last result. None establishes that adaptive
+search is universally ineffective.
 
 ## Parallel leaves: buying latency with search quality
 
@@ -199,9 +201,6 @@ measured, workload-dependent quality/latency tradeoff. Root retention, forced pl
 exact PUCT constants are retained parts of a coherent AlphaZero-style recipe, but most lack isolated final-workload
 strength estimates.
 
-The overall conclusion is correspondingly narrow. For this diverse chess self-play workload, fixed budgets were
-strong, legible, and operationally robust. The adaptive systems either lacked a safe observable, optimized the wrong
-proxy, or removed work that did not control elapsed training time. Exact graph and cache reuse were too sparse to
-cover their overhead. Different games, a repetitive analysis service, or a non-overlapped learner could reverse
-some of those economics. They do not reverse the decision supported here: under the measured workload, the simplest
-auditable allocation was the most dependable one.
+Under the measured chess workload, fixed visits made target provenance and search expenditure explicit while the
+tested alternatives failed to show a better learning return. A repetitive analysis service or a non-overlapped
+learner could change the economics, but that possibility does not substitute for a measured improvement here.

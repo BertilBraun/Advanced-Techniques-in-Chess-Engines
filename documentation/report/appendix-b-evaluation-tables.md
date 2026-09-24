@@ -10,6 +10,10 @@ fixed; they exclude calibration uncertainty. The headline for each candidate bud
 observed score is closest to 0.5. Searched games used the INT8 TensorRT artifact; policy-only games used the
 corresponding float TorchScript export.
 
+For score `s` against an opponent anchor `R`, benchmark Elo is `R + 400 log10(s / (1 - s))`. Each 95% interval
+resamples the 50 colour-swapped opening pairs 10,000 times, then transforms the 2.5th and 97.5th percentiles of
+the resulting match scores with the anchor held fixed.
+
 | Model searches | Parallel | Opponent nodes | W/D/L | Score | Benchmark Elo (95% CI) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | Policy only | -- | 1,000 | 32/24/44 | 0.440 | **1,658 [1,608, 1,710]** |
