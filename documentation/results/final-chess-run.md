@@ -3,8 +3,14 @@
 > **Status: training and evaluation complete; result evidence captured.** The selected teacher, all ten headline-matrix
 > rows, the parallel-search sweep, and both student experiments are checksum-covered by the local evidence bundles.
 
-The complete readable recipe remains
-[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). The compact evidence index is
+The editable recipe is
+[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). Its medium-candidate plateau
+threshold was changed to 15 Elo/hour after this result was selected. The
+[archived campaign configuration](../../py/configs/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml) used
+50 Elo/hour before the medium candidate and 4 before the large candidate; later continuations inherited those
+thresholds. This post-run change to the living recipe does not change what produced the reported checkpoint. Exact
+result reproduction uses the frozen resolved configuration and hashes, not a future revision of the living YAML.
+The compact evidence index is
 [`documentation/evidence/final-chess-20260923`](../evidence/final-chess-20260923/README.md); it records the archive
 hashes, model hashes, protocol, capture status, and machine-readable result table without putting the large archives
 in Git.

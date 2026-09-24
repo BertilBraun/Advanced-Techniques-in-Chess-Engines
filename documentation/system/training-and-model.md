@@ -67,7 +67,7 @@ publishes a refitted TensorRT engine. See
 ## Progressive sizing
 
 Only the active model trains initially. Candidate start is controlled by the searched Stockfish ladder and is
-stage-specific: 50 Elo/hour for 14×160 and 4 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
+stage-specific: 15 Elo/hour for 14×160 and 4 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
 decay `0.90`. It retains seven EMA samples, measures gain across the six observation intervals between the oldest
 and newest samples, and requires two consecutive complete-window gains strictly below the threshold before the
 immediate successor starts. After a promotion, the next stage begins a fresh plateau state seeded from the latest

@@ -58,11 +58,14 @@ The legacy `elo_plateau` candidate-start configuration contains one value beyond
 The final chess recipe instead uses `staged_elo_plateau`. It contains one ordered entry for every successor model,
 and each entry names that model and its positive gain-rate threshold. The configured stages are:
 
-- `chess-cnn-scaled-post-14x160-fromto-int8`: 50 Elo/hour;
+- `chess-cnn-scaled-post-14x160-fromto-int8`: 15 Elo/hour;
 - `chess-cnn-scaled-post-19x176-fromto-int8`: 4 Elo/hour.
 
 The staged model IDs must exactly match the configured successor order. A stage can therefore neither apply the
 wrong threshold to a model nor silently omit a successor.
+
+These are the living recipe's thresholds. The archived campaign configuration used 50 Elo/hour before the medium
+candidate and 4 before the large candidate; changing the living recipe after training does not change that result.
 
 The Elo EMA decay is fixed in code at `0.90`. The runtime stores the bias-corrected EMA, its observation count, and
 the latest applied boundary. Its initial baseline is Elo `0` at boundary `0`. Whenever a new primary searched
@@ -98,11 +101,10 @@ The promotion configuration explicitly owns:
 - a candidate step multiplier of at least one, which controls how many complete optimizer quanta the successor trains
   per global generation.
 
-The configured match-gate `definition_id` must name a `progressive_candidate` evaluation definition. The current
-standalone final YAML names `progressive-candidate` in the gate but does not yet include the corresponding evaluation
-definition that exists in the campaign continuation configuration. The typed loader does not currently cross-check
-that reference. This must be corrected before treating the standalone YAML as an executable future promotion recipe;
-without it, the evaluator produces no candidate-match observations and the gate cannot pass.
+The configured match-gate `definition_id` must name a `progressive_candidate` evaluation definition. The standalone
+final YAML names `progressive-candidate` in the gate and supplies the matching evaluation definition. The candidate
+gate therefore has a scheduled source of match observations. A future configuration that changes the definition ID
+must keep both references aligned.
 
 The primary searched ladder is the highest configured project-model search budget, currently the
 `evaluation/ladder_elo_64` series also published as `evaluation/ladder_elo`. Policy-only and lower-search ladder

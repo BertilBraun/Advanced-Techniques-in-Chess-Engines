@@ -162,36 +162,24 @@ better than an ordinary residual block in floating point. The experiments are do
 
 ## Progressive model sizing
 
-Small networks evaluate more positions early, when additional capacity may be less valuable than additional searched
-games. The progressive design therefore moves through 12-by-128, 14-by-160, and 19-by-176 residual towers while
-keeping the input, block family, context module, and heads fixed. The
-[throughput benchmark](../benchmarks/progressive-sizing-throughput-rtx4070super-20260823/README.md) supports this
-premise, and the small-to-medium handoff worked repeatedly. There is no equal-cost fixed-size counterfactual,
-however, so the exact Elo-per-currency benefit of the ladder cannot be isolated.
+KataGo provided the precedent: start with a small, fast network, train the next size on the same data, and switch
+when it catches up ([Wu, *Accelerating Self-Play Learning in Go*](https://arxiv.org/abs/1902.10565)). Early in
+self-play, extra model capacity may contribute less than the additional searched games a small network can produce.
+The [throughput benchmark](../benchmarks/progressive-sizing-throughput-rtx4070super-20260823/README.md) supports
+that premise here, and the small-to-medium handoff worked repeatedly. There is no equal-cost fixed-size control,
+so its exact Elo-per-currency contribution remains unknown.
 
-The controller separates candidate start from candidate promotion. A candidate starts only after a bias-corrected
-searched-Elo moving average remains below the stage's improvement threshold for two complete six-interval windows.
-The thresholds are 50 Elo per hour before the medium stage and 4 before the large stage. While the active network
-receives one optimizer quantum, its candidate averages 1.5 by alternating one and two quanta against the same
-captured replay boundary. It gains optimizer exposure, not fresh self-play data. Private candidate state and
-in-flight progress survive restart; only the active network is published.
+Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
+matches against the active model. The former loss-based gate promoted a candidate that was about 270 Elo weaker
+because extra catch-up updates made its training loss incomparable. The
+[failure study](05a-three-failures.md#promotion-from-incomparable-training-losses) explains that correction;
+[the sizing guide](../architecture/progressive-model-sizing.md) owns thresholds, scheduling, and restart details.
 
-Loss-based promotion proved unsafe. A larger candidate received more presentations of the same replay samples, so a
-lower weighted training loss was not comparable evidence of playing strength; promotion produced a model that lost
-about 270 Elo despite passing inference-fidelity checks. Promotion now requires two consecutive paired matches with
-a score of at least 0.48 against the active artifact. This incident is discussed with the other methodological
-failures in the decision-lineage chapter and specified in the
-[current sizing architecture](../architecture/progressive-model-sizing.md).
-
-Independently initialized large candidates did not catch the active network reliably. A separate experiment instead
-grew the medium tower while preserving its function: new channels used random-in/zero-out wiring, new residual blocks
-began as identities, and copied branch scales were compensated for the new depth. The resulting float network agreed
-with its parent to within `1.34e-05` in policy logits and reached a 0.495 match score after one replay epoch. Direct
-INT8 conversion then failed fidelity; ten quantization-aware quanta recovered much of it, but the deployed artifact
-still scored about 42 Elo below the parent estimate. The retained reported model is consequently the medium network.
-Function-preserving growth solved the initial discontinuity, but the limited continuation did not show that the
-added capacity generalized better. It remains unclear whether the boundary was training time, post-growth
-optimization, replay targets, or genuinely unused capacity.
+The larger stage remains unresolved. An independently initialized candidate needed substantial catch-up. Explicit
+function-preserving growth avoided relearning the medium model's function, but may also bias optimization toward its
+existing representation; that possible capacity cost was not measured. The limited grown-model continuation reached
+parity without a clear strength gain, so the reported model remains medium-sized. A matched-compute comparison of
+independent catch-up and growth would be needed to choose between them.
 
 ## Distillation and compact models
 

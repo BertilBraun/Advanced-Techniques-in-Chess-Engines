@@ -96,9 +96,9 @@ configuration, so changing a base invalidates approvals and queue summaries for 
 
 Every experiment defines `training.progressive_model_sizing` as a discriminated `fixed` or `progressive` value. The
 fixed variant owns one complete model and no candidate settings. The progressive variant owns at least two models,
-typed paired-loss EMA promotion settings, and either an `elapsed` candidate-start schedule or an `elo_plateau`
-policy. The Elo policy starts the immediate successor when the primary searched evaluation ladder's EMA gain falls
-strictly below its configured rate. The fixed model or first progressive definition is the sole initial-network
+a paired-match promotion gate, and an `elapsed`, `elo_plateau`, or `staged_elo_plateau` candidate-start policy. The
+final chess recipe uses stage-specific thresholds on the primary searched ladder's EMA gain to start the immediate
+successor. The fixed model or first progressive definition is the sole initial-network
 configuration. See
 [`configs/research/go-9x9-progressive-model-sizing.yaml`](configs/research/go-9x9-progressive-model-sizing.yaml) for
 the elapsed variant, [`configs/production/chess-final-config.yaml`](configs/production/chess-final-config.yaml) for
