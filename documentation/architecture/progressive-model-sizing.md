@@ -64,8 +64,10 @@ and each entry names that model and its positive gain-rate threshold. The config
 The staged model IDs must exactly match the configured successor order. A stage can therefore neither apply the
 wrong threshold to a model nor silently omit a successor.
 
-These are the living recipe's thresholds. The archived campaign configuration used 50 Elo/hour before the medium
-candidate and 4 before the large candidate; changing the living recipe after training does not change that result.
+These are the living recipe's thresholds. The frozen final-lineage configurations differ: early segments record
+12 and 3 Elo/hour, while later continuations record 15 and 5. The checked-in campaign YAML records 50 and 4;
+the [evidence index](../evidence/final-chess-20260923/README.md#candidate-start-threshold-discrepancy) tracks this
+unresolved provenance discrepancy. Do not substitute the living recipe for the frozen run configuration.
 
 The Elo EMA decay is fixed in code at `0.90`. The runtime stores the bias-corrected EMA, its observation count, and
 the latest applied boundary. Its initial baseline is Elo `0` at boundary `0`. Whenever a new primary searched

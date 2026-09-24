@@ -7,11 +7,13 @@ assumption, and the repair changed the system's acceptance criteria.
 
 ## Late-game target poisoning
 
-The self-play design once reduced search near the end of long games. Only full-search positions were admitted as
-primary training rows, so the cheap-search tail did not merely save work: it selectively removed the conversion
-phase from the training set. The resulting policy was weakest exactly where it needed to turn an advantage into a
-terminal result. Games wandered to the ply cap more often, and the cutoff then assigned one terminal value to every
-earlier training row in the trajectory.
+The self-play design once reduced search near the end of long games. The intent was to keep noisy positions from
+exceptionally long endgames from dominating replay. If those positions would not become training targets, spending
+full-search compute on them seemed wasteful, so the tail used cheap searches instead. Only full-search positions
+were admitted as primary training rows, however, so the cheap-search tail selectively removed the conversion phase
+from the training set. The resulting policy was weakest exactly where it needed to turn an advantage into a terminal
+result. Games wandered to the ply cap more often, and the cutoff then assigned one terminal value to every earlier
+training row in the trajectory.
 
 This created a closed feedback loop. Missing searched endgames produced weak late-game play; weak play produced
 drawn-out, unconverted games; the cutoff supplied an unreliable target; and that target reinforced the same policy
@@ -75,10 +77,11 @@ checkpoint.
 ## Promotion from incomparable training losses
 
 The progressive controller originally promoted a larger candidate when its smoothed training loss caught up with
-the active model. That comparison ceased to be meaningful once the candidate received extra optimizer quanta over
-the same replay distribution. More presentations gave it a systematic advantage on replay loss without proving
-equal playing strength. The loss gate promoted a candidate whose deployed artifact passed inference-fidelity checks
-but was still about 270 Elo weaker in play.
+the active model. Loss looked like a cheap proxy for readiness: it was already measured during training, whereas a
+full-search candidate match consumed additional evaluation compute and time. That comparison ceased to be meaningful
+once the candidate received extra optimizer quanta over the same replay distribution. More presentations gave it a
+systematic advantage on replay loss without proving equal playing strength. The loss gate promoted a candidate whose
+deployed artifact passed inference-fidelity checks but was still about 270 Elo weaker in play.
 
 Promotion now measures the property that publication requires. The candidate plays paired head-to-head matches
 against the active deployment artifact and must score at least 0.48 in two consecutive completed evaluations. A

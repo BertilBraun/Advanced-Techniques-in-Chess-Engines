@@ -118,8 +118,9 @@ does not change the stored rows or their sampling probabilities.
 - Candidate training starts only after the searched-strength curve meets the configured plateau condition. The
   detector uses a bias-corrected Elo exponential moving average with decay `0.90`, measures its gain across six
   observation intervals using seven retained EMA samples, and requires two complete below-threshold windows. The
-  configured worthwhile-gain thresholds are 50 Elo/hour before starting the middle-sized candidate and 4 Elo/hour
-  before starting the largest candidate.
+  living-recipe worthwhile-gain thresholds are 15 Elo/hour before starting the middle-sized candidate and 4
+  Elo/hour before starting the largest candidate. The frozen final-lineage configurations instead record 12/3
+  followed by 15/5; see the [provenance discrepancy](../../evidence/final-chess-20260923/README.md#candidate-start-threshold-discrepancy).
 - The active model always trains one 500-step quantum for each credit-ledger quantum. A non-active candidate trains
   an average of 1.5 quanta: whole quanta alternate one, two, one, two according to the outer training-quantum index.
   The active model never inherits this multiplier.

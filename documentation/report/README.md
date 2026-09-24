@@ -6,10 +6,10 @@ Chess is the research result. Go 7x7 and 9x9 appear only where they explain the 
 decision, including why small-board Go was not retained as a proxy for chess hyperparameter optimization. Systems
 work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
 
-> **Narrative draft ready for focused review.** The topic-first chapters have been rewritten from the
-> [source dossiers](source-notes/README.md) and the final strength evidence. The [narrative outline](narrative-outline.md)
-> tracks the argument and remaining figure opportunities; publication still needs the archive-derived analyses and
-> review listed in the [completion plan](publication-plan.md).
+> **Narrative draft in review.** The owner has accepted the opening, the three failure-study directions, and the
+> reader path, with the original motivations added to the late-game and promotion studies. The remaining chapters
+> and figures still need focused review. The [narrative outline](narrative-outline.md) tracks the argument and figure
+> opportunities; publication also needs the archive-derived analyses in the [completion plan](publication-plan.md).
 
 The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength, cost,
 and training-volume fields remain centralized in [Final-run results](07-final-run-results.md). Cost and volume claims
@@ -38,7 +38,7 @@ that still require archive reconciliation remain explicitly marked rather than i
 
 | Area | Status | Authority |
 | --- | --- | --- |
-| Narrative chapters and five figures | Draft complete; focused scientific and visual review remains | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
+| Narrative chapters and five figures | Opening, three failures, and reader path owner-reviewed; other scientific and visual review remains | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
 | Archive-derived training dynamics, throughput, and total cost | Not yet reconciled | [Completion plan](publication-plan.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
 | Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 7](07-final-run-results.md) |
