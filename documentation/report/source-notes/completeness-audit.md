@@ -185,22 +185,17 @@ result bundles are not currently known. Those memories are recorded as qualitati
 quantitative evidence. Historical pretraining is out of report scope. Causal and editorial scope review is complete;
 only the remaining final-result presentation choices require owner judgment.
 
-## Remaining result-integration work
+## Current publication boundary
 
-The final recap has supplied the terminal checkpoint choice, cost basis, principal strength matrix, capacity outcome,
-and archived artifact locations. The following work remains before publication:
+The terminal teacher and student matrices, selected checkpoint and artifact identity, cost basis, matched ladder
+comparison, and selected-checkpoint training trajectory are now integrated into the report, result record, and root
+README. Their raw or derived evidence is indexed in the
+[final-run evidence directory](../../evidence/final-chess-20260923/README.md). The cross-campaign ladder figure trims
+the final recipe at 2.5 days and the previous four-day baseline at 3.0 days while retaining the untrimmed export as
+provenance. The abstract, conclusion, and headline README claims are no longer waiting for terminal evaluation.
 
-- reconcile the final policy-only, fixed-search, moderate/deep-search, and very-deep-search results with their raw
-  result files and uncertainty calculations;
-- commit the matched-estimator conversion, adaptive-rung event audit, and their exact machine-readable derivation;
-- freeze the exact serving-artifact identities and re-fetch evaluation outputs produced after the evidence pull;
-- extract complete optimizer volume, admitted data, effective replay reuse, and systems telemetry from the archive;
-- loss, learning-rate, Elo, replay-age, resignation, cut, throughput, and resource curves;
-- remaining shared-protocol checks outside the completed plateau comparison; and
-- render the largest model's TensorRT/QAT recovery and fidelity history without implying it is the reported model.
-
-These pending results do not block factual review of any source dossier. They do block final evaluation, abstract,
-headline README claims, and conclusion prose.
-
-The cross-campaign ladder figure is complete. Its deterministic input trims the final recipe at exactly 2.5 days
-and the previous four-day baseline at exactly 3.0 days while preserving the untrimmed export as provenance.
+Publication work that remains is narrower: reconcile wider actor/search and rejection telemetry where the local
+archive permits it; settle the operational timing definition for the parallel-search speedup; finish optional
+figures and editorial review; verify release metadata, the public model card and live artifact; and record the
+owner's code/model licensing decision. The [publication plan](../publication-plan.md) tracks these gates. Missing
+causal ablations must remain limitations, not be inferred from the bundled final result.
