@@ -1,9 +1,7 @@
 # 7. Final training and evaluation results
 
-> **Evidence state.** Teacher training, the ten-row terminal matrix, the parallel-search sweep, and both distilled
-> student experiments are complete and checksum-covered. The quantitative authority is the
-> [final-run result record](../results/final-chess-run.md), backed by the
-> [compact evidence index](../evidence/final-chess-20260923/README.md).
+Teacher training, the ten-row terminal matrix, the parallel-search sweep, and both distilled student experiments
+are complete and checksum-covered. The protocols and all ten terminal rows are reproduced in Appendix B.
 
 ## What was selected
 
@@ -37,15 +35,13 @@ The allowance reflects uncertainty in transferring the estimator correction; it 
 confidence interval. The report therefore uses **about +74 Elo under a matched estimator** as the cross-campaign
 headline and does not compare raw peaks. Repeating the arithmetic with only the report figure's clean 3.0- and
 2.5-day windows gives **+75.8 Elo**; the conclusion is not driven by the later points omitted from the plot. The
-[recomputable plateau table](../evidence/final-chess-20260923/README.md#matched-estimator-plateau-check) retains both
-windows and the transfer assumption.
+plateau arithmetic and its transfer assumption are given in Appendix B.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
 Figure 7.1: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
-training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The tracked
-[publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) records those rules and retains
-the source-series identities; internal run labels do not appear in the figure. The figure is descriptive; the +74.1
+training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The
+figure is descriptive; the +74.1
 Elo claim comes from the matched-estimator plateau audit rather than from subtracting its displayed endpoints.
 
 That stitched curve is not the entire compute history. It deliberately excludes two reverted branches while retaining
@@ -68,24 +64,12 @@ training quanta on that path. Summing their per-quantum ingested-game counters g
 the credit ledger ends at approximately **209.15 million net materialized positions**, or about **4.00 training
 presentations per net materialized position**. Replay held **16 million live rows** at the selected checkpoint.
 These are selected-lineage counters, not totals for every experiment or every game generated on the node. The
-cumulative position scalar is float32 in TensorBoard, so its final few integer digits are not meaningful. The
-[tracked trajectory and extraction method](../evidence/final-chess-20260923/README.md#training-volume-extraction)
-preserve the boundary of each count.
+cumulative position scalar is float32 in TensorBoard, so its final few integer digits are not meaningful. Appendix A
+shows the training diagnostics and clarifies the boundary of each count.
 
-![Training losses and learning rate through the selected checkpoint](figures/final-training-loss-and-rate.svg)
-
-Figure 7.2: Total, policy, and WDL training losses are shown with an 11-quantum moving average over faint raw
-observations. The dashed line marks the small-to-medium active-model transition at 240,000 optimizer steps. Loss
-levels across different model stages are optimization diagnostics, not paired playing-strength measurements. The
-active learning rate fell from about 0.10 to 0.0266 by selection.
-
-![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput.svg)
-
-Figure 7.3: Per-quantum ingested completed games, net materialized positions, live replay occupancy, and training
-samples per second share an optimizer-step axis. The active small model's median measured trainer throughput was
-16,977 samples/s across 480 quanta; the medium model's was 11,194 across 337 quanta. The stage comparison is
-descriptive: model shape, training schedule, and concurrent workload differ, so the gap is not an isolated model-size
-effect. The charts stop at the selected checkpoint and exclude later capacity experiments.
+Across 480 small-model quanta, median measured trainer throughput was 16,977 samples/s; across 337 medium-model
+quanta it was 11,194. Model shape, schedule, and concurrent workload all differed, so this is not an isolated
+model-size effect.
 
 The narrow cost attached to the selected checkpoint is **$43.20**, calculated as 60 accepted-lineage hours at
 `$0.72/h`. It excludes the reverted work, later growth experiment, distillation, evaluation, and idle rental time.
@@ -96,21 +80,13 @@ Until total spend is reconciled, it must not be described as the project's total
 The terminal protocol used 100 games per row from 50 colour-swapped opening pairs against single-threaded Stockfish
 13 at fixed node limits. For each search budget, the reported rating is the opponent rung whose score lies closest to
 0.500. Anchor ratings come from
-[Marco Meloni's fixed-node Stockfish 13 benchmark](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+Marco Meloni's fixed-node Stockfish 13 benchmark [9],
 which connects Stockfish through Fruit 2.2.1 to the historical SSDF scale. The resulting values are benchmark Elo,
 not FIDE ratings or estimates on a current unrestricted-engine list.
 
-| Search budget | Headline score and anchor | Benchmark Elo (95% match-bootstrap CI) | Increment |
-| ---: | --- | ---: | ---: |
-| Policy only | 0.440 vs 1,000 nodes | **1,658 [1,608, 1,710]** | -- |
-| 100 | 0.480 vs 10,000 nodes | **2,456 [2,400, 2,512]** | +798 |
-| 1,000 | 0.450 vs 50,000 nodes | **2,925 [2,875, 2,977]** | +469 |
-| 10,000 | 0.520 vs 100,000 nodes | **3,114 [3,065, 3,163]** | +189 |
-| 100,000 | 0.530 vs 200,000 nodes | **3,251 [3,206, 3,297]** | +137 |
-
 ![Final model playing strength across measured search budgets](figures/final-search-curve.svg)
 
-Figure 7.4: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
+Figure 7.2: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
 measured rung at each budget. Vertical bars are the reported 95% confidence intervals. The categorical horizontal
 axis keeps policy-only play visible alongside the searched conditions; it does not imply equal compute spacing.
 Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes
@@ -124,8 +100,7 @@ estimate is unusually well anchored: an independent 100,000-node opponent
 gives 3,247 Elo, only four points below the 200,000-node result. That local agreement supports the top headline, but
 does not validate extrapolation beyond the measured anchors.
 
-The complete ten-row matrix, including W/D/L and archive-capture status, is in the
-[result record](../results/final-chess-run.md#terminal-evaluation-protocol).
+Appendix B reports the complete ten-row W/D/L matrix and match-bootstrap intervals.
 
 ## Two protocol effects that matter
 
@@ -154,18 +129,10 @@ effectively free at each budget. That frontier would require a dedicated budget-
 
 ## What the student establishes—and what it does not
 
-Both completed students have **470,295 parameters**, 13.4 times fewer parameters than the teacher. They differ only
-in training duration on the same 20-million-row replay snapshot. At 10,000 searches against the same 20,000-node
-anchor, the 36,621-step student scored 31/33/36 for **2,683 Elo [2,637, 2,731]**; the 110,000-step student scored
-35/29/36 for **2,697 [2,640, 2,753]**. Tripling training from exactly 7.500 to 22.528 replay epochs therefore moved
-the point estimate by 14 Elo, well inside the confidence intervals.
-
-The longer student's training/held-out policy losses ended at 1.8613/1.8815, a roughly 0.020 gap that was flat from
-about step 60,000. Combined with the match, this suggests that the small architecture had saturated on this dataset;
-it does not demonstrate a memorisation collapse.
-
-At 100,000 searches the longer student scored 59/28/13 against the 20,000-node anchor, corresponding to **2,873 Elo
-[2,819, 2,935]**. The planned 50,000-node bracket was skipped, so this remains an unbracketed lower anchor-based
-estimate. The student used TorchScript and the teacher INT8 TensorRT, further preventing a clean architecture-only
-comparison. Elo is an interval scale: parameter compression can be expressed as 13.4x, but ratings cannot be
-meaningfully expressed as one model having a percentage of another model's Elo.
+Both students have **470,295 parameters**, 13.4 times fewer than the teacher, and trained on the same 20-million-row
+replay snapshot. At 10,000 searches against the same 20,000-node anchor, extending training from 36,621 to 110,000
+steps moved the estimate only from **2,683 [2,637, 2,731]** to **2,697 [2,640, 2,753]** benchmark Elo. The 14-Elo
+central change lies inside match uncertainty, while the longer student's held-out policy loss had nearly flattened.
+At 100,000 searches it reached **2,873 [2,819, 2,935]**, but that point is unbracketed. The student used TorchScript
+and the teacher INT8 TensorRT, so this is not an architecture-only comparison. Appendix B gives the W/D/L counts and
+the skipped-rung boundary. Parameter compression is 13.4x; Elo itself is not a meaningful percentage scale.

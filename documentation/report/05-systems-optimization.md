@@ -10,9 +10,8 @@ optimizer progress can move by very different amounts.
 Python owns experiment configuration, process supervision, replay, training, evaluation, and artifact publication.
 C++ owns the latency-sensitive path: game rules, encoded positions, search trees, selection and backup, batched
 inference submission, and inference-result processing. Moving this loop into one native runtime removed Python
-message serialization and per-position dispatch from the dominant self-play path. The old
-[Python MCTS benchmark](../benchmarks/naive-python-mcts-rtx3060-20260816/README.md) is therefore a reference floor,
-not an alternative production implementation.
+message serialization and per-position dispatch from the dominant self-play path. The old Python MCTS implementation
+is a historical performance floor, not an alternative production search engine.
 
 The native boundary also enables batching across many simultaneous games. Each self-play process advances 512 game
 roots, and requests from those roots share a preallocated asynchronous inference pipeline. Trees survive played moves
@@ -32,13 +31,11 @@ In a controlled 32-process self-play workload, the optimized path increased sear
 inference batch size rose from 141 to 222 and the number of model calls fell by 24%. On the same node restricted to
 24 CPU cores, throughput increased from 215,265 to 496,036 searches/s because reducing submission overhead allowed
 the previously starved GPUs to remain busy. These figures are specific to the tested network and host, but they show
-why CPU efficiency can be decisive even in a nominally GPU-bound workload
-([submission benchmark](../benchmarks/self-play-submission-8xrtx4070super-20260824/README.md)).
+why CPU efficiency can be decisive even in a nominally GPU-bound workload.
 
 More processes are not automatically wasteful. With the TensorRT actor, reducing the topology from four to two
 processes per GPU lowered simulations/s by 39%, despite both configurations filling individual inference batches.
-Process concurrency was needed to overlap the work around inference and saturate the device
-([actor decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)). Conversely, excessive
+Process concurrency was needed to overlap the work around inference and saturate the device. Conversely, excessive
 inference threads duplicated CUDA contexts and divided available requests into smaller batches. One inference thread
 per actor was the measured operating point after submission became cheap.
 
@@ -53,20 +50,15 @@ runtime. It is important to compare against that serving artifact rather than ag
 diagnostic, `torch.compile` improved batch-64 model throughput by approximately 27–33%, but the corrected comparison
 showed that fused TorchScript was faster than the compiled eager path. Training compilation was also unfavorable in
 the relevant eight-GPU control: at the selected batch and contention level it reduced throughput by about 18%
-relative to eager execution, whereas bfloat16 autocast improved it by 9.2%
-([inference controls](../benchmarks/chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md),
-[training throughput](../benchmarks/chess-training-throughput-rtx3060-20260812/README.md)). `torch.compile` was
+relative to eager execution, whereas bfloat16 autocast improved it by 9.2%. `torch.compile` was
 therefore not used as the production inference compiler.
 
-TensorRT [quantization and engine refitting](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/refitting-engines.html)
+TensorRT quantization and engine refitting [8]
 provided the stronger serving path. A native FP16 engine reached 75,889 positions/s against 40,716 for the
 TorchScript BF16 control in one matched backend benchmark, a 1.86x ratio. Quantization-aware INT8 inference added a
-further 1.31x over the TensorRT FP16 engine for the tested quantization-oriented network
-([native backend benchmark](../benchmarks/tensorrt-native-backend-rtx4070s-20260912/README.md)). Matched production-
+further 1.31x over the TensorRT FP16 engine for the tested quantization-oriented network. Matched production-
 topology comparisons measured smaller but still material INT8 gains that depended strongly on model shape: 14.4%
-for the smaller network and 39.1% for the medium network
-([small-network control](../benchmarks/v76-v35-small-prefold-backend-20260918/README.md),
-[medium-network control](../benchmarks/v76-v35-medium-prefold-backend-20260918/README.md)).
+for the smaller network and 39.1% for the medium network.
 
 These gains required the model and runtime to be designed together. Post-training INT8 was fast but changed policy
 and value outputs too severely. The retained design uses scaled post-activation residual blocks trained with fake
@@ -74,14 +66,12 @@ quantization, quantizes the backbone convolutions, and leaves the start block, p
 layers at higher precision. Each published checkpoint is recalibrated, exported through an explicit Q/DQ ONNX
 graph, and refitted into shape-specific TensorRT templates. Fidelity is checked on encoded chess positions with
 legal-action masking, policy divergence, and WDL error; engine construction success is not treated as semantic
-validation. The relevant feasibility evidence is the [architecture screen](../benchmarks/tensorrt-int8-architecture-screen-rtx4070s-20260912/README.md)
-and [frozen-replay QAT study](../benchmarks/tensorrt-int8-replay-screen-rtx4070s-20260912/README.md).
+validation. The corresponding architectural failure and retained block are described in Chapter 4C.
 
 Model shape remained a systems variable even at similar parameter counts. Width and depth changed kernel efficiency,
 TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN
 shapes, but no analytic parameter-count rule predicted the fastest network. Progressive model sizes were therefore
-benchmarked at their actual serving batch and precision rather than selected from FLOPs alone
-([CNN throughput study](../benchmarks/cnn-inference-throughput-rtx4070s-20260827/README.md)).
+benchmarked at their actual serving batch and precision rather than selected from FLOPs alone.
 
 ## Replay materialization and training supply
 
@@ -93,11 +83,9 @@ data. This makes replay ingestion both a throughput stage and a scientific bound
 
 The trainer reads vectorized batches from the memory-mapped store with pinned-memory prefetch and one persistent DDP
 rank per GPU. A loader benchmark on 2.5 million rows improved from 3,943 to 32,579 samples/s after compacting 5,000
-small producer shards into 25 containers—8.26x faster and 44% above the measured trainer demand
-([replay-loader benchmark](../benchmarks/replay-loader-20260724/README.md)). In a later live interval,
+small producer shards into 25 containers—8.26x faster and 44% above the measured trainer demand. In a later live interval,
 materialization appended 8,790 positions/s while accepted positions arrived at 1,365/s, leaving more than sixfold
-headroom. Materialization was not the bottleneck in that workload
-([end-to-end decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)).
+headroom. Materialization was not the bottleneck in that workload.
 
 A credit ledger links optimizer work to newly admitted positions. Each training quantum becomes eligible only after
 enough materialized data has arrived for the configured replay-reuse ratio. This prevents rejected games, ingestion
@@ -120,8 +108,7 @@ simultaneously producing approximately 506,000, 606,000, and 742,000 searches/s.
 remaining self-play wait were included, the estimated complete-quantum times were 117.1, 112.9, and 111.2 seconds.
 The broad result was that moderate overlap improved total cadence, while running every actor nearly doubled the
 trainer quantum for only a small additional end-to-end gain. The retained half-active policy sits near that measured
-tradeoff rather than maximizing either trainer or actor throughput alone
-([overlap benchmark](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md)).
+tradeoff rather than maximizing either trainer or actor throughput alone.
 
 The best overlap also changes with search cost. When searches are cheap, training dominates and pausing policy has
 little effect. As visit budgets and model size grow, self-play becomes more expensive and additional concurrent
@@ -138,17 +125,15 @@ live 400-visit training stage admitted 23.3% more replay positions per second th
 topology. Those stages differ in visit budget, checkpoint, and actor scheduling; the 23.3% is not the downstream
 effect of the 1.86x benchmark. Faster actors can finish shorter games, actor population changes during training,
 checkpoint publication consumes time, and replay credit appears only after complete-game materialization. Within
-the live stage, the measured accepted-position rate predicted the observed optimizer cadence exactly
-([end-to-end decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)).
+the live stage, the measured accepted-position rate predicted the observed optimizer cadence exactly.
 
-Systems results should therefore be reported as a chain:
+The relevant sequence is visualized in Figure 5.1.
 
-1. model positions per second;
-2. completed search simulations;
-3. completed games and eligible observations;
-4. admitted replay positions;
-5. optimizer presentations and steps per hour;
-6. strength gained per wall-clock hour.
+![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
+
+Figure 5.1: The denominator changes at each boundary. Model evaluations and search simulations describe local
+service capacity; completed games and admitted rows determine training supply; only the final stage measures the
+playing-strength gain per unit wall-clock time.
 
 An optimization is valuable to this project only if its effect survives far enough down that chain. Core inference
 and search benchmarks diagnose mechanisms, while the credit ledger and learning curve establish whether the saved
@@ -157,5 +142,4 @@ compute became useful training.
 Finally, absolute throughput is not portable across machines. CPU quota, GPU power limits, PCIe and NUMA layout,
 driver/runtime versions, model shape, batch fill, and concurrent training all affect the operating point. Node
 comparisons informed hardware selection, but quantitative claims in this chapter remain attached to the documented
-hardware and workload
-([hardware comparison](../benchmarks/node-comparison-vast-4nodes-20260821/README.md)).
+hardware and workload.

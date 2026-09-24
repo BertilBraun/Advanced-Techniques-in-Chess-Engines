@@ -1,11 +1,10 @@
-# 9. Reproducibility
+# Appendix D. Reproducibility and release boundary
 
 ## Two reproducibility targets
 
-The project maintains two distinct targets:
+The project maintains two distinct reproducibility targets:
 
-1. **Recipe reproduction:** use the current fully expanded
-   [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) as the supported entry point.
+1. **Recipe reproduction:** use the current fully expanded `chess-final-config.yaml` as the supported entry point.
 2. **Result reproduction:** use the frozen source revision, resolved config hash, manifest, checkpoints, engines,
    datasets, and archive recorded for the final result.
 
@@ -13,7 +12,7 @@ The first may evolve; the second must not.
 
 ## Result identity and provenance
 
-The frozen local result record and its linked evidence identify these layers of provenance:
+The frozen local result record identifies these layers of provenance:
 
 - Git source revision and clean/dirty state;
 - resolved YAML and SHA-256;
@@ -28,26 +27,22 @@ The frozen local result record and its linked evidence identify these layers of 
 - raw terminal match records, aggregate reports, commands, and confidence-interval method;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
-The authoritative values belong in [the final result record](../results/final-chess-run.md) and Chapter 7. The
+The selected hashes and evaluation values are summarized in Chapter 7 and Appendix B. The
 large run archives and some exact evaluation inputs are currently local rather than published with the Git
 repository. The public recipe and model artifact support inspection and a new run, but they are not yet a
 self-contained package for bitwise or exact-match reproduction of the reported experiment.
 
 ## Reproducing the software
 
-Local setup and validation begin in the root [README](../../README.md), the [Python guide](../../py/README.md), and
-the [native runtime guide](../../cpp/README.md). Production nodes are provisioned by
-[`deployment/setup_remote.sh`](../../deployment/setup_remote.sh), which installs locked dependencies, builds the
+Local setup and validation begin in the public source-code release [10]. Production nodes are provisioned by
+`deployment/setup_remote.sh`, which installs locked dependencies, builds the
 Release extension, installs pinned evaluation engines, and runs engine smokes. Run lifecycle operations go through
-[`deployment/run_control.sh`](../../deployment/run_control.sh).
+`deployment/run_control.sh`.
 
-This chapter intentionally does not duplicate commands from current operational documentation. The
-[experiment platform](../operations/experiment-platform.md), [run control](../operations/run-control.md), and
-[result export](../operations/experiment-result-export.md) documents are the executable authorities.
+Operational commands are versioned with the source release; they are not part of the scientific match protocol.
 
-Original project code and documentation, including this report, are available under the repository
-[MIT License](../../LICENSE). The published final model artifacts carry the same license in the
-[Hugging Face model repository](https://huggingface.co/BertilBraun/alphazero-chess). External dependencies,
+Original project code and documentation, including this report, are available under the MIT License in the
+source release [10]. The published final model artifacts carry the same license in the model repository [11]. External dependencies,
 reference sources, and third-party data retain their own terms.
 
 ## Reproducing evaluation
@@ -62,8 +57,7 @@ For latency, separate:
 - saturated many-position search throughput;
 - single-game interactive latency.
 
-Only compare like with like. The [Stockfish gauntlet](../operations/stockfish-gauntlet.md) defines the current match
-procedure, while [evaluation engines](../operations/evaluation-engines.md) owns binary identity.
+Only compare like with like. Appendix B states the terminal opponent, openings, game count, and inference artifact.
 
 ## Reproducing plots and tables
 

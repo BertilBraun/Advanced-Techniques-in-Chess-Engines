@@ -80,7 +80,7 @@ than encoded as letter grades.
 | [Ladder batching](../benchmarks/ladder-batching-rtx4070s-20260906/README.md) | [Evaluation](03-system-and-methods.md#evaluation) | Primary throughput, mechanics, and strength-protocol evidence |
 | [Ladder strength evaluation](../benchmarks/ladder-elo-generation936-rtx4070s-20260906/README.md) | [Evaluation](03-system-and-methods.md#evaluation) | Primary strength evidence |
 | [Ladder learning curve](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md) | [Training outcome](07-final-run-results.md#training-outcome) | Primary strength and observational online-learning evidence |
-| [Ladder reference config](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/reference-config/README.md) | [Reproducibility](09-reproducibility.md#reproducing-evaluation) | Supporting provenance mechanics |
+| [Ladder reference config](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/reference-config/README.md) | [Reproducibility](appendix-d-reproducibility.md#reproducing-evaluation) | Supporting provenance mechanics |
 | [Model refresh](../benchmarks/model-refresh-20260723/README.md) | [Model publication](03-system-and-methods.md#progressive-models-and-publication) | Supporting mechanics |
 | [Naive Python MCTS](../benchmarks/naive-python-mcts-rtx3060-20260816/README.md) | [Native search](05-systems-optimization.md#native-ownership-of-the-search-loop) | Supporting reference throughput |
 | [8x4070S node comparison](../benchmarks/node-comparison-8xrtx4070super-20260824/README.md) | [End-to-end throughput](05-systems-optimization.md#from-inference-speed-to-learning-speed) | Supporting throughput |

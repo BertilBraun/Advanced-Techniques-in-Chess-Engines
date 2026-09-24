@@ -1,6 +1,6 @@
 # 1. How far can efficient self-play go?
 
-An [AlphaZero-style](https://arxiv.org/abs/1712.01815) chess player improves by searching its own games, learning from the resulting positions, and
+An AlphaZero-style [1] chess player improves by searching its own games, learning from the resulting positions, and
 repeating that cycle with a stronger network. Each step consumes compute. Search creates targets, training absorbs
 them, and evaluation must distinguish real progress from noise. When all three share one eight-GPU node, a faster
 model forward or a cheaper search matters only if it produces stronger play sooner.
@@ -12,8 +12,8 @@ and quantization calibration. It has 6.3 million parameters. Under the project's
 calibration it measured **1,658 benchmark Elo without search** and **3,251 benchmark Elo at 100,000 searches per
 move**. The previous four-day training baseline trails the final recipe by approximately **74 Elo** in an
 estimator-matched 64-search plateau comparison. These numbers describe the stated match protocols; they are not
-FIDE ratings or unrestricted-engine rankings. The full intervals and artifacts appear in
-[the results chapter](07-final-run-results.md).
+FIDE ratings or unrestricted-engine rankings. Chapter 7 gives the plotted results; Appendix B contains every
+terminal match row and interval.
 
 The most useful finding is the interaction among decisions. Search determines which targets are worth paying for.
 Replay determines which of those targets the learner sees again. The network representation determines both what
@@ -24,8 +24,8 @@ learning loop.
 ## Scope and contributions
 
 Chess is the research subject. The same runtime supports Go on 7×7 and 9×9 boards, and a small-board baseline
-[validated the shared platform](../benchmarks/go-7x7-training-baseline-2xrtx3060-20260810/README.md). Go also
-supplied ideas, notably KataGo's fast and full searches. The project briefly considered small-board Go as a cheaper
+validated the shared platform. Go also supplied ideas, notably KataGo's fast and full searches [7]. The project
+briefly considered small-board Go as a cheaper
 place to tune parameters for chess. The basic loop worked, but its large first-player advantage, shorter games,
 rapidly learned value target, and apparent need for different tuning made that transfer unattractive. This is the
 project owner's qualitative rationale, not a controlled cross-game result. Go receives no separate strength claim
@@ -34,8 +34,7 @@ in this report.
 The report contributes:
 
 1. A fully recorded, locally auditable chess self-play run whose readable recipe starts at
-   [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) and whose selected checkpoint,
-   evaluation, and hashes are frozen in the [final result record](../results/final-chess-run.md).
+   `chess-final-config.yaml` [10]; Chapter 7 and Appendix B state the selected checkpoint and evaluation.
 2. Substantial investigations of search allocation, graph search, inference caching, policy representation,
    model sizing, replay, restart states, resignation, auxiliary targets, and quantized serving. Each conclusion is
    bounded by the workload and evidence actually measured.
@@ -48,9 +47,11 @@ isolated Elo contribution for every retained component. The report uses paired g
 keeps throughput and target-fidelity measurements attached to their own protocols, and labels owner recollections
 when original result artifacts are unavailable.
 
+A live chess demonstration is available [12], but its games are not part of the evaluation protocol.
+
 ## Reading the report
 
-[Chapter 2](02-methodology-and-evidence.md) gives the compact measurement rules. [Chapter 3](03-system-and-methods.md)
+Chapter 2 gives the compact measurement rules. Chapter 3
 shows the learning loop. The investigation chapters then follow the three central choices: how to spend search,
 what the network predicts, and which positions become training data. A short systems chapter explains how those
 choices were made affordable. The three failure studies lead into the integrated recipe and the final measured

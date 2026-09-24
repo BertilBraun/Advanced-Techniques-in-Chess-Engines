@@ -3,14 +3,13 @@
 ## Living recipe and frozen result
 
 The readable entry point for reproducing or extending the system is the fully expanded
-[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). It owns the current network ladder,
+`chess-final-config.yaml` [10]. It owns the current network ladder,
 trainer, replay, self-play, deployment, and online-evaluation settings without an inheritance chain. It is a living
 recipe: future project work may revise it.
 
-The reported experiment is immutable. Its selected checkpoint, model and engine hashes, evaluation rows, archive
-digests, and evidence status are recorded in the [final result](../results/final-chess-run.md) and
-[evidence index](../evidence/final-chess-20260923/README.md). Those frozen records—not a future state of the YAML—are
-the authority for published numbers.
+The reported experiment is immutable. Chapter 7 and Appendices B and D identify the selected checkpoint, evaluation
+rows, and provenance boundary. These frozen facts—not a future state of the editable YAML—are the authority for
+published numbers.
 
 ## Model, objective, and optimization
 
@@ -58,8 +57,7 @@ against durable admitted data.
 ## Progressive sizing
 
 Candidate start and promotion are separate decisions. The primary 64-search ladder is smoothed and used to detect
-stage-specific plateaus; the full thresholds and window semantics are documented in
-[Progressive model sizing](../architecture/progressive-model-sizing.md). An eligible successor receives an average
+stage-specific plateaus. The current configuration [10] specifies the thresholds and window. An eligible successor receives an average
 of 1.5 optimizer quanta per active-model quantum on the captured replay snapshot and uses its own catch-up
 learning-rate clock.
 
@@ -82,7 +80,7 @@ terminal result matrix.
 The terminal matrix evaluated the selected 14×160 checkpoint over 100 games per row from 50 paired openings, with
 each opening played from both colours. Stockfish 13 used one thread, 1,024 MiB hash, and fixed node budgets from the
 published anchor curve. The reported rung for each model budget is the one whose observed score is closest to 0.5;
-both rungs and confidence intervals remain in the result record. Searched play used the frozen INT8 TensorRT artifact.
+both rungs and confidence intervals appear in Appendix B. Searched play used the frozen INT8 TensorRT artifact.
 Policy-only play used the matching float TorchScript export because it bypasses the native search service.
 
 The measured curve spans policy only and 100, 1,000, 10,000, and 100,000 searches per move. Parallelism is one at

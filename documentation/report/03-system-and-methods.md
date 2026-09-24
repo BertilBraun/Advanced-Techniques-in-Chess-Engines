@@ -4,8 +4,8 @@
 
 The systems design matters here for one reason: AlphaZero training needs enough searched games and fresh positions to
 learn within the available wall-clock budget. The report therefore describes the throughput-critical path—native
-search, batching, inference, replay, and training ownership—while leaving topology sweeps and recovery machinery to
-the linked engineering record.
+search, batching, inference, replay, and training ownership—while leaving exhaustive topology sweeps and recovery
+machinery outside the main argument.
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
@@ -15,14 +15,13 @@ diagram shows ownership and data flow, not the number or scheduling of every wor
 
 The system has one native implementation of the latency-sensitive path and one typed orchestration layer:
 
-- [`cpp/`](../../cpp/README.md) owns chess and Go state, legal actions, encodings, batched inference, MCTS, self-play,
+- `cpp/` owns chess and Go state, legal actions, encodings, batched inference, MCTS, self-play,
   and interactive analysis;
-- [`py/`](../../py/README.md) owns validated experiment configuration, worker lifecycle, replay ingestion,
+- `py/` owns validated experiment configuration, worker lifecycle, replay ingestion,
   distributed training, checkpoint publication, evaluation, telemetry, and tools.
 
 This division avoids maintaining a second production search or rules implementation in Python. Cross-language
-contracts—action mapping, tensor shape, feature planes, symmetry, and output order—are tested explicitly. The
-[Python runtime architecture](../architecture/python-runtime-rework.md) is the detailed ownership record.
+contracts—action mapping, tensor shape, feature planes, symmetry, and output order—are tested explicitly.
 
 ## Chess representation and outputs
 
@@ -35,7 +34,7 @@ The final architecture family is convolutional. Residual blocks use scaled post-
 and global-pooling context is inserted every second block. A from-to attention policy head scores move origin and
 destination structure far more compactly than the earlier dense spatial projection. The value path uses two value
 channels and a small fully connected layer. Exact stage shapes are listed in
-[the final recipe](06-final-chess-recipe.md).
+the final recipe.
 
 ## Search and self-play
 
@@ -61,10 +60,8 @@ fixed-layout columnar shards. A single circular memory-mapped store is the canon
 retain a bounded number of action entries, while dense batches are reconstructed only at the training boundary.
 
 The layout stores the state, legal moves, primary search policy, WDL target, root value, sample weight, source
-generation, surprise information, and configured auxiliary targets. Append and restart behavior are designed around
-exactly-once claims and explicit rejection telemetry. See
-[Columnar replay and shard ingestion](../architecture/replay-pipeline-rework.md) and the later
-[materialization rework](../architecture/replay-materialization-rework.md).
+generation, surprise information, and configured auxiliary targets. Append and restart behavior use exactly-once
+claims and explicit rejection telemetry.
 
 Sampling mixes uniform probability with policy surprise, emphasizing positions where search disagreed with the
 network prior while preserving broad coverage. Capacity grows in stages as the run matures. Credit accounting ties
@@ -91,30 +88,25 @@ controller, the immediate larger candidate starts from an independent initializa
 model. Candidate starts are triggered by an Elo-improvement plateau, and promotion requires two qualifying
 head-to-head matches. A separate final investigation tested function-preserving growth from the trained medium model;
 it is not the controller's ordinary initialization path. A promotion publishes the new model without changing replay
-identity or generation accounting. The full contract is in
-[Progressive model sizing](../architecture/progressive-model-sizing.md).
+identity or generation accounting. Chapter 6 states the final schedule and gate.
 
 Rank zero publishes a complete training checkpoint and a trimmed inference artifact. In the final path, QAT-aware
 ONNX artifacts are refit into TensorRT templates for self-play and evaluation. Numerical fidelity is a publication
-condition and is discussed in [Chapter 5](05-systems-optimization.md).
+condition and is discussed in Chapter 5.
 
 ## Evaluation
 
 Short-lived evaluation jobs run independently of training on a fixed cadence. They include fixed-dataset metrics and
 paired-opening Stockfish ladders for policy-only and searched play. The final evaluation is a separate terminal
 protocol with larger matches and deeper budgets. Engine binaries, datasets, opening books, and their hashes are
-configuration-owned; [evaluation engine documentation](../operations/evaluation-engines.md) records installation and
-identity rules.
+configuration-owned; the frozen run records their identities.
 
 Evaluation itself became an engineered subsystem. Adaptive ladders bracket the candidate against adjacent Stockfish
 node limits rather than extrapolating from one score; paired openings reverse colors; concurrent jobs are
 device-cycled; and reports retain raw W/D/L and exact search identity. Batch shape can alter serving behavior and
-reshuffle outcomes, so it is part of the protocol rather than an invisible speed setting. The
-[ladder-batching study](../benchmarks/ladder-batching-rtx4070s-20260906/README.md),
-[strength-over-generation series](../benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md), and
-[deep fixed-node match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) show the
-progression from frequent noisy signal to terminal-strength measurement.
+reshuffle outcomes, so it is part of the protocol rather than an invisible speed setting. Frequent training ladders
+provide a noisy progress signal; the terminal paired matches in Appendix B provide the final strength estimate.
 
-Detailed restart and recovery semantics are implementation concerns rather than a report contribution. The public
-reproducibility boundary is simply that completed trajectories, replay state, checkpoints, and evaluation evidence
-are durably committed before they are credited or reported; the linked architecture documentation owns the mechanics.
+Detailed restart and recovery semantics are implementation concerns rather than a report contribution. The
+reproducibility boundary is that completed trajectories, replay state, checkpoints, and evaluation evidence are
+durably committed before they are credited or reported.

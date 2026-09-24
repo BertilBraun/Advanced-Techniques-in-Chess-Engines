@@ -24,8 +24,7 @@ predict them. The project implemented three materially different policy families
 projection, move-plane heads preserve spatial move types, and the retained from-to head scores square pairs before a
 fixed gather. The parameter counts are from the same controlled convolutional-trunk comparison; no count is shown for
 the plane family because its implementations and external interfaces differed. The diagram is architectural, not a
-playing-strength comparison. Source:
-[attention viability study](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md).
+playing-strength comparison.
 
 The first used a conventional dense reduced-action head: a small spatial projection was flattened and mapped
 directly to the 1,880 logits. Two-, four-, and eight-channel projections were explored, along with spatial reduction
@@ -57,8 +56,7 @@ measured cells, although the missing fourth cell prevents a full factorial concl
 at production scale: approximately 1.9% of batch-512 forward throughput and 9% at batch 64. These measurements made
 the from-to head the best-supported policy choice, but they came from a shortened, single-seed teacher-data study,
 not an isolated long self-play match. Cross-entropy differences are reported as such and are not converted into an
-invented Elo gain. The full comparison and its dataset limitations are preserved in the
-[attention viability study](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md).
+invented Elo gain. The shortened teacher-data protocol limits the comparison's playing-strength interpretation.
 
 The owner remembers roughly ten policy-head comparisons, including an online plane-head trial that trained more
 slowly and underperformed. The full result bundle has not been recovered; the preserved plane implementation has 76
@@ -133,9 +131,7 @@ range. The production schedule was not a literal copy of the best short screen: 
 pre-fold until one million optimizer steps, and the deployment copy inherits the main linear learning rate. Frequent
 gradient clipping in several screens did not prevent learning, but neither did it establish that the threshold was
 optimal. These are controlled optimization diagnostics; online playing strength belongs to the complete trained
-system. The supporting records are the [SGD replay screen](../benchmarks/chess-sgd-replay-screen-rtx4070s-20260913/README.md),
-[pre-fold factorial](../benchmarks/chess-sgd-prefold-factorial-rtx4070s-20260914/README.md), and
-[post-fold sweep](../benchmarks/chess-sgd-postfold-lr-rtx4070s-20260914/README.md).
+system. These short frozen-replay screens informed, but did not independently validate, the final online recipe.
 
 ## Quantization as an architectural constraint
 
@@ -157,25 +153,21 @@ a production-sized smoke test reached roughly 135,000 INT8 positions per second,
 TorchScript BF16 and 99,000 for TensorRT FP16. These are model-core rates, not end-to-end self-play rates. Folding
 only after training damaged agreement, and global context and the heads remain outside the INT8 trunk. The result is
 evidence that architecture and deployment had to be co-designed; it is not evidence that the scaled block plays
-better than an ordinary residual block in floating point. The experiments are documented in the
-[quantization salvage](../benchmarks/tensorrt-int8-salvage-rtx4070s-20260912/README.md),
-[pre-activation screen](../benchmarks/tensorrt-int8-architecture-screen-rtx4070s-20260912/README.md), and
-[scaled post-activation screen](../benchmarks/tensorrt-int8-replay-screen-rtx4070s-20260912/README.md).
+better than an ordinary residual block in floating point. The fidelity and throughput measurements above distinguish
+the tested alternatives.
 
 ## Progressive model sizing
 
-KataGo provided the precedent: start with a small, fast network, train the next size on the same data, and switch
-when it catches up ([Wu, *Accelerating Self-Play Learning in Go*](https://arxiv.org/abs/1902.10565)). Early in
-self-play, extra model capacity may contribute less than the additional searched games a small network can produce.
-The [throughput benchmark](../benchmarks/progressive-sizing-throughput-rtx4070super-20260823/README.md) supports
-that premise here, and the small-to-medium handoff worked repeatedly. There is no equal-cost fixed-size control,
+KataGo provided the precedent [2]: start with a small, fast network, train the next size on the same data, and
+switch when it catches up. Early in self-play, extra model capacity may contribute less than the additional searched
+games a small network can produce. The measured small-model throughput supports that premise here, and the
+small-to-medium handoff worked repeatedly. There is no equal-cost fixed-size control,
 so its exact Elo-per-currency contribution remains unknown.
 
 Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
 matches against the active model. The former loss-based gate promoted a candidate that was about 270 Elo weaker
-because extra catch-up updates made its training loss incomparable. The
-[failure study](05a-three-failures.md#promotion-from-incomparable-training-losses) explains that correction;
-[the sizing guide](../architecture/progressive-model-sizing.md) owns thresholds, scheduling, and restart details.
+because extra catch-up updates made its training loss incomparable. The failure study in Chapter 5 explains that
+correction; Chapter 6 states the retained thresholds and promotion gate.
 
 The larger stage remains unresolved. An independently initialized candidate needed substantial catch-up. Explicit
 function-preserving growth avoided relearning the medium model's function, but may also bias optimization toward its
@@ -199,9 +191,8 @@ frozen ten-million-row window. The selected 474,069-parameter student was 13.20 
 trailed by 291.3 Elo at 64 searches each and by 166.2 Elo when its measured saturated serving advantage allowed 186
 searches against 64. It reached statistical parity only at an equal-multiply-accumulate allowance of 850 searches,
 which ignored tree work, launches, and imperfect batching and was therefore not an equal-time result. The compact
-artifact was useful, but it did not replace direct training. Detailed protocols appear in the
-[teacher-output study](../benchmarks/chess-distillation-probe-rtx3060-20260827/README.md) and
-[replay-target study](../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md).
+artifact was useful, but it did not replace direct training. These were separate compression protocols, not direct
+comparisons with the final teacher.
 
 A terminal compression check trained a 470,295-parameter student on the final 20-million-row replay buffer. At
 10,000 searches it reached 2,683 conditional benchmark Elo after roughly 7.5 epochs and 2,697 after roughly 23

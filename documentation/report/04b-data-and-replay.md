@@ -6,12 +6,11 @@ runtime reached a wall-clock-motivated cap. The replay system decides which of t
 they return to the optimizer, and which parts of each target are actually known. Those decisions shape the learning
 problem as directly as the network or optimizer does.
 
-The project gradually separated four operations that are easy to confuse. *Generation* chooses the trajectories to
+The project separated four operations that are easy to confuse. *Generation* chooses the trajectories to
 search. *Admission* turns eligible observations into durable rows. *Selection* chooses rows for a batch. *Weighting*
 changes their contribution after selection. A fifth mechanism, presentation credit, governs when training may
 advance. This vocabulary matters because a technique that prioritizes future games is not the same as prioritized
-replay, and drawing a row more often is not the same as increasing its loss weight. The underlying investigations
-are indexed in the [data and replay experiment ledger](../experiments/data-and-replay.md).
+replay, and drawing a row more often is not the same as increasing its loss weight.
 
 ## Replay is both memory and clock
 
@@ -26,8 +25,7 @@ The retained design therefore preallocates the physical memory map once while gr
 diversity and later allows a broader policy history to remain available. A mature earlier campaign showed why
 freshness must be measured rather than inferred: strength continued to improve after fixed-dataset policy accuracy
 largely saturated, while larger models and deeper search reduced the rate of new positions. That observation
-motivates the wider window but does not isolate this exact schedule as a strength improvement
-([training-dynamics audit](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)).
+motivates the wider window but does not isolate this exact schedule as a strength improvement.
 
 Replay reuse introduces a second tradeoff. The configured ratio is the number of optimizer presentations funded by
 each newly admitted row. In the retained setting, four presentations are credited per row; a 500-step quantum at a
@@ -47,7 +45,7 @@ admitted row are needed to describe what the learner actually saw.
 ## Choosing information without inventing it
 
 Within the live window, the sampler asks where search most revised the raw policy. This is related to
-[prioritized replay](https://arxiv.org/abs/1511.05952), but the priority signal and absence of importance correction
+prioritized replay [4], but the priority signal and absence of importance correction
 are specific to this project. Policy surprise is the divergence
 between the visit distribution and the network prior. Seventy percent of draws are allocated in proportion to this
 signal, capped at 2.0, while 30% remain uniform. The cap keeps a few extreme rows from monopolizing training and the
@@ -66,13 +64,13 @@ normalization, multiplies the primary and eligible auxiliary losses. Ordinary ro
 that the mechanism worked, not that arbitrary weighting improved play. Claims that the final system “weights hard
 positions more” should therefore refer to draw probability unless a non-unit loss-weight schedule is explicitly
 being discussed. TD-error priority, recency weighting, and global deduplication remained proposals rather than
-completed current experiments ([sample-stream audit](../analysis/v8-training-data-comparison-20260826.md)).
+completed current experiments.
 
 Admission happens earlier still. Random opening-prefix moves and the reconstructed prefix of a restart game have no
 search observation and create no replay row. A normal searched move does. A final search performed only to value a
 cut position can also become a row even though it selects no played action. Sparse policy storage retains at most 60
 actions and records how much visit mass was discarded. These rules define the data set before sampling or weighting
-can act on it ([replay system](../system/replay-and-data.md)).
+can act on it.
 
 ## Starting games where information is likely
 
@@ -87,7 +85,7 @@ archive is empty. A position is eligible only if at least 15 plies remained in i
 source game, its absolute root value was at most 0.8, and two or three leading actions covered 85% of visit mass. The
 branch actually played is marked used. A later restarted game reserves one untried plausible alternative and forces
 that action after reconstructing the prefix, so new compute explores a branch the source game did not.
-This differs from the learned [targeted search control](https://arxiv.org/abs/2302.12359) explored in prior work:
+This differs from the learned targeted search control [5] explored in prior work:
 the archive here uses observed search disagreement and untried branches, not a trained restart policy.
 
 Selection from this archive gives 30% probability to uniform choice. The remaining reservations favor the square
@@ -101,8 +99,7 @@ globally deduplicated.
 Restart priority and replay surprise are related only in motivation. One changes which future trajectories are
 generated; the other changes which already stored rows are selected for optimization. Their individual Elo effects,
 the 50% start mixture, and the exact filters were not isolated. They should be presented as a coherent curriculum
-design grounded in branch coverage rather than as independent measured gains
-([reference-recipe analysis](../analysis/reference-recipes-for-a-compute-poor-run.md)).
+design grounded in branch coverage rather than as independent measured gains.
 
 ## Ending games without corrupting their labels
 
@@ -116,8 +113,7 @@ outcome remains unknown.
 Over a rolling window, a candidate threshold needs at least 100 triggered continuation games and a one-sided 95%
 upper confidence bound on false non-loss no greater than 2.5%. The threshold may become more conservative
 immediately but relaxes by at most 0.01 per publication. An intentionally aggressive canary verified trigger
-journaling, persistence, and exclusion of a capped continuation, but did not establish a safe production threshold
-([resignation canary](../benchmarks/resignation-audit-canary-20260723/README.md)). The defensible conclusion is that
+journaling, persistence, and exclusion of a capped continuation, but did not establish a safe production threshold. The defensible conclusion is that
 resignation is calibrated and continuously audited—not that it has zero error or a measured independent Elo gain.
 
 A ply cap creates a harder target problem because there is no observed result at all. The project compared material
@@ -126,8 +122,7 @@ beyond the normal cap supplied later outcomes for evaluation. At the earlier mea
 search achieved Brier score 0.444 and cross-entropy 0.756, compared with 0.491 and 0.851 for material divided by 39.
 At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Search-root sign
 accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
-therefore performs one full search at the actual cut position and uses its root value as the bootstrap
-([cut-position benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md)).
+therefore performs one full search at the actual cut position and uses its root value as the bootstrap.
 The scalar root value `v` becomes a soft WDL target: with `r = 1 - |v|`, the win, draw, and loss components are
 `max(v, 0) + r/3`, `r/3`, and `max(-v, 0) + r/3`. Materialization then applies the configured per-ply blur.
 
@@ -135,8 +130,8 @@ The cut policy also closes the most damaging data failure found in the project. 
 searched endgame rows while broadcasting one shallow cutoff estimate back through each affected game. Weak endgame
 targets then produced weak conversion, more capped games, and more weak targets; replay eviction could remove the
 bad rows while their effect remained in the weights. The full reconstruction, measured incidence, and two-stage
-repair belong to [the late-game target-poisoning study](05a-three-failures.md#late-game-target-poisoning). Here the
-relevant data rule is simply that cut-value provenance and policy-row eligibility must be audited together.
+repair are described in the late-game target-poisoning failure study in Chapter 5. The relevant data rule is that
+cut-value provenance and policy-row eligibility must be audited together.
 
 ## Knowing what each target means
 
@@ -153,7 +148,7 @@ exist. Remaining game length is known only when the game reaches a natural resul
 from a cut game marks that target ineligible. The objective masks and renormalizes auxiliary losses over eligible
 rows rather than treating missing labels as zeros. Overfit tests established that the supplied multi-head targets
 were learnable, while replay audits established that censoring and offsets were wired correctly. Neither establishes
-an independent playing-strength gain ([multi-head overfit study](../benchmarks/chess-overfit-rtx3090-20260819/README.md)).
+an independent playing-strength gain.
 
 Broader auxiliary bundles were removed during a period with several simultaneous training problems. That was a
 precautionary simplification, not a controlled negative ablation. Retaining next-policy and remaining length later
@@ -166,15 +161,13 @@ future is unknown.
 An older replay design synchronously re-searched some recent positions and stored source-bound target overrides.
 No controlled study established that this used search more effectively than generating fresh states and outcomes,
 and the mechanism disappeared with its replay schema. Reanalysis is therefore superseded infrastructure, not a
-negative efficacy result ([historical implementation record](../history/v10-training-quality-implementation.md)).
+negative efficacy result.
 
 Model publication addresses freshness from the other side. Publishing every 100 optimizer steps was implemented
 historically and rejected because repeated serialization, deployment preparation, validation, synchronization, and
 activation outweighed the observed benefit. The raw timing bundle and matched strength curve were not preserved, so
 this remains a qualitative decision record, not an effect-size result. The retained 500-step boundary is a
-compromise, not a universal optimum; its cost and freshness also depend on replay reuse
-([publication-cadence record](../history/historical-research-backlog-20260822.md),
-[current decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)).
+compromise, not a universal optimum; its cost and freshness also depend on replay reuse.
 
 ## Overlap without full asynchrony
 
@@ -182,18 +175,14 @@ Training proceeds in coordinated credit-funded quanta while half the actor proce
 sweep found only a narrow, workload-dependent difference between balanced choices, so the retained fraction is an
 operational setting rather than a universal optimum. Publication, replay snapshots, and optimizer commits remain
 synchronized; fully asynchronous learning was proposed but not implemented. The throughput measurements and a
-corrected device-placement artifact are covered in [Chapter 5](05-systems-optimization.md#overlapping-self-play-and-training)
-and the [pause benchmark](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md).
+corrected device-placement artifact are covered in Chapter 5.
 
 ## Making the data trustworthy
 
 Completed games pass through bounded, worker-owned materialization into a typed circular store. Atomic writes,
 quarantine with a fatal rejection ceiling, immutable trainer snapshots, deterministic cross-rank sampling, and
 credit only after durable append preserve the meaning of the experiments under load. These are correctness and
-throughput properties, not direct evidence of stronger chess; the implementation and benchmarks belong to
-[Chapter 5](05-systems-optimization.md#replay-materialization-and-training-supply), the
-[pipeline design](../architecture/replay-pipeline-rework.md), and the
-[materialization design](../architecture/replay-materialization-rework.md).
+throughput properties, not direct evidence of stronger chess; Chapter 5 explains their role in the learning loop.
 
 ## What the retained curriculum establishes
 

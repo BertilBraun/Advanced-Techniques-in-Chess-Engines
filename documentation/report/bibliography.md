@@ -89,7 +89,7 @@ marked **verify** require metadata, version, and section checks during the publi
 - [Systems optimization](05-systems-optimization.md): versioned NVIDIA TensorRT documentation plus repository
   benchmarks for all project-specific behavior.
 - [Limitations](08-limitations.md): Elo-scale analysis and the non-transferability of external ablation multipliers.
-- [Reproducibility](09-reproducibility.md): pinned implementation sources, exact run configuration, and repository
+- [Reproducibility](appendix-d-reproducibility.md): pinned implementation sources, exact run configuration, and repository
   evidence hashes.
 
 ## Evaluation calibration

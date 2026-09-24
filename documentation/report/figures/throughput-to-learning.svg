@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="180" viewBox="0 0 1040 180" role="img" aria-labelledby="title description">
+  <title id="title">The throughput-to-learning chain</title>
+  <desc id="description">Model evaluations feed search simulations, completed games, admitted replay positions, optimizer presentations, and ultimately playing strength per wall-clock hour. Gains can disappear at each boundary.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#626A76"/>
+    </marker>
+  </defs>
+  <rect width="1040" height="180" fill="white"/>
+  <g fill="#E9F5F0" stroke="#16615A" stroke-width="1.8">
+    <rect x="10" y="30" width="147" height="102" rx="7"/>
+    <rect x="184" y="30" width="147" height="102" rx="7"/>
+    <rect x="358" y="30" width="147" height="102" rx="7"/>
+    <rect x="532" y="30" width="147" height="102" rx="7"/>
+    <rect x="706" y="30" width="147" height="102" rx="7"/>
+    <rect x="880" y="30" width="150" height="102" rx="7" fill="#16615A"/>
+  </g>
+  <g fill="none" stroke="#626A76" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M159 81 H180"/><path d="M333 81 H354"/><path d="M507 81 H528"/>
+    <path d="M681 81 H702"/><path d="M855 81 H876"/>
+  </g>
+  <g font-family="Arial" font-size="18" text-anchor="middle" fill="#16181D">
+    <text x="83" y="72">Model</text><text x="83" y="96">evaluations</text>
+    <text x="257" y="72">Search</text><text x="257" y="96">simulations</text>
+    <text x="431" y="72">Completed</text><text x="431" y="96">games</text>
+    <text x="605" y="72">Admitted replay</text><text x="605" y="96">positions</text>
+    <text x="779" y="72">Optimizer</text><text x="779" y="96">steps</text>
+  </g>
+  <g font-family="Arial" font-size="18" text-anchor="middle" fill="white">
+    <text x="955" y="72">Strength per</text><text x="955" y="96">wall-clock hour</text>
+  </g>
+  <text x="520" y="161" font-family="Arial" font-size="15" text-anchor="middle" fill="#626A76">A local speedup matters only when it reaches the rightmost outcome.</text>
+</svg>

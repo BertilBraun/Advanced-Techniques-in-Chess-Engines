@@ -10,10 +10,9 @@ network that fits stored targets can still create a worse game distribution.
 The project evaluates chess models against Stockfish 13 at fixed node limits. Openings are paired: each starting
 position is played once from each colour. Every reported match identifies the candidate checkpoint and deployed
 inference artifact, candidate search budget and parallelism, opponent limit, opening suite, W/D/L count, score, and
-uncertainty interval. The terminal matrix and its raw evidence are in the
-[final result record](../results/final-chess-run.md#terminal-evaluation-protocol).
+uncertainty interval. Appendix B presents the terminal matrix.
 
-Absolute ratings use [Marco Meloni's fixed-node Stockfish calibration](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/).
+Absolute ratings use Marco Meloni's fixed-node Stockfish calibration [9].
 They are **benchmark Elo** under this match protocol. They are not FIDE ratings, online ratings, or ratings against
 unrestricted contemporary engines. For each model search budget, the headline uses the opponent limit whose match
 score is closest to 0.5, reducing Elo extrapolation. Both tested limits remain visible. Their inferred ratings
@@ -36,8 +35,7 @@ The cross-campaign 64-search plot shows descriptive training trajectories. The p
 used different ladder estimators, so the report does not subtract their plotted endpoints as a strength claim. A
 retrospective comparison on a matched three-rung estimator estimates an approximately 74-Elo final plateau gain,
 with a separate transfer sensitivity of about ±15 Elo. The latter is not a game-level confidence interval. The
-[derivation and trimmed plot input](../results/final-chess-run.md#training-trajectory-and-excluded-work) record the
-comparison boundary.
+comparison boundary and transfer assumption are stated in Appendix B.
 
 ## Throughput and target fidelity
 
@@ -53,14 +51,13 @@ cannot stand in for a different INT8 artifact when INT8 is the intended deployme
 
 ## Provenance and limits
 
-The living [final configuration](../../py/configs/production/chess-final-config.yaml) explains the current recipe.
+The living final configuration [10] explains the current recipe.
 The reported run additionally needs its frozen source revision, resolved configuration, checkpoint and deployment
-hashes, evaluation assets, and archived results. The [evidence index](../evidence/final-chess-20260923/README.md)
-links those identities. A plan records intent; only implemented code and preserved measurements support claims that
+hashes, evaluation assets, and archived results. Appendix D distinguishes public artifacts from locally archived
+evidence. A plan records intent; only implemented code and preserved measurements support claims that
 an experiment happened.
 
 Many choices in the successful recipe were changed together. The report calls them *retained* when they are in that
 recipe, and gives an isolated effect only when a controlled comparison supports one. Missing historical policy-head
-artifacts and qualitative owner recollections are stated as such. The
-[experiment ledger](../experiments/README.md) and [coverage matrix](coverage-matrix.md) retain the full audit trail
-without making the reader traverse it to understand the main result.
+artifacts and qualitative owner recollections are stated as such. The paper gives the method and measured outcome
+needed to understand each conclusion without requiring its underlying project records.

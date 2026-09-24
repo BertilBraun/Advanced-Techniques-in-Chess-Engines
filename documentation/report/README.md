@@ -1,7 +1,8 @@
 # Technical report
 
-This report explains how the project built and studied a compute-constrained AlphaZero-style chess system. It is
-repository-native: claims link to the benchmark, analysis, configuration, or frozen evidence that supports them.
+This report explains how the project built and studied a compute-constrained AlphaZero-style chess system. The
+publication manuscript is self-contained: research claims are explained in the body or appendices, and external
+works use numbered references. Repository benchmarks remain the audit trail, not required reading for the paper.
 Chess is the research result. Go 7x7 and 9x9 appear only where they explain the shared platform or an early design
 decision, including why small-board Go was not retained as a proxy for chess hyperparameter optimization. Systems
 work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
@@ -26,13 +27,15 @@ Wider node throughput remains open; total project spend is intentionally not a r
 6. [Three failures that changed the method](05a-three-failures.md)
 7. [Final chess recipe](06-final-chess-recipe.md)
 8. [Final-run results](07-final-run-results.md) — completed teacher, search, parallelism, and distillation results
-9. [Limitations](08-limitations.md)
-10. [Reproducibility](09-reproducibility.md)
-11. [Conclusion](10-conclusion.md)
-12. [Publication references](references-publication.md) and [working citation plan](bibliography.md)
-13. [Research coverage matrix](coverage-matrix.md)
-14. [Publication plan](publication-plan.md)
-15. [Narrative outline and visualization strategy](narrative-outline.md)
+9. [Limitations](08-limitations.md) and [conclusion](10-conclusion.md)
+10. [Publication references](references-publication.md) and [working citation plan](bibliography.md)
+11. Appendices: [training diagnostics](appendix-a-training-diagnostics.md),
+    [evaluation tables](appendix-b-evaluation-tables.md),
+    [supporting comparisons](appendix-c-supporting-comparisons.md), and
+    [reproducibility](appendix-d-reproducibility.md)
+12. [Research coverage matrix](coverage-matrix.md)
+13. [Publication plan](publication-plan.md)
+14. [Narrative outline and visualization strategy](narrative-outline.md)
 
 ## Report status
 
@@ -53,5 +56,4 @@ does not authorize compute, deployment, stopping, or deletion.
 Build the PDF from the repository root with
 `uv run --group publication python .\py\tools\render_technical_report.py`. The generated review copy is
 `output/pdf/technical-report-review.pdf`; Markdown remains the editable source. Figure SVGs remain vector artwork in
-the PDF. Relative evidence links are converted to repository links and will resolve against the default branch after
-the documentation changes are merged.
+the PDF. The paper does not use repository-file hyperlinks as substitutes for methods or results.

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from urllib.parse import quote
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -24,12 +22,14 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     BalancedColumns,
+    BaseDocTemplate,
     Flowable,
+    Frame,
     KeepTogether,
     LongTable,
     PageBreak,
+    PageTemplate,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     TableStyle,
 )
@@ -49,11 +49,14 @@ SOURCE_FILES = (
     '06-final-chess-recipe.md',
     '07-final-run-results.md',
     '08-limitations.md',
-    '09-reproducibility.md',
     '10-conclusion.md',
 )
-SOURCE_REVISION = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPOSITORY_ROOT, text=True).strip()
-PUBLIC_SOURCE_ROOT = f'https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/{SOURCE_REVISION}/'
+APPENDIX_FILES = (
+    'appendix-a-training-diagnostics.md',
+    'appendix-b-evaluation-tables.md',
+    'appendix-c-supporting-comparisons.md',
+    'appendix-d-reproducibility.md',
+)
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 16 * mm
 COLUMN_GAP = 7 * mm
@@ -67,7 +70,6 @@ MUTED = colors.HexColor('#444444')
 class ContentBlock:
     flowable: Flowable
     full_width: bool = False
-    page_before: bool = False
 
 
 class VectorFigure(Flowable):
@@ -211,6 +213,7 @@ def styles() -> dict[str, ParagraphStyle]:
             fontSize=12,
             leading=14,
             textColor=INK,
+            alignment=TA_LEFT,
             firstLineIndent=0,
             spaceBefore=10,
             spaceAfter=5,
@@ -223,6 +226,7 @@ def styles() -> dict[str, ParagraphStyle]:
             fontSize=10,
             leading=12,
             textColor=INK,
+            alignment=TA_LEFT,
             firstLineIndent=0,
             spaceBefore=8,
             spaceAfter=3,
@@ -235,6 +239,7 @@ def styles() -> dict[str, ParagraphStyle]:
             fontSize=10,
             leading=12,
             textColor=INK,
+            alignment=TA_LEFT,
             firstLineIndent=0,
             spaceBefore=6,
             spaceAfter=2,
@@ -243,6 +248,7 @@ def styles() -> dict[str, ParagraphStyle]:
         'list': ParagraphStyle(
             'list',
             parent=body,
+            alignment=TA_LEFT,
             leftIndent=13,
             firstLineIndent=0,
             bulletIndent=2,
@@ -297,20 +303,9 @@ def styles() -> dict[str, ParagraphStyle]:
 
 
 def source_link(source: Path, href: str) -> str:
-    if href.startswith(('https://', 'http://', 'mailto:')):
+    if source.name == 'references-publication.md' and href.startswith(('https://', 'http://')):
         return href
-    target_name, separator, fragment = href.partition('#')
-    if not target_name:
-        return href
-    target = (source.parent / target_name).resolve()
-    try:
-        repository_path = target.relative_to(REPOSITORY_ROOT)
-    except ValueError:
-        return href
-    result = PUBLIC_SOURCE_ROOT + quote(repository_path.as_posix())
-    if separator:
-        result += '#' + fragment
-    return result
+    raise ValueError(f'Hyperlink outside the publication bibliography: {source}: {href}')
 
 
 def inline_markup(tokens: list[Token], source: Path) -> str:
@@ -393,9 +388,7 @@ def parse_table(
         elif token.type == 'tr_close':
             rows.append(current_row)
         position += 1
-    return ContentBlock(
-        KeepTogether([make_table(rows, report_styles)]), full_width=True, page_before=True
-    ), position + 1
+    return ContentBlock(KeepTogether([make_table(rows, report_styles)]), full_width=True), position + 1
 
 
 def parse_markdown(
@@ -438,6 +431,8 @@ def parse_markdown(
                             'figures/final-training-loss-and-rate.svg',
                             'figures/final-training-volume-and-throughput.svg',
                         }
+                        else 235
+                        if image_path == 'figures/final-search-curve.svg'
                         else 275
                     )
                     figure = VectorFigure((source.parent / image_path).resolve(), maximum_height)
@@ -466,7 +461,12 @@ def parse_markdown(
                         bullet = None
                         if list_depth:
                             counter = ordered_counters[-1]
-                            bullet = f'{counter}.' if counter is not None else '•'
+                            if counter is None:
+                                bullet = '•'
+                            elif source.name == 'references-publication.md':
+                                bullet = f'[{counter}]'
+                            else:
+                                bullet = f'{counter}.'
                         blocks.append(ContentBlock(Paragraph(content, report_styles[style_name], bulletText=bullet)))
                         after_heading = False
                 position += 3
@@ -527,7 +527,7 @@ def append_column_content(story: list[Flowable], pending: list[Flowable]) -> Non
         pending.clear()
 
 
-def draw_page(canvas: Canvas, document: SimpleDocTemplate) -> None:
+def draw_page(canvas: Canvas, document: BaseDocTemplate) -> None:
     canvas.saveState()
     canvas.setTitle('Engineering Efficient Self-Play Chess')
     canvas.setAuthor('Bertil Braun')
@@ -550,7 +550,7 @@ def build_report(output: Path) -> None:
     register_fonts()
     report_styles = styles()
     output.parent.mkdir(parents=True, exist_ok=True)
-    document = SimpleDocTemplate(
+    document = BaseDocTemplate(
         str(output),
         pagesize=A4,
         leftMargin=MARGIN,
@@ -560,8 +560,20 @@ def build_report(output: Path) -> None:
         title='Engineering Efficient Self-Play Chess',
         author='Bertil Braun',
     )
+    frame = Frame(
+        MARGIN,
+        20 * mm,
+        CONTENT_WIDTH,
+        PAGE_HEIGHT - 38 * mm,
+        id='article',
+        leftPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        bottomPadding=0,
+    )
+    document.addPageTemplates([PageTemplate(id='article', frames=[frame], onPage=draw_page)])
     story: list[Flowable] = [
-        Spacer(1, 17),
+        Spacer(1, 23),
         Paragraph(
             'Engineering Efficient Self-Play Chess: Search, Replay, and Throughput Under Limited Compute',
             report_styles['title'],
@@ -571,7 +583,7 @@ def build_report(output: Path) -> None:
         Paragraph('Abstract', report_styles['abstract_label']),
         Paragraph(escape(abstract_text()), report_styles['abstract']),
         Paragraph(
-            '<b>Keywords:</b> AlphaZero, chess, self-play, Monte Carlo tree search, replay, inference',
+            '<b>Keywords:</b> AlphaZero, chess, self-play, Monte Carlo tree search, replay, GPU inference, quantization, model growth, fixed-node evaluation',
             report_styles['keywords'],
         ),
     ]
@@ -580,8 +592,6 @@ def build_report(output: Path) -> None:
         for block in parse_markdown(REPORT_ROOT / filename, report_styles):
             if block.full_width:
                 append_column_content(story, pending)
-                if block.page_before:
-                    story.append(PageBreak())
                 story.append(block.flowable)
             else:
                 pending.append(block.flowable)
@@ -597,7 +607,19 @@ def build_report(output: Path) -> None:
     for block in parse_markdown(REPORT_ROOT / 'references-publication.md', reference_styles):
         pending.append(block.flowable)
     append_column_content(story, pending)
-    document.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
+    story.append(PageBreak())
+    for appendix_index, filename in enumerate(APPENDIX_FILES):
+        if appendix_index:
+            append_column_content(story, pending)
+            story.append(PageBreak())
+        for block in parse_markdown(REPORT_ROOT / filename, report_styles):
+            if block.full_width:
+                append_column_content(story, pending)
+                story.append(block.flowable)
+            else:
+                pending.append(block.flowable)
+    append_column_content(story, pending)
+    document.build(story)
 
 
 def main() -> None:
