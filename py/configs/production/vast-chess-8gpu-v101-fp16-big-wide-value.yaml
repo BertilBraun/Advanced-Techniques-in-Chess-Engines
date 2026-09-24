@@ -1,0 +1,149 @@
+extends: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml
+
+# The last recipe: everything the post-mortem left standing, on the 19x176 from scratch. INT8 is
+# gone because the one A/B that isolated it (V77 against V79) showed no end-to-end throughput for
+# it while QAT cost the trainer eleven percent, and every INT8 defect this project hit came with it.
+# TensorRT stays, because that is where the throughput actually came from.
+run:
+  run_name: vast-chess-8gpu-v101-fp16-big-wide-value
+  tensorboard_run_directory: vast-chess-8gpu-v101-fp16-big-wide-value
+  environment:
+    dependency_lock_sha256: a09c3c9697dbe690c874bac20ee8690a3904dd6b8bc8e6b5478c27d61ddd03aa
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v101-fp16-big-wide-value
+  trainer:
+    quantization:
+      kind: disabled
+    # The peak is untested; the floor is not. V100 ran a constant 0.02 for sixty-eight generations
+    # and gave up about twenty-six Elo against 0.01, so the decay ends where the evidence is.
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.2
+      end_value: 0.01
+      rounding: none
+  # No progressive stages: the open question is how a big model behaves once it has caught up on its
+  # own, which a promotion from a smaller parent cannot answer and a candidate phase only taxes.
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-post-19x176-fromto-wide-value
+      network:
+        kind: convolutional
+        num_layers: 19
+        hidden_size: 176
+        residual_block: {kind: post_activation}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 32
+        value_fc_size: 128
+  limits:
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    minimum_free_disk_gib: 1.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v101-fp16-big-wide-value.stop
+
+chess:
+  objective:
+    # next_policy and remaining_game_length carry over at the weights the reported run used. Every
+    # target added here sits well below them, so that one nobody has tuned cannot outvote the policy
+    # and value it exists to support. legal_moves is left out: it costs a full action-space head to
+    # teach a rule that masking already enforces at inference.
+    auxiliary_targets:
+    - {kind: next_policy, ply_offset: 1, loss_weight: 0.15}
+    - {kind: remaining_game_length, loss_weight: 0.1, normalization_scale: 400.0}
+    # Three horizons rather than one: at two plies the search value has barely moved, so a single
+    # near head would mostly restate the value target it is meant to complement.
+    - {kind: future_search_value, ply_offset: 2, smooth_l1_beta: 0.1, loss_weight: 0.03}
+    - {kind: future_search_value, ply_offset: 4, smooth_l1_beta: 0.1, loss_weight: 0.03}
+    - {kind: future_search_value, ply_offset: 8, smooth_l1_beta: 0.1, loss_weight: 0.03}
+    - {kind: irreversible_progress, horizon_plies: 20, loss_weight: 0.02}
+    # How far the value head sat from its own tree. Measured on forty thousand replay positions,
+    # this residual is structured rather than noise, which is what makes it worth predicting.
+    - {kind: value_residual, smooth_l1_beta: 0.05, loss_weight: 0.05}
+  self_play:
+    search:
+      # Measured on 120 positions at this budget: the AlphaZero constant moves 4.8 percent of visit
+      # mass, changes the chosen move in one position in twenty-four and takes 0.104 nats out of the
+      # target. Small, real, and free; the sign is what this run is partly for.
+      exploration_constant: auto
+      # 1600 visits cost nineteen Elo on the policy-only ladder at eighty-seven percent buffer
+      # turnover and halved throughput, so the budget stays where the reported model had it.
+      baseline_visits:
+        kind: staged
+        stages:
+        - {start_generation: 0, value: 300}
+        - {start_generation: 10, value: 400}
+        - {start_generation: 50, value: 500}
+        - {start_generation: 90, value: 600}
+        - {start_generation: 1000, value: 800}
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true
+        templates:
+        - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b320.engine}
+
+evaluation:
+  # Three bracketed rungs, so the ladder stays on the same estimator as the reported run and the
+  # numbers can be compared directly rather than through a single-rung fit.
+  definitions:
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b64.engine}
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - {kind: float, model_id: chess-cnn-post-19x176-fromto-wide-value, engine_path: /workspace/tensorrt/v101-19x176-wide-value-fp16-b64.engine}
