@@ -124,28 +124,12 @@ accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguish
 therefore performs one full search at the actual cut position and uses its root value as the bootstrap
 ([cut-position benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md)).
 
-### The late-game poisoning incident
-
-This decision became urgent after two training attempts struggled to convert overwhelmingly won positions. The
-initial hypotheses—tablebase removal, resignation behavior, and remaining-length censoring—did not explain the
-difference. Replay forensics instead found an early interval in which the recipe switched to cheap searches before
-the game cap. Because only full-search observations were admitted, about 14.4% of all played plies disappeared from
-primary policy training, specifically the final plies of the longest games. At the same time, an 81–136-simulation
-cheap search supplied the cutoff value propagated to every admitted row in the game, affecting roughly 36–38% of
-rows in the worst interval.
-
-The failure reinforced itself. Too few well-searched endgame targets produced a weak conversion policy. Cheap late
-searches driven by that policy played nearly randomly and failed to finish. The shallow cutoff then replaced a
-natural result with another weak bootstrap. By the time the failure was diagnosed, the offending rows had aged out
-of replay, making the current buffer look healthy while the learned weights still carried the damage.
-
-The first repair replaced the heuristic cutoff with the fresh cut-position search. The later design eliminated the
-forced cheap tail, returning searched endgames to replay, and allowed the maximum game length to grow as training
-advanced. These changes were bundled with other conversion repairs, so the incident identifies a credible causal
-chain without assigning a clean Elo effect to each component. Its broader lesson is stronger: target provenance must
-be audited over time, because replay eviction can remove the evidence before it removes the learned consequence
-([conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
-[replay forensics](../analysis/v8-training-data-comparison-20260826.md)).
+The cut policy also closes the most damaging data failure found in the project. A former cheap-search tail removed
+searched endgame rows while broadcasting one shallow cutoff estimate back through each affected game. Weak endgame
+targets then produced weak conversion, more capped games, and more weak targets; replay eviction could remove the
+bad rows while their effect remained in the weights. The full reconstruction, measured incidence, and two-stage
+repair belong to [the late-game target-poisoning study](05a-three-failures.md#late-game-target-poisoning). Here the
+relevant data rule is simply that cut-value provenance and policy-row eligibility must be audited together.
 
 ## Knowing what each target means
 
@@ -172,18 +156,10 @@ future is unknown.
 
 ## Fresh targets versus fresh positions
 
-Old replay targets were once refreshed through bounded synchronous reanalysis. After a publication, one worker
-re-searched a fraction of recent positions with the new model and wrote immutable, source-bound override sidecars.
-Those overrides updated policy visits and root values without pretending to add a new position, terminal outcome, or
-presentation credit. The implementation and recovery behavior were real, but no controlled study established
-better learning per unit search. The path disappeared when replay ownership moved to the fixed-layout columnar
-store, whose rows no longer preserve the trajectory provenance that implementation required. Reanalysis is thus
-superseded infrastructure, not an experiment that proved reanalysis harmful
-([historical implementation record](../history/v10-training-quality-implementation.md)).
-
-The unresolved comparison is economic: is a stale position worth re-searching, or should the same search budget
-generate a fresh trajectory with a new state and outcome? Reanalysis should return only after measuring target age
-and current-versus-source policy divergence, then comparing refreshed-target value directly with fresh self-play.
+An older replay design synchronously re-searched some recent positions and stored source-bound target overrides.
+No controlled study established that this used search more effectively than generating fresh states and outcomes,
+and the mechanism disappeared with its replay schema. Reanalysis is therefore superseded infrastructure, not a
+negative efficacy result ([historical implementation record](../history/v10-training-quality-implementation.md)).
 
 Model publication addresses freshness from the other side. Publishing every 100 optimizer steps was implemented
 historically and rejected because repeated serialization, deployment preparation, validation, synchronization, and
@@ -195,46 +171,22 @@ compromise, not a universal optimum; its cost and freshness also depend on repla
 
 ## Overlap without full asynchrony
 
-Training proceeds in credit-funded quanta, but self-play does not stop completely. Two of four actor processes per
-GPU are requested to pause while all GPUs optimize; the others continue searching. Publication, actor refresh,
-replay identity, and optimizer commits remain coordinated. The correct description is overlapped self-play and
-training, not fully asynchronous AlphaZero.
-
-The pause sweep demonstrates why the exact fraction is operational rather than universal. In a deeper-search
-workload, leaving zero, eight, sixteen, or thirty-two actors running reduced trainer throughput from 25,275 to
-21,492, 17,139, and 9,210 samples per second, while concurrent search rose from none to 505,509, 605,762, and 741,508
-searches per second. Converting both streams to estimated quantum time left only about a 5% spread. In an earlier
-cheaper-search regime the spread was 2.3%. An initial placement mistake had even produced a false 2.53-fold advantage
-by loading only the first GPUs and slowing the distributed trainer at its most contended rank. Round-robin placement
-removed the artifact ([pause tradeoff](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md)).
-
-Partial overlap was retained because it converts otherwise idle actor capacity into fresh data without accepting the
-severe trainer slowdown of leaving every actor active. Fully asynchronous learning—continuous optimization and
-publication with actors consuming arbitrary model ages—was proposed but not implemented. Its potential throughput
-must be weighed against the loss of auditable replay snapshots, exact credit accounting, and simple recovery.
+Training proceeds in coordinated credit-funded quanta while half the actor processes continue self-play. A pause
+sweep found only a narrow, workload-dependent difference between balanced choices, so the retained fraction is an
+operational setting rather than a universal optimum. Publication, replay snapshots, and optimizer commits remain
+synchronized; fully asynchronous learning was proposed but not implemented. The throughput measurements and a
+corrected device-placement artifact are covered in [Chapter 5](05-systems-optimization.md#overlapping-self-play-and-training)
+and the [pause benchmark](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md).
 
 ## Making the data trustworthy
 
-These experiments depend on infrastructure that can preserve their meaning under load. Completed games are written
-atomically, dispatched into bounded worker-owned queues, reconstructed and validated in parallel, and materialized
-into typed columnar shards. Bad games are quarantined individually, while a rolling rejection ceiling turns a
-systemic schema failure into a loud stop rather than silent data loss. Sealed shards enter one preallocated circular
-memory map; trainers capture an immutable replay description and receive deterministic, non-overlapping sample
-slices across data-parallel ranks.
-
-This design followed a concrete bottleneck. The older shard loader managed only 3,943 samples per second across
-5,000 producer files, then reached 32,579 after compaction into 25 containers. The production distributed path later
-sustained 22,599 samples per second with real decoding, partitioning, transfer, and synchronization, or 15,026 under
-simultaneous self-play contention ([loader benchmark](../benchmarks/replay-loader-20260724/README.md),
-[distributed-training benchmark](../benchmarks/ddp-production-training-20260720/README.md)). The current mapped store,
-vectorized gather, bounded prefetch, deterministic shard adoption, and credit-after-flush rule turn those systems
-lessons into the active pipeline
-([pipeline design](../architecture/replay-pipeline-rework.md),
-[materialization design](../architecture/replay-materialization-rework.md)).
-
-Those are throughput, durability, and correctness results—not direct evidence of stronger chess. Their scientific
-role is to prevent corrupt rows, duplicate credit, loader starvation, or a growing inbox from masquerading as a
-learning plateau.
+Completed games pass through bounded, worker-owned materialization into a typed circular store. Atomic writes,
+quarantine with a fatal rejection ceiling, immutable trainer snapshots, deterministic cross-rank sampling, and
+credit only after durable append preserve the meaning of the experiments under load. These are correctness and
+throughput properties, not direct evidence of stronger chess; the implementation and benchmarks belong to
+[Chapter 5](05-systems-optimization.md#replay-materialization-and-training-supply), the
+[pipeline design](../architecture/replay-pipeline-rework.md), and the
+[materialization design](../architecture/replay-materialization-rework.md).
 
 ## What the retained curriculum establishes
 
