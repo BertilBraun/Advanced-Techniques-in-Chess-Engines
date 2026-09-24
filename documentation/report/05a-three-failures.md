@@ -22,6 +22,11 @@ entire recorded trajectory. By the time the active replay buffer looked healthy,
 evicted, while their effect on the weights and subsequent self-play distribution could remain. The reconstruction is
 documented in the [late-game training-data audit](../analysis/v8-training-data-comparison-20260826.md).
 
+![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
+
+*The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at its
+source.*
+
 The repair happened in two stages. First, the cutoff stopped relying on the material heuristic and obtained a value
 from one full search at the final cut position. A controlled continuation study supported that choice: on 2,282
 early cut positions, the searched root value reduced Brier error from 0.491 to 0.444 and cross-entropy from 0.851 to
