@@ -1,7 +1,8 @@
 # Publication plan
 
-This file is the completion contract for turning the report draft into a final project publication. It complements
-the quantitative placeholder chapter; it does not contain provisional result values.
+This file is the completion contract for turning the evidence-linked narrative draft into a final publication.
+Terminal strength and the headline figures are complete; archive-derived training-volume analysis, additional
+figures, release metadata, and editorial review remain open.
 
 ## Narrative scope
 
@@ -32,7 +33,7 @@ the quantitative placeholder chapter; it does not contain provisional result val
 | Resignation was safe and useful | Threshold history, continuation outcomes, false-nonloss bound, saved work | “Calibrated with continuation auditing” |
 | Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Final ONNX identity is verified on Hugging Face; release metadata and aliases remain open |
 
-## Required headline tables
+## Candidate supporting tables
 
 1. **Final result summary:** policy-only, 64, 10,000, and chosen high-search condition with opponent, games, W/D/L,
    score, benchmark Elo/CI, latency, parallelism, and artifact ID.
@@ -79,19 +80,20 @@ fixed table or figure count.
 - synchronized final model card, aliases, checksum index, and download identity;
 - explicit code and model license decision.
 
-## Writing pass after evidence arrives
+## Completion pass
 
-1. Reconcile the [project result record](../results/final-chess-run.md) with the checksum-covered result artifacts.
-2. Write results and discussion without changing historical conclusions to fit the outcome.
-3. Update the abstract/conclusion, then replace the root README's temporary predecessor showcase with the final result
-   and update the documentation index. Retain the previous four-day baseline only as a clearly labeled historical
-   comparison and evidence link.
-4. Replace any remaining “current/live/pending” statements with a dated final status.
-5. Verify every quantitative claim against the claim map and named evidence dimension.
-6. Pin mutable external documentation and complete bibliography metadata.
-7. Run link/anchor validation, render plots, and inspect Markdown/PDF output.
-8. Refresh the Hugging Face model card, `latest` aliases, and checksum index; the immutable final ONNX already matches
-   the reported artifact hash.
+1. Finish archive-derived games, admitted-position, replay, throughput, training-curve, and cost reconciliation;
+   retain explicit gaps where records do not permit it.
+2. Check every quantitative and causal claim against the source artifact and keep proxy, throughput, and Elo results
+   distinct. The terminal matrix, headline search curve, and root README result are already integrated.
+3. Add figures where they clarify the mechanism, then review visual hierarchy, captions, and accessibility in a
+   rendered report. Avoid filling a figure slot merely to reach a count.
+4. Pin mutable external documentation and complete bibliography metadata.
+5. Validate links and anchors after the topic-first chapter rewrite, then render and inspect a PDF edition if one is
+   produced. Markdown remains the editable source.
+6. Verify the public Hugging Face model card, aliases, checksum index, and live-site artifact identity. The owner is
+   updating those external surfaces; repository prose must not imply that they are already synchronized.
+7. Record the code and model/data license decision before making redistribution claims.
 
 ## Review gates
 
