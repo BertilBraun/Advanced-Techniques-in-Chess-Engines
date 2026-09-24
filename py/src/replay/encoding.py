@@ -30,6 +30,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
+    ValueResidualHeadLayout,
 )
 
 
@@ -99,14 +100,14 @@ def _encode_sample(
             ):
                 destination.eligible[row_index] = 0
             case (
-                FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout(),
+                FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout() | ValueResidualHeadLayout(),
                 EligibleScalarAuxiliaryTarget(value=value),
                 ReplayScalarColumnViews(),
             ):
                 destination.value[row_index] = value
                 destination.eligible[row_index] = 1
             case (
-                FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout(),
+                FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout() | ValueResidualHeadLayout(),
                 IneligibleScalarAuxiliaryTarget(),
                 ReplayScalarColumnViews(),
             ):

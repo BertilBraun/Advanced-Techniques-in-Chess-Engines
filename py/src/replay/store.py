@@ -41,6 +41,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
+    ValueResidualHeadLayout,
 )
 
 _REPLAY_MAGIC = b'AZRPLY02'
@@ -627,7 +628,7 @@ class ReplayStore:
                     else:
                         auxiliary_targets.append(IneligibleRemainingGameLengthTarget())
                 case (
-                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout() | ValueResidualHeadLayout()),
                     ReplayScalarColumnViews(),
                 ):
                     if int(target.eligible[0]):

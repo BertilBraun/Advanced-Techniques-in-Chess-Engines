@@ -17,6 +17,7 @@ from src.training.targets import (
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
     TrainingTargetLayout,
+    ValueResidualHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
 
@@ -200,7 +201,12 @@ class ReplayLayout(FrozenModel):
                             ),
                         )
                     )
-                case RemainingGameLengthHeadLayout() | FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout():
+                case (
+                    RemainingGameLengthHeadLayout()
+                    | FutureSearchValueHeadLayout()
+                    | IrreversibleProgressHeadLayout()
+                    | ValueResidualHeadLayout()
+                ):
                     descriptors.extend(
                         (
                             ReplayColumnDescriptor(
@@ -283,3 +289,5 @@ def _head_digest_fields(head: AuxiliaryHeadLayout) -> dict[str, int | float | st
             return {'kind': head.kind, 'output_size': 1, 'horizon_plies': horizon_plies}
         case LegalMovesHeadLayout(action_size=action_size):
             return {'kind': head.kind, 'action_size': action_size}
+        case ValueResidualHeadLayout(smooth_l1_beta=beta):
+            return {'kind': head.kind, 'output_size': 1, 'smooth_l1_beta': beta}
