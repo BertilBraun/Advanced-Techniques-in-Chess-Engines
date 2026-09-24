@@ -69,16 +69,22 @@ def smooth(values: list[float], radius: int = 5) -> list[float]:
     return [fmean(values[max(0, index - radius) : index + radius + 1]) for index in range(len(values))]
 
 
-def configure_axes(axes: Axes, ylabel: str) -> None:
+def configure_axes(axes: Axes, ylabel: str, *, paper: bool) -> None:
     axes.set_ylabel(ylabel)
-    axes.grid(axis='y', color=GRID, linewidth=0.8)
+    axes.grid(axis='y', color='#c9d3dc' if paper else GRID, linewidth=0.8)
     axes.set_axisbelow(True)
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['left'].set_color(MUTED)
     axes.spines['bottom'].set_color(MUTED)
     axes.tick_params(colors='#34495b', length=0, pad=7)
-    axes.axvline(SMALL_TO_MEDIUM_STEPS / 1000, color=MUTED, linewidth=1, linestyle='--', alpha=0.8)
+    axes.axvline(
+        SMALL_TO_MEDIUM_STEPS / 1000,
+        color=MUTED,
+        linewidth=1.3 if paper else 1,
+        linestyle='--',
+        alpha=0.95 if paper else 0.8,
+    )
 
 
 def configure_style(*, paper: bool) -> None:
@@ -121,16 +127,30 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
     for axis in axes:
         axis.set_facecolor('white')
     loss_axes, rate_axes = axes
-    configure_axes(loss_axes, 'Training loss')
-    configure_axes(rate_axes, 'Learning rate')
+    configure_axes(loss_axes, 'Training loss', paper=paper)
+    configure_axes(rate_axes, 'Learning rate', paper=paper)
     for label, values, color in (
         ('Total', [point.total_loss for point in points], '#1f5875' if paper else BLUE),
         ('Policy', [point.policy_loss for point in points], '#1f7065' if paper else TEAL),
         ('WDL', [point.wdl_loss for point in points], '#a45d1e' if paper else ORANGE),
     ):
-        loss_axes.plot(x, values, color=color, linewidth=0.55, alpha=0.12 if paper else 0.16)
+        loss_axes.plot(x, values, color=color, linewidth=0.75 if paper else 0.55, alpha=0.35 if paper else 0.16)
         loss_axes.plot(x, smooth(values), color=color, linewidth=2.3 if paper else 1.9, label=label)
-    loss_axes.legend(loc='upper right', frameon=False, ncol=3, fontsize=11 if paper else 9)
+        if paper:
+            loss_axes.plot(x[-1], values[-1], marker='o', color=color, markersize=4)
+            loss_axes.annotate(
+                f'{values[-1]:.2f}',
+                (x[-1], values[-1]),
+                xytext=(6, 0),
+                textcoords='offset points',
+                va='center',
+                color=color,
+                fontsize=10,
+            )
+    if paper:
+        loss_axes.legend(loc='lower center', bbox_to_anchor=(0.5, 1.01), frameon=False, ncol=3, fontsize=10)
+    else:
+        loss_axes.legend(loc='upper right', frameon=False, ncol=3, fontsize=9)
     if not paper:
         loss_axes.annotate(
             'Medium model active',
@@ -146,14 +166,26 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
         color='#1f5875' if paper else BLUE,
         linewidth=2.2 if paper else 1.8,
     )
+    if paper:
+        rate_axes.set_ylim(0.015, 0.105)
+        rate_axes.set_yticks((0.02, 0.04, 0.06, 0.08, 0.10))
+        rate_axes.plot(x[-1], points[-1].learning_rate, marker='o', color='#1f5875', markersize=4)
+        rate_axes.annotate(
+            f'{points[-1].learning_rate:.4f}',
+            (x[-1], points[-1].learning_rate),
+            xytext=(6, 4),
+            textcoords='offset points',
+            color='#1f5875',
+            fontsize=10,
+        )
     rate_axes.set_xlabel('Completed optimizer steps (thousands)')
-    rate_axes.set_xlim(0, 410)
+    rate_axes.set_xlim(0, 445 if paper else 410)
     if not paper:
         figure.suptitle('Final lineage: training objectives and learning rate', x=0.09, ha='left', color='#203444')
     figure.subplots_adjust(
         left=0.13 if paper else 0.10,
         right=0.98,
-        top=0.97 if paper else 0.91,
+        top=0.88 if paper else 0.91,
         bottom=0.13 if paper else 0.11,
         hspace=0.15 if paper else 0.12,
     )
@@ -162,6 +194,9 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
 
 
 def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> None:
+    if paper:
+        render_volume_paper(points)
+        return
     x = [point.optimizer_steps / 1000 for point in points]
     figure: Figure
     axes: list[Axes]
@@ -170,9 +205,9 @@ def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> N
     for axis in axes:
         axis.set_facecolor('white')
     games_axes, replay_axes, trainer_axes = axes
-    configure_axes(games_axes, 'Games / quantum' if paper else 'Ingested games / quantum')
-    configure_axes(replay_axes, 'Positions (millions)')
-    configure_axes(trainer_axes, 'Trainer samples/s (k)' if paper else 'Trainer samples/s (thousands)')
+    configure_axes(games_axes, 'Ingested games / quantum', paper=False)
+    configure_axes(replay_axes, 'Positions (millions)', paper=False)
+    configure_axes(trainer_axes, 'Trainer samples/s (thousands)', paper=False)
     games = [float(point.completed_games) for point in points]
     games_axes.plot(x, games, color='#1f7065' if paper else TEAL, linewidth=0.55, alpha=0.12 if paper else 0.16)
     games_axes.plot(x, smooth(games), color='#1f7065' if paper else TEAL, linewidth=2.2 if paper else 1.8)
@@ -207,6 +242,44 @@ def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> N
     )
     suffix = '-paper.svg' if paper else '.svg'
     save_figure(figure, FIGURE_DIRECTORY / f'final-training-volume-and-throughput{suffix}')
+
+
+def render_volume_paper(points: tuple[TrainingPoint, ...]) -> None:
+    x = [point.optimizer_steps / 1000 for point in points]
+    figure: Figure = plt.figure(figsize=(8.0, 5.4))
+    games_axes: Axes = figure.add_subplot(2, 2, 1)
+    positions_axes: Axes = figure.add_subplot(2, 2, 2, sharex=games_axes)
+    replay_axes: Axes = figure.add_subplot(2, 2, 3, sharex=games_axes)
+    trainer_axes: Axes = figure.add_subplot(2, 2, 4, sharex=games_axes)
+    for axis, label in (
+        (games_axes, 'Games / quantum'),
+        (positions_axes, 'Net positions (millions)'),
+        (replay_axes, 'Live replay (millions)'),
+        (trainer_axes, 'Trainer samples/s (k)'),
+    ):
+        configure_axes(axis, label, paper=True)
+        axis.set_xlim(0, 410)
+    games = [float(point.completed_games) for point in points]
+    games_axes.plot(x, games, color='#1f7065', linewidth=0.75, alpha=0.35)
+    games_axes.plot(x, smooth(games), color='#1f7065', linewidth=2.2)
+    positions_axes.plot(x, [point.materialized_positions / 1e6 for point in points], color='#1f5875', linewidth=2.2)
+    replay_axes.plot(
+        x,
+        [point.replay_live_rows / 1e6 for point in points],
+        color='#a45d1e',
+        linewidth=2.2,
+        drawstyle='steps-post',
+    )
+    replay_axes.set_ylim(0, 18)
+    replay_axes.set_yticks((0, 4, 8, 12, 16))
+    throughput = [point.training_samples_per_second / 1000 for point in points]
+    trainer_axes.plot(x, throughput, color='#1f5875', linewidth=0.75, alpha=0.35)
+    trainer_axes.plot(x, smooth(throughput), color='#1f5875', linewidth=2.2)
+    games_axes.tick_params(labelbottom=False)
+    positions_axes.tick_params(labelbottom=False)
+    figure.supxlabel('Completed optimizer steps (thousands)', y=0.02)
+    figure.subplots_adjust(left=0.12, right=0.98, top=0.97, bottom=0.15, wspace=0.34, hspace=0.16)
+    save_figure(figure, FIGURE_DIRECTORY / 'final-training-volume-and-throughput-paper.svg')
 
 
 def main() -> None:

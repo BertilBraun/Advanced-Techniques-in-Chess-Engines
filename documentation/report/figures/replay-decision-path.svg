@@ -5,12 +5,12 @@
     <style>
       text { font-family: Arial, sans-serif; fill: #172b36; }
       .card { fill: #f5f8f7; stroke: #365f60; stroke-width: 2.5; }
-      .head { font-size: 24px; font-weight: 700; fill: #17615b; }
-      .body { font-size: 19px; }
+      .head { font-size: 21px; font-weight: 700; fill: #17615b; }
+      .body { font-size: 17px; }
       .arrow { stroke: #17615b; stroke-width: 3.5; fill: none; }
       .credit { fill: #e7f1ef; stroke: #255c5a; stroke-width: 2.5; }
-      .credit-label { font-size: 20px; font-weight: 700; fill: #17615b; }
-      .credit-body { font-size: 19px; }
+      .credit-label { font-size: 18px; font-weight: 700; fill: #17615b; }
+      .credit-body { font-size: 17px; }
     </style>
   </defs>
   <rect width="1200" height="430" fill="#fff"/>

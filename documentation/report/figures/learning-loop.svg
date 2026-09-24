@@ -56,7 +56,7 @@
   <text x="75" y="617" class="small">legal policy priors and WDL values</text>
   <path d="M 150 420 V 520" class="path"/>
   <path d="M 275 520 V 420" class="path"/>
-  <text x="117" y="472" class="label">leaves</text>
+  <text x="80" y="472" class="label">leaves</text>
   <text x="290" y="472" class="label">outputs</text>
 
   <rect x="830" y="520" width="320" height="130" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>

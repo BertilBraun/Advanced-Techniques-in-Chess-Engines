@@ -197,7 +197,7 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
     figure_path = convert_figure(source.parent / address, build_directory)
     caption_text = caption.content.replace('\n', ' ').strip()
     if appendix:
-        environment, placement, width, height = 'figure', 'H', '0.76', '0.38'
+        environment, placement, width, height = 'figure', 'H', '0.70', '0.34'
     elif source.name == '07-final-run-results.md':
         environment, placement, width, height = 'figure*', '!t', '0.87', '0.36'
     else:
@@ -382,8 +382,6 @@ def build_report(output: Path) -> None:
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
-        if filename == '05a-three-failures.md':
-            parts.append(r'\FloatBarrier' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
     parts.extend(
         [

@@ -5,9 +5,9 @@
     <style>
       text { font-family: Arial, sans-serif; fill: #172b36; }
       .gate { fill: #f2f6f5; stroke: #255c5a; stroke-width: 3; }
-      .gate-title { font-size: 23px; font-weight: 700; }
-      .body { font-size: 19px; }
-      .note { font-size: 18px; fill: #344c58; }
+      .gate-title { font-size: 21px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .note { font-size: 16px; fill: #344c58; }
       .negative { fill: #ac4d37; font-weight: 700; }
       .positive { fill: #17615b; font-weight: 700; }
       .rule { stroke: #255c5a; stroke-width: 3; }

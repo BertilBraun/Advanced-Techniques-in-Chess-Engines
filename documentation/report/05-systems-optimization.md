@@ -117,6 +117,12 @@ not extrapolated from the beginning of training.
 
 ## From inference speed to learning speed
 
+![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
+
+Figure 6: The denominator changes at each boundary. Model evaluations and search simulations describe local
+service capacity; completed games and admitted rows determine training supply; only the final stage measures the
+playing-strength gain per unit wall-clock time.
+
 The central systems result is that faster simulations do not translate mechanically into training throughput. In a
 production-shaped 400-visit benchmark, a generation-34 TensorRT INT8 actor executed 1.86 times as many simulations
 as a generation-18 floating TorchScript control with the same architecture and configuration. The weights were not
@@ -126,14 +132,6 @@ topology. Those stages differ in visit budget, checkpoint, and actor scheduling;
 effect of the 1.86x benchmark. Faster actors can finish shorter games, actor population changes during training,
 checkpoint publication consumes time, and replay credit appears only after complete-game materialization. Within
 the live stage, the measured accepted-position rate predicted the observed optimizer cadence exactly.
-
-The relevant sequence is visualized in Figure 6.
-
-![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
-
-Figure 6: The denominator changes at each boundary. Model evaluations and search simulations describe local
-service capacity; completed games and admitted rows determine training supply; only the final stage measures the
-playing-strength gain per unit wall-clock time.
 
 An optimization is valuable to this project only if its effect survives far enough down that chain. Core inference
 and search benchmarks diagnose mechanisms, while the credit ledger and learning curve establish whether the saved

@@ -16,11 +16,11 @@
       .selected { fill: #eef7f4; stroke: #17615b; stroke-width: 3; }
       .box { fill: #fff; stroke: #536d7b; stroke-width: 2.3; }
       .accent-box { fill: #dceeea; stroke: #17615b; stroke-width: 2.4; }
-      .title { font-size: 28px; font-weight: 700; }
-      .body { font-size: 23px; }
-      .label { font-size: 22px; font-weight: 600; }
-      .minor { font-size: 20px; fill: #344c58; }
-      .count { font-size: 27px; font-weight: 700; }
+      .title { font-size: 23px; font-weight: 700; }
+      .body { font-size: 18px; }
+      .label { font-size: 18px; font-weight: 600; }
+      .minor { font-size: 16px; fill: #344c58; }
+      .count { font-size: 22px; font-weight: 700; }
       .accent { fill: #17615b; }
       .line { fill: none; stroke: #344f5d; stroke-width: 3; }
       .accent-line { fill: none; stroke: #17615b; stroke-width: 3; }
