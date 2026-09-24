@@ -2,12 +2,6 @@
   <title id="title">The chess self-play learning loop</title>
   <desc id="description">Python coordinates native C++ self-play, replay, distributed training, TensorRT inference, and paired Stockfish evaluation. The published model returns to self-play.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#33485e"/>
-    </marker>
-    <marker id="feedback-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c27030"/>
-    </marker>
     <style>
       text { font-family: "Segoe UI", Inter, Arial, sans-serif; fill: #182b3d; }
       .card-title { font-size: 22px; font-weight: 700; }
@@ -15,8 +9,10 @@
       .small { font-size: 15px; fill: #344c58; }
       .label { font-size: 16px; font-weight: 600; fill: #33485e; }
       .feedback-label { font-size: 16px; font-weight: 600; fill: #a85b25; }
-      .path { fill: none; stroke: #33485e; stroke-width: 3; marker-end: url(#arrow); }
-      .feedback { fill: none; stroke: #c27030; stroke-width: 3; stroke-dasharray: 8 6; marker-end: url(#feedback-arrow); }
+      .path { fill: none; stroke: #33485e; stroke-width: 3; }
+      .arrowhead { fill: #33485e; }
+      .feedback { fill: none; stroke: #c27030; stroke-width: 3; stroke-dasharray: 8 6; }
+      .feedback-arrowhead { fill: #c27030; }
     </style>
   </defs>
   <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
@@ -45,8 +41,10 @@
   <text x="855" y="361" class="body">checkpoint at generation boundary</text>
   <text x="855" y="397" class="small">Training and self-play share the GPUs.</text>
 
-  <path d="M 370 330 H 440" class="path"/>
-  <path d="M 760 330 H 830" class="path"/>
+  <path d="M 370 330 H 435" class="path"/>
+  <path d="M 429 323 L 440 330 L 429 337 Z" class="arrowhead"/>
+  <path d="M 760 330 H 825" class="path"/>
+  <path d="M 819 323 L 830 330 L 819 337 Z" class="arrowhead"/>
   <text x="405" y="313" text-anchor="middle" class="label">games</text>
   <text x="795" y="313" text-anchor="middle" class="label">batches</text>
 
@@ -54,8 +52,10 @@
   <text x="75" y="559" class="card-title">TensorRT leaf inference</text>
   <text x="75" y="589" class="body">batch neural evaluations</text>
   <text x="75" y="617" class="small">legal policy priors and WDL values</text>
-  <path d="M 150 420 V 520" class="path"/>
-  <path d="M 275 520 V 420" class="path"/>
+  <path d="M 150 420 V 515" class="path"/>
+  <path d="M 143 509 L 150 520 L 157 509 Z" class="arrowhead"/>
+  <path d="M 275 520 V 425" class="path"/>
+  <path d="M 268 431 L 275 420 L 282 431 Z" class="arrowhead"/>
   <text x="80" y="472" class="label">leaves</text>
   <text x="290" y="472" class="label">outputs</text>
 
@@ -64,16 +64,20 @@
   <text x="855" y="589" class="body">QAT checkpoint → verified ONNX</text>
   <text x="855" y="607" class="small">The deployed artifact feeds</text>
   <text x="855" y="627" class="small">the next games.</text>
-  <path d="M 990 420 V 520" class="path"/>
-  <path d="M 1150 585 H 1175 V 213 H 210 V 240" class="path"/>
+  <path d="M 990 420 V 515" class="path"/>
+  <path d="M 983 509 L 990 520 L 997 509 Z" class="arrowhead"/>
+  <path d="M 1150 585 H 1175 V 213 H 210 V 235" class="path"/>
+  <path d="M 203 229 L 210 240 L 217 229 Z" class="arrowhead"/>
   <text x="1037" y="198" class="label">model refresh</text>
 
   <rect x="440" y="520" width="320" height="130" rx="14" fill="#f2e6d9" stroke="#a87853" stroke-width="3"/>
   <text x="465" y="559" class="card-title">Paired evaluation</text>
   <text x="465" y="589" class="body">native search versus Stockfish</text>
   <text x="465" y="617" class="small">strength and uncertainty by protocol</text>
-  <path d="M 830 585 H 760" class="path"/>
-  <path d="M 600 650 V 675 H 20 V 196 H 600 V 190" class="feedback"/>
+  <path d="M 830 585 H 765" class="path"/>
+  <path d="M 771 578 L 760 585 L 771 592 Z" class="arrowhead"/>
+  <path d="M 600 650 V 675 H 20 V 150 H 350" class="feedback"/>
+  <path d="M 344 143 L 355 150 L 344 157 Z" class="feedback-arrowhead"/>
   <text x="423" y="666" class="feedback-label">Elo feedback</text>
 
   <path d="M 390 190 V 225" stroke="#8bb1d6" stroke-width="2" stroke-dasharray="5 5"/>
