@@ -74,6 +74,8 @@ STUDENT_ARGUMENTS = Arguments(
     smolgen_compressed_size=8,
     smolgen_hidden_size=32,
     smolgen_generated_size=32,
+    num_value_channels=2,
+    value_fc_size=48,
     optimizer_kind=OptimizerKind.ADAMW,
     floor_fraction=0.1,
     policy_bottleneck_rank=16,
@@ -897,3 +899,17 @@ def test_halving_the_training_fraction_leaves_the_held_out_floor_bit_identical()
         return achievable_loss_floor(batches[0], objective)
 
     assert floor_at(0.5) == floor_at(1.0)
+
+
+def test_student_value_head_defaults_to_the_production_geometry() -> None:
+    architecture = student_architecture(STUDENT_ARGUMENTS)
+
+    assert architecture.num_value_channels == 2
+    assert architecture.value_fc_size == 48
+
+
+def test_student_value_head_takes_the_configured_geometry() -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, num_value_channels=32, value_fc_size=64))
+
+    assert architecture.num_value_channels == 32
+    assert architecture.value_fc_size == 64
