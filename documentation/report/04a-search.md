@@ -37,7 +37,8 @@ work performed.
 
 ## Why fast and full searches did not transfer
 
-A KataGo-inspired scheme offered an appealing alternative. Most moves could use a cheap search to advance the game,
+A scheme inspired by [KataGo's self-play methods](https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md)
+offered an appealing alternative. Most moves could use a cheap search to advance the game,
 while a random minority received a full search and became primary policy targets. In long Go games this can exchange
 some target density for many more independent terminal outcomes. Chess did not show the same bottleneck. Games were
 shorter, positions were often more decisive, and the value objective was already learning. Discarding cheap-search
@@ -79,7 +80,8 @@ gained most. Simple concentration thresholds tended to stop in the very region w
 rule-based approach was audited and declined before an online strength match; it should not be described as an
 implemented algorithm that lost Elo ([termination audit](../benchmarks/adaptive-search-termination-r3-20260813/README.md)).
 
-The next allocator replaced the rule with a learned prediction. An auxiliary head estimated, for several candidate
+The next allocator replaced the rule with a learned prediction, related in aim but not identical to
+[dynamic simulation stopping](https://arxiv.org/abs/2012.07910). An auxiliary head estimated, for several candidate
 budgets, the divergence between that budget's policy and a deep-search policy. A calibrated corrector incorporated
 root observables, and a dual variable kept average spend near its target. Deep labels, replay persistence, model
 publication, native budget selection, safety gates, and telemetry were all implemented. Mechanically, the system
@@ -101,7 +103,7 @@ rather than predict difficulty in advance. Its decisive test started from the sa
 rebuilt replay state for every arm. The most aggressive setting skipped about 14% of nominal search, and its
 internal credit-wait measurements changed in the expected direction. Yet generation cadence improved by only about
 3%. Self-play overlapped the optimizer, so most of the removed search was slack rather than critical-path work.
-Paired strength estimates were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo for the two stopping settings: neither resolved a
+Paired strength estimates were +1.7 ± 9.9 Elo and -4.2 ± 10.1 Elo (standard errors) for the two stopping settings: neither resolved a
 strength effect. At the observed learning rate, the cadence gain was worth only about one Elo over three hours,
 below the experiment's resolution ([shared-state conclusion](../analysis/adaptive-search-conclusion-20260904.md)).
 
@@ -141,7 +143,7 @@ final all-full workload.
 ## When a tree became a graph
 
 Chess appears rich in transpositions: different move orders often reach the same board. The project tested whether
-Monte Carlo graph search could turn those transpositions into shared neural evaluations, descendants, and search
+Monte Carlo graph search, as in [Czech, Korus, and Kersting](https://arxiv.org/abs/2012.11045), could turn those transpositions into shared neural evaluations, descendants, and search
 statistics. This was a complete implementation, not a cache mislabeled as graph search. Canonical nodes held shared
 state-level information; parent/action edges retained local PUCT statistics; correction backups exposed better
 shared values to incoming edges; and the system handled trajectory reservations, cycles, rerooting, pruning, and

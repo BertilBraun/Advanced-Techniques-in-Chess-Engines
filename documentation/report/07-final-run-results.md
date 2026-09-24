@@ -100,7 +100,7 @@ The terminal protocol used 100 games per row from 50 colour-swapped opening pair
 which connects Stockfish through Fruit 2.2.1 to the historical SSDF scale. The resulting values are benchmark Elo,
 not FIDE ratings or estimates on a current unrestricted-engine list.
 
-| Search budget | Headline score and anchor | Benchmark Elo (95% CI) | Increment |
+| Search budget | Headline score and anchor | Benchmark Elo (95% match-bootstrap CI) | Increment |
 | ---: | --- | ---: | ---: |
 | Policy only | 0.440 vs 1,000 nodes | **1,658 [1,608, 1,710]** | -- |
 | 100 | 0.480 vs 10,000 nodes | **2,456 [2,400, 2,512]** | +798 |
@@ -116,8 +116,11 @@ axis keeps policy-only play visible alongside the searched conditions; it does n
 Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes
 with budget, so this is a measured operating curve rather than an isolated node-budget experiment.
 
-Search therefore adds 1,593 benchmark Elo from policy-only play to the deepest measured condition, with diminishing
-returns at each decade. The 100,000-search estimate is unusually well anchored: an independent 100,000-node opponent
+The observed policy-only-to-deepest operating-point difference is 1,593 benchmark Elo, with smaller increments at
+each later search budget. This is not an isolated search effect: the policy-only and searched artifacts differ, and
+parallelism changes across searched conditions. The bootstrap intervals quantify match sampling conditional on the
+fixed, graph-read Stockfish anchor ratings; they do not include anchor-calibration uncertainty. The 100,000-search
+estimate is unusually well anchored: an independent 100,000-node opponent
 gives 3,247 Elo, only four points below the 200,000-node result. That local agreement supports the top headline, but
 does not validate extrapolation beyond the measured anchors.
 

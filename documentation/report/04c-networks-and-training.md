@@ -6,7 +6,8 @@ within the available wall-clock budget. The resulting design was not selected by
 representation, trunk structure, auxiliary supervision, quantization, and model growth were all tested against the
 same end-to-end constraint.
 
-Every model receives a 52-plane, side-to-move-canonical chess representation. The planes include pieces, castling
+The retained architecture receives a 52-plane, side-to-move-canonical chess representation; some earlier comparisons
+used a 29-plane encoder, so their absolute results are not input-matched to the final model. The 52 planes include pieces, castling
 rights, en passant, checks, repetition state, the eight most recent moves, material counts, and the fifty-move
 counter. File reflection is the only training augmentation; it mirrors the action targets and exchanges kingside
 and queenside castling planes. These rule-sensitive inputs are necessary to keep positions with different legal or
@@ -118,8 +119,9 @@ first replay targets. In an early architecture comparison, the attention policy 
 on the top three moves while the convolutional control was effectively one-hot. Neither extreme was meaningful
 chess knowledge, and their different concentrations changed the data each model generated. The retained bootstrap
 path uses architecture-appropriate initialization, deterministic construction, a small final policy projection, and
-calibration on real encoded positions toward a common policy shape. Calibration controls concentration; it does not
-make an initial policy knowledgeable. A separate audit also found that the configured random seed had not originally
+calibration on 516 encoded positions from the evaluation dataset toward a common policy shape. These positions
+calibrate numerical behavior; their human-game origin is not supervised pretraining or a source of chess targets.
+Calibration controls concentration; it does not make an initial policy knowledgeable. A separate audit also found that the configured random seed had not originally
 reached model construction, so supposedly matched arms began from different tensors. Corrected comparisons now treat
 seed propagation and bootstrap shape as reproducibility requirements rather than hyperparameter wins.
 

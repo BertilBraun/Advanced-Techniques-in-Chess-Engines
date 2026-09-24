@@ -46,7 +46,9 @@ admitted row are needed to describe what the learner actually saw.
 
 ## Choosing information without inventing it
 
-Within the live window, the sampler asks where search most revised the raw policy. Policy surprise is the divergence
+Within the live window, the sampler asks where search most revised the raw policy. This is related to
+[prioritized replay](https://arxiv.org/abs/1511.05952), but the priority signal and absence of importance correction
+are specific to this project. Policy surprise is the divergence
 between the visit distribution and the network prior. Seventy percent of draws are allocated in proportion to this
 signal, capped at 2.0, while 30% remain uniform. The cap keeps a few extreme rows from monopolizing training and the
 uniform component preserves broad coverage. The same row may reappear across optimizer steps, but sampling is
@@ -74,16 +76,19 @@ can act on it ([replay system](../system/replay-and-data.md)).
 
 ## Starting games where information is likely
 
-The retained start mixture attacks two different coverage problems. Half of games begin after a uniformly selected
+The configured start draw attacks two different coverage problems. Half of games are assigned a uniformly selected
 zero to eight random legal plies. These prefixes cheaply diversify the opening without pretending to be a balanced
 opening book. They are reconstructed in the recorded history but not searched or trained directly; their value is
 the downstream positions they expose. Drawing zero plies naturally retains some games from the ordinary initial
 position.
 
-The other half begin from archived self-play states. A position is eligible only if at least 15 plies remained in its
+The other half are assigned archived self-play states, falling back to random openings when a worker's restart
+archive is empty. A position is eligible only if at least 15 plies remained in its
 source game, its absolute root value was at most 0.8, and two or three leading actions covered 85% of visit mass. The
 branch actually played is marked used. A later restarted game reserves one untried plausible alternative and forces
 that action after reconstructing the prefix, so new compute explores a branch the source game did not.
+This differs from the learned [targeted search control](https://arxiv.org/abs/2302.12359) explored in prior work:
+the archive here uses observed search disagreement and untried branches, not a trained restart policy.
 
 Selection from this archive gives 30% probability to uniform choice. The remaining reservations favor the square
 root of *value correction*: half the absolute difference between the searched root value and the raw network value.
@@ -123,6 +128,8 @@ At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.3
 accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
 therefore performs one full search at the actual cut position and uses its root value as the bootstrap
 ([cut-position benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md)).
+The scalar root value `v` becomes a soft WDL target: with `r = 1 - |v|`, the win, draw, and loss components are
+`max(v, 0) + r/3`, `r/3`, and `max(-v, 0) + r/3`. Materialization then applies the configured per-ply blur.
 
 The cut policy also closes the most damaging data failure found in the project. A former cheap-search tail removed
 searched endgame rows while broadcasting one shallow cutoff estimate back through each affected game. Weak endgame

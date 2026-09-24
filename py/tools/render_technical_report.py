@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -17,6 +18,7 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
@@ -25,6 +27,7 @@ from reportlab.platypus import (
     Flowable,
     KeepTogether,
     LongTable,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -49,9 +52,11 @@ SOURCE_FILES = (
     '09-reproducibility.md',
     '10-conclusion.md',
 )
-PUBLIC_SOURCE_ROOT = 'https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/master/'
+SOURCE_REVISION = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPOSITORY_ROOT, text=True).strip()
+PUBLIC_SOURCE_ROOT = f'https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/{SOURCE_REVISION}/'
 PAGE_WIDTH, PAGE_HEIGHT = A4
-MARGIN = 61
+MARGIN = 16 * mm
+COLUMN_GAP = 7 * mm
 CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
 QUIET_TEAL = colors.HexColor('#17625D')
 INK = colors.black
@@ -62,6 +67,7 @@ MUTED = colors.HexColor('#444444')
 class ContentBlock:
     flowable: Flowable
     full_width: bool = False
+    page_before: bool = False
 
 
 class VectorFigure(Flowable):
@@ -127,25 +133,28 @@ def styles() -> dict[str, ParagraphStyle]:
     body = ParagraphStyle(
         'body',
         fontName='ReportSerif',
-        fontSize=9.3,
-        leading=11.1,
+        fontSize=10,
+        leading=12,
         textColor=INK,
         alignment=TA_JUSTIFY,
-        spaceAfter=4.4,
+        firstLineIndent=10,
+        spaceAfter=0,
         allowWidows=0,
         allowOrphans=0,
     )
     return {
         'body': body,
+        'body_first': ParagraphStyle('body_first', parent=body, firstLineIndent=0),
         'title': ParagraphStyle(
             'title',
             parent=body,
             fontName='ReportSerif-Bold',
-            fontSize=18,
-            leading=20.5,
+            fontSize=17.3,
+            leading=20,
             textColor=INK,
             alignment=TA_CENTER,
-            spaceAfter=10,
+            firstLineIndent=0,
+            spaceAfter=16,
         ),
         'byline': ParagraphStyle(
             'byline',
@@ -155,6 +164,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leading=13,
             textColor=INK,
             alignment=TA_CENTER,
+            firstLineIndent=0,
             spaceAfter=2,
         ),
         'contact': ParagraphStyle(
@@ -164,6 +174,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leading=10,
             textColor=QUIET_TEAL,
             alignment=TA_CENTER,
+            firstLineIndent=0,
             spaceAfter=16,
         ),
         'abstract_label': ParagraphStyle(
@@ -173,6 +184,7 @@ def styles() -> dict[str, ParagraphStyle]:
             fontSize=9.5,
             textColor=INK,
             alignment=TA_CENTER,
+            firstLineIndent=0,
             spaceBefore=3,
             spaceAfter=4,
         ),
@@ -181,6 +193,7 @@ def styles() -> dict[str, ParagraphStyle]:
             parent=body,
             fontSize=9.2,
             leading=11.2,
+            firstLineIndent=0,
             spaceAfter=11,
         ),
         'keywords': ParagraphStyle(
@@ -188,15 +201,17 @@ def styles() -> dict[str, ParagraphStyle]:
             parent=body,
             fontSize=9.2,
             leading=11.2,
+            firstLineIndent=0,
             spaceAfter=9,
         ),
         'h1': ParagraphStyle(
             'h1',
             parent=body,
             fontName='ReportSerif-Bold',
-            fontSize=11.2,
-            leading=13,
+            fontSize=12,
+            leading=14,
             textColor=INK,
+            firstLineIndent=0,
             spaceBefore=10,
             spaceAfter=5,
             keepWithNext=True,
@@ -205,9 +220,10 @@ def styles() -> dict[str, ParagraphStyle]:
             'h2',
             parent=body,
             fontName='ReportSerif-Bold',
-            fontSize=9.5,
-            leading=11.2,
+            fontSize=10,
+            leading=12,
             textColor=INK,
+            firstLineIndent=0,
             spaceBefore=8,
             spaceAfter=3,
             keepWithNext=True,
@@ -216,9 +232,10 @@ def styles() -> dict[str, ParagraphStyle]:
             'h3',
             parent=body,
             fontName='ReportSerif-Bold',
-            fontSize=9.1,
-            leading=10.8,
+            fontSize=10,
+            leading=12,
             textColor=INK,
+            firstLineIndent=0,
             spaceBefore=6,
             spaceAfter=2,
             keepWithNext=True,
@@ -237,6 +254,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leftIndent=9,
             rightIndent=7,
             textColor=MUTED,
+            firstLineIndent=0,
             borderColor=QUIET_TEAL,
             borderWidth=1.1,
             borderPadding=7,
@@ -251,6 +269,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leading=10.0,
             textColor=INK,
             alignment=TA_LEFT,
+            firstLineIndent=0,
             spaceBefore=4,
             spaceAfter=9,
         ),
@@ -260,6 +279,7 @@ def styles() -> dict[str, ParagraphStyle]:
             fontSize=7.9,
             leading=9.4,
             alignment=TA_LEFT,
+            firstLineIndent=0,
             spaceAfter=0,
         ),
         'table_header': ParagraphStyle(
@@ -270,6 +290,7 @@ def styles() -> dict[str, ParagraphStyle]:
             leading=9.4,
             textColor=INK,
             alignment=TA_LEFT,
+            firstLineIndent=0,
             spaceAfter=0,
         ),
     }
@@ -372,7 +393,9 @@ def parse_table(
         elif token.type == 'tr_close':
             rows.append(current_row)
         position += 1
-    return ContentBlock(KeepTogether([make_table(rows, report_styles)]), full_width=True), position + 1
+    return ContentBlock(
+        KeepTogether([make_table(rows, report_styles)]), full_width=True, page_before=True
+    ), position + 1
 
 
 def parse_markdown(
@@ -384,6 +407,7 @@ def parse_markdown(
     list_depth = 0
     ordered_counters: list[int | None] = []
     in_quote = False
+    after_heading = False
     position = 0
     while position < len(tokens):
         token = tokens[position]
@@ -395,6 +419,7 @@ def parse_markdown(
                 blocks.append(
                     ContentBlock(Paragraph(inline_markup(heading.children or [], source), report_styles[style_name]))
                 )
+                after_heading = True
                 position += 3
             case 'paragraph_open':
                 inline = tokens[position + 1]
@@ -407,7 +432,7 @@ def parse_markdown(
                     if image_path is None:
                         raise ValueError(f'Image has no source in {source}')
                     maximum_height = (
-                        220
+                        450
                         if image_path
                         in {
                             'figures/final-training-loss-and-rate.svg',
@@ -433,7 +458,9 @@ def parse_markdown(
                 else:
                     content = inline_markup(children, source)
                     if content.strip():
-                        style_name = 'quote' if in_quote else 'list' if list_depth else 'body'
+                        style_name = (
+                            'quote' if in_quote else 'list' if list_depth else 'body_first' if after_heading else 'body'
+                        )
                         if content.lstrip().startswith('<b>Figure'):
                             style_name = 'caption'
                         bullet = None
@@ -441,6 +468,7 @@ def parse_markdown(
                             counter = ordered_counters[-1]
                             bullet = f'{counter}.' if counter is not None else '•'
                         blocks.append(ContentBlock(Paragraph(content, report_styles[style_name], bulletText=bullet)))
+                        after_heading = False
                 position += 3
             case 'table_open':
                 block, position = parse_table(tokens, position, source, report_styles)
@@ -489,7 +517,7 @@ def append_column_content(story: list[Flowable], pending: list[Flowable]) -> Non
                 pending[:],
                 nCols=2,
                 needed=58,
-                innerPadding=17,
+                innerPadding=COLUMN_GAP,
                 leftPadding=0,
                 rightPadding=0,
                 topPadding=0,
@@ -527,12 +555,13 @@ def build_report(output: Path) -> None:
         pagesize=A4,
         leftMargin=MARGIN,
         rightMargin=MARGIN,
-        topMargin=60,
-        bottomMargin=51,
+        topMargin=18 * mm,
+        bottomMargin=20 * mm,
         title='Engineering Efficient Self-Play Chess',
         author='Bertil Braun',
     )
     story: list[Flowable] = [
+        Spacer(1, 17),
         Paragraph(
             'Engineering Efficient Self-Play Chess: Search, Replay, and Throughput Under Limited Compute',
             report_styles['title'],
@@ -551,6 +580,8 @@ def build_report(output: Path) -> None:
         for block in parse_markdown(REPORT_ROOT / filename, report_styles):
             if block.full_width:
                 append_column_content(story, pending)
+                if block.page_before:
+                    story.append(PageBreak())
                 story.append(block.flowable)
             else:
                 pending.append(block.flowable)

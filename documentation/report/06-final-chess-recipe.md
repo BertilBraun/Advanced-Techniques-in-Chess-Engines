@@ -12,23 +12,6 @@ digests, and evidence status are recorded in the [final result](../results/final
 [evidence index](../evidence/final-chess-20260923/README.md). Those frozen records—not a future state of the YAML—are
 the authority for published numbers.
 
-## Recipe at a glance
-
-| Component | Configured method |
-| --- | --- |
-| Compute | Eight RTX 4070 SUPER GPUs shared by self-play, training, and evaluation |
-| Trainer | Eight-rank NCCL DDP; global batch 2,048; 500 optimizer steps per quantum; bfloat16 |
-| Optimization | Nesterov SGD, learning rate 0.1→0.01, momentum 0.9, weight decay 0.0001, gradient-norm cap 1.0 |
-| Deployment | Pre-fold INT8 QAT, real-position calibration, fixed-batch ONNX, TensorRT refitting |
-| Network family | Scaled post-activation CNNs with global pooling, from-to policy, and WDL value head |
-| Replay | Staged 0.6M→20M live rows, reuse ratio 4, policy-surprise sampling with 30% uniform mixing |
-| Self-play search | Fixed staged visits, reduced-parent-value FPU, forced playouts, Dirichlet root noise |
-| Starts | 50% shallow random openings and 50% recent restart states |
-| Targets | Policy and WDL plus next-policy and remaining-game-length auxiliaries |
-| Evaluation | Paired openings against fixed-node Stockfish 13 anchors; native search for searched conditions |
-
-This table is explanatory. Exact schedules, paths, dimensions, and resource limits remain in the YAML.
-
 ## Model, objective, and optimization
 
 The configured ladder contains 12×128, 14×160, and 19×176 residual CNNs. Every stage uses capped scaled
@@ -60,11 +43,12 @@ The fixed search budget grows from 300 to 800 visits per move. Search uses explo
 FPU with reduction 0.2, forced playout coefficient 1.5, Dirichlet epsilon 0.25, and alpha 0.3. Fixed visits were
 retained after adaptive allocation and learned stopping failed to improve wall-clock strength.
 
-Half of games begin after up to eight random legal plies. The other half use recent restart states filtered by value,
-remaining length, age, and branchable visit mass; restart selection retains a 30% uniform component. Game caps grow
+The configured draw assigns half of games up to eight random legal plies and half to recent restart states filtered by value,
+remaining length, age, and branchable visit mass; missing restart candidates fall back to random openings, so this
+is a configured rather than guaranteed realized 50/50 mix. Restart selection retains a 30% uniform component. Game caps grow
 from 150 to 250 plies, and greedy move selection begins later as training matures. Calibrated resignation begins only
-after sufficient evidence, constrains the false-nonloss upper bound to 2.5%, and continues 20% of triggered games for
-ongoing safety measurement.
+after sufficient evidence, constrains the false-nonloss upper bound to 2.5%, and designates 20% of games at creation
+as no-resignation continuations for ongoing safety measurement.
 
 Replay capacity grows through ten stages from 600,000 to 20 million live rows. Each admitted position funds four
 training presentations. Sampling reserves 30% uniform probability and otherwise prioritizes bounded policy surprise.

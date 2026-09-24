@@ -61,10 +61,10 @@ The checkpoint manifest and archive-level hashes are listed in the
 [evidence index](../evidence/final-chess-20260923/README.md#selected-checkpoint).
 The matching INT8 ONNX is also preserved in the public
 [Hugging Face repository at immutable revision `dc8fcccc`](https://huggingface.co/BertilBraun/alphazero-chess/blob/dc8fccccb67ab5ec9e36267a165a9700b7dbf55f/production/final-generation-1026/model.int8.onnx).
-Its LFS SHA-256 matches the frozen evidence. The repository's model card, `latest` aliases, and checksum index still
-describe the preceding public checkpoint, so the final artifact is published but the public release metadata is not
-yet fully synchronized. That release rework is in progress; the final model card and live deployment are expected to
-reference generation 1026 before publication.
+Its LFS SHA-256 matches the frozen evidence. The current
+[model repository](https://huggingface.co/BertilBraun/alphazero-chess) identifies generation 1026 as the final
+checkpoint, publishes matching `latest` aliases and checksum index, and declares the MIT license. The project owner
+has confirmed that the live site uses the updated deployment artifact.
 
 ## Training trajectory and excluded work
 
@@ -182,9 +182,7 @@ and report. The full report and release still need:
 - assess whether auxiliary-loss, replay-age, quantization-fidelity, and transition figures add evidence beyond the
   completed [loss](../report/figures/final-training-loss-and-rate.svg) and
   [volume/throughput](../report/figures/final-training-volume-and-throughput.svg) figures;
-- finish the in-progress Hugging Face model-card, alias, checksum, and live-deployment update around the already
-  hash-matched final ONNX;
-- choose and publish the code and model/data licenses.
+- package any presently local run archives or exact evaluation inputs needed for independent result reproduction.
 
 ## Cross-campaign figure
 

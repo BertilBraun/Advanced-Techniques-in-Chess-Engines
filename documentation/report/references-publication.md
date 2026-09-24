@@ -1,22 +1,11 @@
 # References
 
 - Silver, D. et al. (2017). *Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm*. [arXiv:1712.01815](https://arxiv.org/abs/1712.01815).
-- Silver, D. et al. (2017). *Mastering the Game of Go without Human Knowledge*. *Nature* 550, 354–359. [doi:10.1038/nature24270](https://doi.org/10.1038/nature24270).
 - Wu, D. J. (2020). *Accelerating Self-Play Learning in Go*. [arXiv:1902.10565v5](https://arxiv.org/abs/1902.10565v5).
-- Tian, Y. et al. (2019). *ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero*. [arXiv:1902.04522v5](https://arxiv.org/abs/1902.04522v5).
 - Lan, L.-C. et al. (2021). *Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search*. [arXiv:2012.07910](https://arxiv.org/abs/2012.07910).
-- Czech, J. et al. (2024). *Representation Matters for Mastering Chess: Improved Feature Representation in AlphaZero Outperforms Switching to Transformers*. [arXiv:2304.14918v2](https://arxiv.org/abs/2304.14918v2).
-- Wu, T.-R. et al. (2024). *MiniZero: Comparative Analysis of AlphaZero and MuZero on Go, Othello, and Atari Games*. [arXiv:2310.11305v3](https://arxiv.org/abs/2310.11305v3).
-- Fedus, W. et al. (2020). *Revisiting Fundamentals of Experience Replay*. [arXiv:2007.06700](https://arxiv.org/abs/2007.06700).
-- D'Oro, P. et al. (2023). *Sample-Efficient Reinforcement Learning by Breaking the Replay Ratio Barrier*. [ICLR paper](https://openreview.net/pdf?id=OpC-9aBBVJe).
 - Schaul, T. et al. (2015). *Prioritized Experience Replay*. [arXiv:1511.05952](https://arxiv.org/abs/1511.05952).
-- Jones, A. L. (2021). *Scaling Scaling Laws with Board Games*. [arXiv:2104.03113](https://arxiv.org/abs/2104.03113).
-- Grill, J.-B. et al. (2020). *Monte-Carlo Tree Search as Regularized Policy Optimization*. [arXiv:2007.12509](https://arxiv.org/abs/2007.12509).
-- Danihelka, I. et al. (2022). *Policy Improvement by Planning with Gumbel*. [ICLR paper](https://openreview.net/pdf?id=bERaNdoegnO).
 - Trudeau, A. and Bowling, M. (2023). *Targeted Search Control in AlphaZero for Effective Policy Improvement*. [arXiv:2302.12359](https://arxiv.org/abs/2302.12359).
-- Schrittwieser, J. et al. (2021). *Online and Offline Reinforcement Learning by Planning with a Learned Model*. [arXiv:2104.06294](https://arxiv.org/abs/2104.06294).
-- Tsai, Y.-J. et al. (2026). *Regret-Guided Search Control for Efficient Learning in AlphaZero*. [arXiv:2602.20809v1](https://arxiv.org/abs/2602.20809v1).
 - Czech, J., Korus, P., and Kersting, K. (2020). *Monte-Carlo Graph Search for AlphaZero*. [arXiv:2012.11045](https://arxiv.org/abs/2012.11045).
-- KataGo project (release 1.17.1). [Methods documentation](https://github.com/lightvector/KataGo/blob/v1.17.1/docs/KataGoMethods.md), [self-play training](https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md), and [training history](https://github.com/lightvector/KataGo/blob/v1.17.1/TrainingHistory.md).
-- NVIDIA. [TensorRT quantization](https://docs.nvidia.com/deeplearning/tensorrt/10.x.x/inference-library/work-quantized-types.html), [engine refitting](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/refitting-engines.html), and [10.14.1 release notes](https://docs.nvidia.com/deeplearning/tensorrt/10.x.x/getting-started/release-notes-10/10.14.1.html).
+- KataGo project (release 1.17.1). [Self-play training methods](https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md).
+- NVIDIA. [TensorRT engine refitting](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/refitting-engines.html).
 - Meloni, M. (2021). *Stockfish and Lc0, test at different number of nodes*. [Calibration benchmark](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/).

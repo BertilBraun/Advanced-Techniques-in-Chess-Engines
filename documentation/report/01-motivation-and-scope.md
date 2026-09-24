@@ -1,13 +1,14 @@
 # 1. How far can efficient self-play go?
 
-An AlphaZero-style chess player improves by searching its own games, learning from the resulting positions, and
+An [AlphaZero-style](https://arxiv.org/abs/1712.01815) chess player improves by searching its own games, learning from the resulting positions, and
 repeating that cycle with a stronger network. Each step consumes compute. Search creates targets, training absorbs
 them, and evaluation must distinguish real progress from noise. When all three share one eight-GPU node, a faster
 model forward or a cheaper search matters only if it produces stronger play sooner.
 
 This study asks how strong that loop can become under a very limited compute budget when the entire system is
-engineered for efficiency. The selected model was trained from random initialization using self-play, without human
-games or pretrained chess weights. It has 6.3 million parameters. Under the project's fixed-node Stockfish 13
+engineered for efficiency. The selected model was trained from random initialization using self-play, without
+human-game training targets or pretrained chess weights. Unlabeled evaluation positions were used for bootstrap
+and quantization calibration. It has 6.3 million parameters. Under the project's fixed-node Stockfish 13
 calibration it measured **1,658 benchmark Elo without search** and **3,251 benchmark Elo at 100,000 searches per
 move**. The previous four-day training baseline trails the final recipe by approximately **74 Elo** in an
 estimator-matched 64-search plateau comparison. These numbers describe the stated match protocols; they are not
@@ -32,7 +33,7 @@ in this report.
 
 The report contributes:
 
-1. A complete, reproducible chess self-play run whose readable recipe starts at
+1. A fully recorded, locally auditable chess self-play run whose readable recipe starts at
    [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) and whose selected checkpoint,
    evaluation, and hashes are frozen in the [final result record](../results/final-chess-run.md).
 2. Substantial investigations of search allocation, graph search, inference caching, policy representation,

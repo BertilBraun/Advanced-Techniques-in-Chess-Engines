@@ -13,7 +13,7 @@ The first may evolve; the second must not.
 
 ## Result identity and provenance
 
-The frozen result record and its linked evidence identify these layers of provenance:
+The frozen local result record and its linked evidence identify these layers of provenance:
 
 - Git source revision and clean/dirty state;
 - resolved YAML and SHA-256;
@@ -28,7 +28,10 @@ The frozen result record and its linked evidence identify these layers of proven
 - raw terminal match records, aggregate reports, commands, and confidence-interval method;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
-The authoritative values belong in [the final result record](../results/final-chess-run.md) and Chapter 7.
+The authoritative values belong in [the final result record](../results/final-chess-run.md) and Chapter 7. The
+large run archives and some exact evaluation inputs are currently local rather than published with the Git
+repository. The public recipe and model artifact support inspection and a new run, but they are not yet a
+self-contained package for bitwise or exact-match reproduction of the reported experiment.
 
 ## Reproducing the software
 

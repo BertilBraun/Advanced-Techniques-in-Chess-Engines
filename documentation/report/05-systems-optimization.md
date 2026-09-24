@@ -58,7 +58,8 @@ relative to eager execution, whereas bfloat16 autocast improved it by 9.2%
 [training throughput](../benchmarks/chess-training-throughput-rtx3060-20260812/README.md)). `torch.compile` was
 therefore not used as the production inference compiler.
 
-TensorRT provided the stronger serving path. A native FP16 engine reached 75,889 positions/s against 40,716 for the
+TensorRT [quantization and engine refitting](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/refitting-engines.html)
+provided the stronger serving path. A native FP16 engine reached 75,889 positions/s against 40,716 for the
 TorchScript BF16 control in one matched backend benchmark, a 1.86x ratio. Quantization-aware INT8 inference added a
 further 1.31x over the TensorRT FP16 engine for the tested quantization-oriented network
 ([native backend benchmark](../benchmarks/tensorrt-native-backend-rtx4070s-20260912/README.md)). Matched production-
@@ -129,12 +130,15 @@ not extrapolated from the beginning of training.
 
 ## From inference speed to learning speed
 
-The central systems result is the gap between simulation throughput and replay throughput. In one production-shaped
-comparison, TensorRT INT8 executed 1.86 times as many simulations as the floating TorchScript control. In the live
-training interval, however, accepted replay positions improved by only 23.3% relative to the cited floating
-reference. The faster actor completed many more but shorter games, actor population was reduced during training,
-checkpoint publication consumed time, and replay credit appeared only when a complete game passed materialization.
-The measured accepted-position rate nevertheless predicted the observed optimizer cadence exactly
+The central systems result is that faster simulations do not translate mechanically into training throughput. In a
+production-shaped 400-visit benchmark, a generation-34 TensorRT INT8 actor executed 1.86 times as many simulations
+as a generation-18 floating TorchScript control with the same architecture and configuration. The weights were not
+identical, so this is a backend-and-checkpoint comparison rather than an isolated precision effect. Separately, a
+live 400-visit training stage admitted 23.3% more replay positions per second than an earlier, later-stage 600-visit
+topology. Those stages differ in visit budget, checkpoint, and actor scheduling; the 23.3% is not the downstream
+effect of the 1.86x benchmark. Faster actors can finish shorter games, actor population changes during training,
+checkpoint publication consumes time, and replay credit appears only after complete-game materialization. Within
+the live stage, the measured accepted-position rate predicted the observed optimizer cadence exactly
 ([end-to-end decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)).
 
 Systems results should therefore be reported as a chain:
