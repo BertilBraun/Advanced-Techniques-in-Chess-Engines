@@ -183,11 +183,8 @@ raised the rate only to roughly 4%. The tracker itself cost about 3.65% throughp
 cache would additionally pay for output storage, synchronization, eviction, and device transfers while retaining
 fewer entries.
 
-This audit also corrected a useful false lead. Reusing a small fixed opening suite and automatically restarting
-finished games had produced spectacular apparent repeat rates—98.5% in one harness—but those repetitions were
-artifacts of the benchmark, not representative self-play. Once the workload was repaired, the opportunity vanished.
-The wider design was therefore declined before implementation; the distinction matters because it was not itself
-benchmarked as a production cache. The preserved
+The wider design was declined before implementation; it was an opportunity audit, not a production cache benchmark.
+The preserved
 [opportunity audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
 and the earlier implementation together support the decision more strongly than either alone.
 
