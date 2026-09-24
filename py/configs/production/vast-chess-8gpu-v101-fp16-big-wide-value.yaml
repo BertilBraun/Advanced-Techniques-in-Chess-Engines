@@ -36,7 +36,10 @@ training:
         kind: convolutional
         num_layers: 19
         hidden_size: 176
-        residual_block: {kind: post_activation}
+        # Not an INT8 accommodation: branch_scale is 1/sqrt(depth) and it is what keeps the residual
+        # stream bounded once batch norm uses running statistics. Plain post-activation reaches a
+        # policy logit of 7.4e8 at this depth in eval mode and every bootstrap candidate is rejected.
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.22941573387056174, activation_cap: 6.0}
         residual_context: {kind: global_pooling, placement: every_second_block}
         policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
         num_value_channels: 32
