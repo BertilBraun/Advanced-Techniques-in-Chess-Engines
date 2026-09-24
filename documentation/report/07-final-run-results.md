@@ -69,7 +69,7 @@ shows the training diagnostics and clarifies the boundary of each count.
 
 The network-evaluation total is estimated rather than counted. Using a conservative 100 searched plies per completed
 game and roughly 600 simulations per ply gives about 195 billion search simulations across 3.25 million games,
-rounded to roughly 200 billion in the abstract. Most require a neural-network evaluation; terminal leaves and reuse
+reported as an estimate in the abstract. Most require a neural-network evaluation; terminal leaves and reuse
 make this an approximate scale measure, not an exact forward-pass counter.
 
 Across 480 small-model quanta, median measured trainer throughput was 16,977 samples/s; across 337 medium-model
