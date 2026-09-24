@@ -11,9 +11,9 @@ The project maintains two distinct targets:
 
 The first may evolve; the second must not.
 
-## Required final evidence bundle
+## Result identity and provenance
 
-The publication bundle should contain or identify:
+The frozen result record and its linked evidence identify these layers of provenance:
 
 - Git source revision and clean/dirty state;
 - resolved YAML and SHA-256;
@@ -64,16 +64,6 @@ procedure, while [evaluation engines](../operations/evaluation-engines.md) owns 
 
 ## Reproducing plots and tables
 
-Plots should be generated from archived JSON, CSV, TensorBoard, or manifest data. Every figure should name the source
-archive and extraction script or command. Derived tables should preserve enough raw columns to recompute totals,
-rates, Elo transformations, and uncertainty intervals. Hand-copied live-dashboard values are not publication data.
-
-## Minimum validation before publication
-
-- verify every internal link and anchor;
-- verify hashes against artifacts rather than copied prose;
-- reconcile generation, optimizer-step, game, position, and presentation counts;
-- check that every Elo row identifies its calibration and protocol;
-- ensure no live-node address, private key, or unarchived path is treated as permanent evidence;
-- render the report and figures and inspect layout if a PDF edition is produced;
-- preserve the Markdown report as the canonical editable source.
+The plots derive from archived JSON, CSV, TensorBoard, or manifest data. Figure inputs and extraction methods are
+retained beside the final evidence archive. Derived tables preserve the raw columns needed to recompute totals,
+rates, Elo transformations, and uncertainty intervals; live-dashboard values are not treated as publication data.

@@ -26,8 +26,8 @@ chapters. The larger-network continuation reached parity but not a clear gain; i
 an optimization problem from a capacity or target-quality limit. The final student experiments show useful
 compression, but did not test a student and teacher under identical deployment backends at every budget.
 
-Archive-derived training-volume and throughput figures, reconciled total project expenditure, and a publication
-render remain unfinished. The known **$43.20** is only the accepted 60-hour lineage at **$0.72/h**, not the total
+The selected-checkpoint training-volume and trainer-throughput figures are reconciled, but wider end-to-end
+self-play/search throughput and total project expenditure are not. The known **$43.20** is only the accepted 60-hour lineage at **$0.72/h**, not the total
 cost of experiments, evaluation, or discarded work. Proprietary drivers and TensorRT versions also limit bitwise
 reproduction: the intended reproducibility target is a recorded recipe, artifacts, protocol, and statistical
 agreement, not identical future weights.

@@ -166,20 +166,3 @@ At 100,000 searches the longer student scored 59/28/13 against the 20,000-node a
 estimate. The student used TorchScript and the teacher INT8 TensorRT, further preventing a clean architecture-only
 comparison. Elo is an interval scale: parameter compression can be expressed as 13.4x, but ratings cannot be
 meaningfully expressed as one model having a percentage of another model's Elo.
-
-## Remaining publication figures and accounting
-
-The terminal result matrix and headline search curve are complete. The publication pass still needs archive-derived
-analysis of:
-
-1. Detailed final-lineage ladder Elo against both stitched and raw time, with discarded intervals visible.
-2. Auxiliary losses and replay-age distributions, if they materially change the interpretation of the retained
-   training curves.
-3. Resume-reconciled self-play/search rates and rejection or quarantine totals not captured by the selected
-   checkpoint's coordinator counters.
-4. Quantization fidelity, backend changes, capacity-growth attempts, and other material interventions.
-5. An explicit cost boundary: $43.20 covers accepted-lineage effective time only; discarded work, distillation,
-   evaluation, and idle rental time remain excluded rather than estimated without full billing records.
-
-The root README uses only the reconciled results and figures above. Additional plots and accounting must distinguish
-measured archive-derived quantities from fields that remain unreconciled.

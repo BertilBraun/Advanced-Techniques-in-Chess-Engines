@@ -83,6 +83,13 @@ fixed table or figure count.
 
 ## Completion pass
 
+The retained final-run chapter reports only reconciled measurements. Further archive-derived analyses remain
+optional supporting material: raw-versus-stitched ladder time with discarded intervals, auxiliary losses and replay
+age, resume-reconciled self-play and search rates, rejection and quarantine counts, and intervention/fidelity
+timelines. Add a panel only when its counters are sufficiently reconciled to change interpretation. The $43.20
+accepted-lineage effective cost excludes discarded work, evaluation, distillation, and idle rental time; no total
+project-spend estimate is implied.
+
 1. Finish wider self-play/search-rate, rejection, and stage-time reconciliation beyond the now-tracked
    selected-checkpoint game, replay, trainer-throughput, loss, and learning-rate series; retain explicit gaps where
    records do not permit it. Do not attempt to estimate total project spend from incomplete rental records.
