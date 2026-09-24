@@ -127,11 +127,10 @@ The owner review of these decisions is complete.
 2. **Compute-curve wording — confirmed:** Report 1,658 policy-only Elo and 2,456 / 2,925 / 3,114 / 3,251 Elo across
    four search budgets, with confidence intervals and parallelism stated at every point. Do not describe the curve as
    fixed-parallelism scaling.
-3. **Cost denominator — narrow effective cost:** The evidence record and final configuration specify `$0.72/hour`,
-   so 60 hours on the accepted-lineage axis equals `$43.20`. This is not actual billed spend: it excludes discarded
-   work, experiments, evaluation, distillation, and idle time. Total project experimentation cost was substantially
-   larger but will remain unreconciled and unreported. If a billing record later establishes `$0.75/hour`, the
-   60-hour product would be `$45.00`; until then the frozen `$0.72` evidence wins.
+3. **Cost denominator — confirmed narrow effective cost:** The owner verified the recorded `$0.72/hour` rate. Thus
+   60 hours on the accepted-lineage axis equals `$43.20`. This is not actual billed spend: it excludes discarded work,
+   experiments, evaluation, distillation, and idle time. Total project experimentation cost was substantially larger
+   but will remain unreconciled and unreported.
 4. **Reported model — confirmed:** Generation/checkpoint 1026 is the reported teacher. The owner confirms it is
    preserved and published in the project's Hugging Face repository. The larger function-preserving continuation is
    an unresolved capacity experiment, not the reported model.

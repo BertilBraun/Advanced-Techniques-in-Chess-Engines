@@ -54,6 +54,11 @@ its limited continuation.
 
 The checkpoint manifest and archive-level hashes are listed in the
 [evidence index](../evidence/final-chess-20260923/README.md#selected-checkpoint).
+The matching INT8 ONNX is also preserved in the public
+[Hugging Face repository at immutable revision `dc8fcccc`](https://huggingface.co/BertilBraun/alphazero-chess/blob/dc8fccccb67ab5ec9e36267a165a9700b7dbf55f/production/final-generation-1026/model.int8.onnx).
+Its LFS SHA-256 matches the frozen evidence. The repository's model card, `latest` aliases, and checksum index still
+describe the preceding public checkpoint, so the final artifact is published but the public release metadata is not
+yet fully synchronized.
 
 ## Training trajectory and excluded work
 
@@ -167,7 +172,7 @@ The verified result and headline ladder figure are ready for the root README. Th
 - distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
 - generate the loss, learning-rate, throughput, replay, quantization-fidelity, and transition figures from the
   checksum-covered archives;
-- verify that the downloadable public model matches the reported checkpoint and deployment-artifact hashes;
+- update the Hugging Face model card, `latest` aliases, and checksum index around the already hash-matched final ONNX;
 - choose and publish the code and model/data licenses.
 
 ## Cross-campaign figure

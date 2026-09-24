@@ -7,7 +7,8 @@ decision, including why small-board Go was not retained as a proxy for chess hyp
 work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
 
 > **Writing pass ready.** The topic-first source dossiers and final strength evidence are complete enough to begin the
-> narrative rewrite. The chapters remain evidence-bearing drafts rather than final prose. Use the
+> narrative rewrite. Start with the compact [narrative outline](narrative-outline.md); the chapters remain
+> evidence-bearing drafts rather than final prose. Use the
 > [owner review guide](source-notes/owner-review-guide.md) for the small set of decisions that need project-owner
 > judgment; the full dossiers are not an owner review assignment.
 
@@ -33,6 +34,7 @@ that still require archive reconciliation remain explicitly marked rather than i
 11. [Bibliography and citation plan](bibliography.md)
 12. [Research coverage matrix](coverage-matrix.md)
 13. [Publication plan](publication-plan.md)
+14. [Narrative outline and figure budget](narrative-outline.md)
 
 ## Report status
 

@@ -71,6 +71,13 @@ the report curve. The derived JSON records both cutoffs and reasons without alte
 | TensorRT engine | SHA-256 `357652b119b4e4570127587bf0a04757ece6c01dd03abe3a0a905254249d84a5` |
 | Completed optimizer steps in QAT state | 408,500 |
 
+The final INT8 ONNX is published at the immutable Hugging Face revision
+[`dc8fccccb67ab5ec9e36267a165a9700b7dbf55f`](https://huggingface.co/BertilBraun/alphazero-chess/blob/dc8fccccb67ab5ec9e36267a165a9700b7dbf55f/production/final-generation-1026/model.int8.onnx).
+Its repository LFS SHA-256 is `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658`,
+matching the frozen final-run evidence. The Hugging Face model card, `latest` aliases, and top-level `SHA256SUMS`
+still describe the previous public checkpoint and must be refreshed before the model repository is presented as a
+complete final-model release.
+
 The stitched multi-rung ladder reached its strongest window at approximately generations 1020--1080. Generation
 1026 was selected because it was the last checkpoint in that window retained with a complete model, optimizer, QAT,
 ONNX, and TensorRT evidence set. The later, larger network reached parity but did not establish a stronger plateau.

@@ -30,7 +30,7 @@ the quantitative placeholder chapter; it does not contain provisional result val
 | Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |
 | Replay/restart/auxiliary choices improved strength | Isolated online-learning or playing-strength ablation, if any | “Retained in the final bundle” |
 | Resignation was safe and useful | Threshold history, continuation outcomes, false-nonloss bound, saved work | “Calibrated with continuation auditing” |
-| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Reported strength matches are frozen; accounting and public-model identity remain open |
+| Reproducible final result | Source/config/archive/checkpoint/backend hashes and evaluation assets | Final ONNX identity is verified on Hugging Face; release metadata and aliases remain open |
 
 ## Required headline tables
 
@@ -47,22 +47,20 @@ the quantitative placeholder chapter; it does not contain provisional result val
 6. **Negative-result summary:** technique, tested claim, strongest evidence dimension, outcome, and why it was not
    retained.
 
-## Required figures
+## Figure budget
 
 The source and derivation of each figure must be machine-readable and retained beside the final archive.
 
-1. Cross-campaign 64-search ladder Elo for the early baseline, first major architecture revision, previous four-day
-   baseline, later successor, and final accepted lineage. Internal identifiers belong only in the plot sidecar.
-2. Final accepted-lineage searched and policy-only Elo with uncertainty, promotions, resumes, and backend incidents.
-3. Policy, WDL, auxiliary, and total losses against wall clock and optimizer step.
-4. Learning rate, gradient norm, and clipping fraction.
-5. Games, fresh positions, presentations, generations, and optimizer steps against wall clock.
-6. Actor, trainer, materialization, admitted-replay, and generation throughput.
-7. Replay occupancy, age percentiles, effective reuse, and surprise/uniform sampling distribution.
-8. INT8 legal-policy fidelity and backend usage, annotated with refits, rebuilds, fallbacks, and model transitions.
-9. Resignation threshold, triggers, continuation outcomes, and false-nonloss upper bound.
-10. Strength versus compute/search depth for the selected checkpoint, with saturated throughput clearly separated
-    from interactive latency.
+Main text contains exactly three figures:
+
+1. normal learning-system loop across Python, C++, TensorRT, replay, training, publication, and evaluation;
+2. cross-campaign 64-search ladder Elo, using the existing tracked SVG and keeping internal identifiers in its sidecar;
+3. selected-model strength versus search budget, with confidence intervals, both opponent rungs, and parallelism.
+
+The appendix may contain at most four additional figures: raw-versus-stitched lineage provenance, a compact training-
+diagnostics panel, a traceable pipeline/replay-health panel, and the quantization-fidelity transition. Omit any panel
+whose source counters cannot be reconciled. Use tables for the terminal matrix, rejected-technique catalogue,
+parallel-search sweep, student result, configuration, resignation evidence, and detailed topology.
 
 ## Final inputs
 
@@ -73,7 +71,7 @@ The source and derivation of each figure must be machine-readable and retained b
 - TensorRT/ONNX/template/engine identities and fidelity reports;
 - raw terminal match games and result summaries;
 - plot extraction scripts or recorded commands;
-- final model-card/download identity;
+- synchronized final model card, aliases, checksum index, and download identity;
 - explicit code and model license decision.
 
 ## Writing pass after evidence arrives
@@ -87,7 +85,8 @@ The source and derivation of each figure must be machine-readable and retained b
 5. Verify every quantitative claim against the claim map and named evidence dimension.
 6. Pin mutable external documentation and complete bibliography metadata.
 7. Run link/anchor validation, render plots, and inspect Markdown/PDF output.
-8. Confirm the public model artifact matches the reported checkpoint rather than merely sharing a run name.
+8. Refresh the Hugging Face model card, `latest` aliases, and checksum index; the immutable final ONNX already matches
+   the reported artifact hash.
 
 ## Review gates
 
