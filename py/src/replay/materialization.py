@@ -30,6 +30,7 @@ from src.training.targets import (
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
     TrainingTargetLayout,
+    ValueResidualHeadLayout,
 )
 from src.util.generation_schedule import FloatGenerationSchedule
 
@@ -161,6 +162,16 @@ def materialize_completed_game(
                             positions,
                             state,
                             horizon_plies,
+                        )
+                    )
+                case ValueResidualHeadLayout():
+                    # The native search already reports 0.5 * |root_value - network_root_value| as
+                    # value_correction, so the target is how far the playing network sat from what
+                    # its own tree concluded, already normalised into [0, 1].
+                    auxiliary_targets.append(
+                        EligibleScalarAuxiliaryTarget(
+                            kind='value_residual',
+                            value=observation.value_correction,
                         )
                     )
                 case LegalMovesHeadLayout():

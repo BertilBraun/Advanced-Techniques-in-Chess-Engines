@@ -12,6 +12,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
+    ValueResidualHeadLayout,
 )
 
 ReplayArray: TypeAlias = (
@@ -47,7 +48,7 @@ class ReplayNextPolicyColumnViews:
 
 @dataclass(frozen=True)
 class ReplayScalarColumnViews:
-    kind: Literal['remaining_game_length', 'future_search_value', 'irreversible_progress']
+    kind: Literal['remaining_game_length', 'future_search_value', 'irreversible_progress', 'value_residual']
     value: npt.NDArray[np.float32]
     eligible: npt.NDArray[np.uint8]
 
@@ -115,6 +116,14 @@ def build_column_views(
                 auxiliary.append(
                     ReplayScalarColumnViews(
                         kind='irreversible_progress',
+                        value=_float32_array(arrays, ReplayColumnKind.AUXILIARY_VALUE, index),
+                        eligible=_uint8_array(arrays, ReplayColumnKind.AUXILIARY_ELIGIBLE, index),
+                    )
+                )
+            case ValueResidualHeadLayout():
+                auxiliary.append(
+                    ReplayScalarColumnViews(
+                        kind='value_residual',
                         value=_float32_array(arrays, ReplayColumnKind.AUXILIARY_VALUE, index),
                         eligible=_uint8_array(arrays, ReplayColumnKind.AUXILIARY_ELIGIBLE, index),
                     )

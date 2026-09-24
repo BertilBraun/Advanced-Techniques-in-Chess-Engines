@@ -593,6 +593,8 @@ class ReplayStore:
                     _validate_eligible_values(target.value, target.eligible, minimum=-1.0, maximum=1.0)
                 case ReplayScalarColumnViews(kind='irreversible_progress'):
                     _validate_eligible_values(target.value, target.eligible, minimum=0.0, maximum=1.0)
+                case ReplayScalarColumnViews(kind='value_residual'):
+                    _validate_eligible_values(target.value, target.eligible, minimum=0.0, maximum=1.0)
                 case ReplayLegalMovesColumnViews():
                     pass
 

@@ -32,7 +32,7 @@ class RemainingGameLengthTrainingDistribution(FrozenModel):
 
 
 class ScalarAuxiliaryTrainingDistribution(FrozenModel):
-    kind: Literal['future_search_value', 'irreversible_progress']
+    kind: Literal['future_search_value', 'irreversible_progress', 'value_residual']
     target: tuple[float, ...]
     prediction: tuple[float, ...]
     absolute_error: tuple[float, ...]

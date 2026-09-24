@@ -56,14 +56,14 @@ class IneligibleRemainingGameLengthTarget:
 
 @dataclass(frozen=True)
 class EligibleScalarAuxiliaryTarget:
-    kind: Literal['future_search_value', 'irreversible_progress']
+    kind: Literal['future_search_value', 'irreversible_progress', 'value_residual']
     value: float
     eligible: Literal[True] = True
 
 
 @dataclass(frozen=True)
 class IneligibleScalarAuxiliaryTarget:
-    kind: Literal['future_search_value', 'irreversible_progress']
+    kind: Literal['future_search_value', 'irreversible_progress', 'value_residual']
     eligible: Literal[False] = False
 
 

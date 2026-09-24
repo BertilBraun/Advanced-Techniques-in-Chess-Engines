@@ -24,6 +24,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
+    ValueResidualHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
 from torch import Tensor, nn
@@ -879,6 +880,8 @@ def _build_auxiliary_head(
         case FutureSearchValueHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case IrreversibleProgressHeadLayout(output_size=output_size):
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
+        case ValueResidualHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case LegalMovesHeadLayout(action_size=legal_action_size):
             if legal_action_size != action_size:

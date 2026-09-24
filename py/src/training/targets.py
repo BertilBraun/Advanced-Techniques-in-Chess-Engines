@@ -57,6 +57,18 @@ class IrreversibleProgressTargetConfiguration(FrozenModel):
         return self
 
 
+class ValueResidualTargetConfiguration(FrozenModel):
+    kind: Literal['value_residual'] = 'value_residual'
+    smooth_l1_beta: float = Field(default=0.05, gt=0.0)
+    loss_weight: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_loss_weight(self) -> ValueResidualTargetConfiguration:
+        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
+            raise ValueError('Value-residual loss weight must stay nonnegative.')
+        return self
+
+
 class LegalMovesTargetConfiguration(FrozenModel):
     kind: Literal['legal_moves'] = 'legal_moves'
     loss_weight: FloatGenerationSchedule
@@ -73,7 +85,8 @@ AuxiliaryTargetConfiguration: TypeAlias = Annotated[
     | RemainingGameLengthTargetConfiguration
     | FutureSearchValueTargetConfiguration
     | IrreversibleProgressTargetConfiguration
-    | LegalMovesTargetConfiguration,
+    | LegalMovesTargetConfiguration
+    | ValueResidualTargetConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -124,6 +137,17 @@ class IrreversibleProgressHeadLayout:
 
 
 @dataclass(frozen=True)
+class ValueResidualHeadLayout:
+    kind: Literal['value_residual']
+    smooth_l1_beta: float
+    output_size: Literal[1] = 1
+
+    def __post_init__(self) -> None:
+        if self.smooth_l1_beta <= 0.0:
+            raise ValueError('Value-residual beta must be positive.')
+
+
+@dataclass(frozen=True)
 class LegalMovesHeadLayout:
     kind: Literal['legal_moves']
     action_size: int
@@ -139,6 +163,7 @@ AuxiliaryHeadLayout: TypeAlias = (
     | FutureSearchValueHeadLayout
     | IrreversibleProgressHeadLayout
     | LegalMovesHeadLayout
+    | ValueResidualHeadLayout
 )
 
 
@@ -154,6 +179,8 @@ def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
             return output_size
         case LegalMovesHeadLayout(action_size=action_size):
             return action_size
+        case ValueResidualHeadLayout(output_size=output_size):
+            return output_size
 
 
 @dataclass(frozen=True)
@@ -194,6 +221,8 @@ def build_training_target_layout(
                         smooth_l1_beta=smooth_l1_beta,
                     )
                 )
+            case ValueResidualTargetConfiguration(smooth_l1_beta=smooth_l1_beta):
+                heads.append(ValueResidualHeadLayout(kind='value_residual', smooth_l1_beta=smooth_l1_beta))
             case IrreversibleProgressTargetConfiguration(horizon_plies=horizon_plies):
                 heads.append(
                     IrreversibleProgressHeadLayout(

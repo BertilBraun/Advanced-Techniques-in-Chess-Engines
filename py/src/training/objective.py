@@ -13,6 +13,7 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
+    ValueResidualTargetConfiguration,
 )
 from src.util.frozen_model import FrozenModel
 from torch.nn import functional
@@ -77,6 +78,12 @@ class ResolvedIrreversibleProgressLoss(FrozenModel):
     weight: float = Field(ge=0.0)
 
 
+class ResolvedValueResidualLoss(FrozenModel):
+    kind: Literal['value_residual'] = 'value_residual'
+    weight: float = Field(ge=0.0)
+    smooth_l1_beta: float = Field(gt=0.0)
+
+
 class ResolvedLegalMovesLoss(FrozenModel):
     kind: Literal['legal_moves'] = 'legal_moves'
     weight: float = Field(ge=0.0)
@@ -87,7 +94,8 @@ ResolvedAuxiliaryLoss: TypeAlias = Annotated[
     | ResolvedRemainingGameLengthLoss
     | ResolvedFutureSearchValueLoss
     | ResolvedIrreversibleProgressLoss
-    | ResolvedLegalMovesLoss,
+    | ResolvedLegalMovesLoss
+    | ResolvedValueResidualLoss,
     Field(discriminator='kind'),
 ]
 
@@ -115,6 +123,16 @@ def resolve_auxiliary_losses(
                 )
             case IrreversibleProgressTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedIrreversibleProgressLoss(weight=loss_weight.value_at(model_generation)))
+            case ValueResidualTargetConfiguration(
+                loss_weight=loss_weight,
+                smooth_l1_beta=smooth_l1_beta,
+            ):
+                losses.append(
+                    ResolvedValueResidualLoss(
+                        weight=loss_weight.value_at(model_generation),
+                        smooth_l1_beta=smooth_l1_beta,
+                    )
+                )
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedLegalMovesLoss(weight=loss_weight.value_at(model_generation)))
     return tuple(losses)
@@ -191,6 +209,13 @@ class ResolvedTrainingObjective(FrozenModel):
                     torch.sigmoid(prediction),
                     target,
                     reduction='none',
+                ).squeeze(1)
+            case ResolvedValueResidualLoss(smooth_l1_beta=beta):
+                rows = functional.smooth_l1_loss(
+                    torch.sigmoid(prediction),
+                    target,
+                    reduction='none',
+                    beta=beta,
                 ).squeeze(1)
             case ResolvedLegalMovesLoss():
                 element_loss = functional.binary_cross_entropy_with_logits(
