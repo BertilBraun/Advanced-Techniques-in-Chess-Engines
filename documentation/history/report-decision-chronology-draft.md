@@ -1,4 +1,7 @@
-# 4D. Decision provenance and transferable incidents
+# Archived report decision-chronology draft
+
+This worksheet preserves the earlier temporal synthesis as historical evidence. The publication report uses
+topic-first chapters and a focused [failure study](../report/05a-three-failures.md) instead.
 
 Internal run numbers mostly identify restarts, recoveries, or infrastructure changes rather than independent
 scientific experiments. They therefore remain in artifact paths and frozen provenance, not in the report's

@@ -81,8 +81,9 @@ marked **verify** require metadata, version, and section checks during the publi
 - [Motivation and scope](01-motivation-and-scope.md): AlphaZero, AlphaGo Zero, ELF OpenGo, KataGo, and scaling laws.
 - [System and training method](03-system-and-methods.md): AlphaZero/ELF OpenGo methods, KataGo paper, and pinned
   KataGo implementation documentation.
-- [Research investigations](04-research-investigations.md): learned stopping, Gumbel search, graph search,
-  Go-Exploit, replay research, Reanalyse, and architecture papers.
+- [Search investigations](04a-search.md): KataGo's search recipe, adaptive allocation, graph search, and caching.
+- [Data and replay](04b-data-and-replay.md): replay, restart curricula, resignation, and target provenance.
+- [Network investigations](04c-networks-and-training.md): policy representation, context, quantization, and sizing.
 - [Systems optimization](05-systems-optimization.md): versioned NVIDIA TensorRT documentation plus repository
   benchmarks for all project-specific behavior.
 - [Limitations](08-limitations.md): Elo-scale analysis and the non-transferability of external ablation multipliers.
