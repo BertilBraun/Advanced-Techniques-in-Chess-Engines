@@ -1,83 +1,118 @@
-# 6. Final chess recipe
+# 6. Integrated chess recipe
 
-## Canonical entry point
+## Living recipe and frozen result
 
-The reproduction entry point is
-[`py/configs/production/chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). It is fully
-expanded and inherits from no other YAML file. Documentation should link to that file instead of copying every field,
-because the living recipe may be revised if the project resumes.
+The readable entry point for reproducing or extending the system is the fully expanded
+[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). It owns the current network ladder,
+trainer, replay, self-play, deployment, and online-evaluation settings without an inheritance chain. It is a living
+recipe: future project work may revise it.
 
-The final campaign included operational resumes and correctness repairs without restarting the scientific training
-lineage. The frozen result record, rather than those internal labels, must identify the exact source revision and
-resolved configuration used by the reported checkpoint.
+The reported experiment is immutable. Its selected checkpoint, model and engine hashes, evaluation rows, archive
+digests, and evidence status are recorded in the [final result](../results/final-chess-run.md) and
+[evidence index](../evidence/final-chess-20260923/README.md). Those frozen records—not a future state of the YAML—are
+the authority for published numbers.
 
-## Recipe summary
+## Recipe at a glance
 
-| Component | Settled choice |
+| Component | Configured method |
 | --- | --- |
-| Hardware | 8x RTX 4070 SUPER, shared by training, self-play, and evaluation |
-| Trainer | 8-rank NCCL DDP; global batch 2,048; bfloat16 |
-| Optimizer | SGD, momentum 0.9, Nesterov, weight decay 0.0001, gradient norm cap 1.0 |
-| Learning rate | 1,000-step warmup to 0.1; linear 0.1 to 0.01 over generations 0–1,000 |
-| Quantization | TensorRT INT8 QAT, pre-fold deployment copy, per-generation recalibration |
-| Model ladder | 12x128 → 14x160 → 19x176 convolutional networks |
-| Context/head | Global pooling every second residual block; from-to attention policy head |
-| Candidate timing | Searched-Elo plateau thresholds; repeated candidate-versus-active matches for promotion |
-| Replay | Staged 0.6M → 20M positions; reuse 4; eight materializers |
-| Sampling | 30% uniform plus capped policy-surprise weighting |
-| Search | 300 → 400 → 500 → 600 → 800 visits; reduced-parent FPU; forced playouts |
-| Starts | 50% shallow random openings; 50% recent restart states |
-| Resignation | Calibrated after generation 70, with 20% continuation games |
-| Objectives | Policy 1.0, value 1.0, root-value blend, discounted value targets |
-| Auxiliary targets | Next policy at 0.15; remaining game length at 0.1 |
+| Compute | Eight RTX 4070 SUPER GPUs shared by self-play, training, and evaluation |
+| Trainer | Eight-rank NCCL DDP; global batch 2,048; 500 optimizer steps per quantum; bfloat16 |
+| Optimization | Nesterov SGD, learning rate 0.1→0.01, momentum 0.9, weight decay 0.0001, gradient-norm cap 1.0 |
+| Deployment | Pre-fold INT8 QAT, real-position calibration, fixed-batch ONNX, TensorRT refitting |
+| Network family | Scaled post-activation CNNs with global pooling, from-to policy, and WDL value head |
+| Replay | Staged 0.6M→20M live rows, reuse ratio 4, policy-surprise sampling with 30% uniform mixing |
+| Self-play search | Fixed staged visits, reduced-parent-value FPU, forced playouts, Dirichlet root noise |
+| Starts | 50% shallow random openings and 50% recent restart states |
+| Targets | Policy and WDL plus next-policy and remaining-game-length auxiliaries |
+| Evaluation | Paired openings against fixed-node Stockfish 13 anchors; native search for searched conditions |
 
-This table is explanatory, not executable. The YAML remains authoritative.
+This table is explanatory. Exact schedules, paths, dimensions, and resource limits remain in the YAML.
 
-## Progressive stages
+## Model, objective, and optimization
 
-All stages share the same semantic heads and objective. Training loss remains useful for optimization diagnostics,
-but it is not a valid promotion comparison when a candidate receives additional replay presentations:
+The configured ladder contains 12×128, 14×160, and 19×176 residual CNNs. Every stage uses capped scaled
+post-activation branches, global-pooling context in every second block, a key-size-128 chess from-to policy head, and
+a two-channel WDL value head with a 48-unit hidden layer. Training-only heads predict the next searched policy at
+weight 0.15 and remaining game length at weight 0.1; deployment removes both.
 
-1. **12 blocks × 128 channels.** The high-throughput bootstrap and early-data stage.
-2. **14 blocks × 160 channels.** The medium stage used once early Elo gain per hour no longer justifies staying small.
-3. **19 blocks × 176 channels.** The maximum configured stage, tested both from independent initialization and by
-   function-preserving growth from the medium model.
+The primary policy and value losses each have weight 1.0. Terminal outcome targets are discounted by 0.998 per ply.
+A search-root-value blend rises from zero to 0.1 over its configured schedule, while search backup uses a separate
+0.99 per-ply discount. Cut games use the searched root value and censor unknown remaining-length labels.
 
-Each block family uses scaled post-activation with an activation cap of 6. The branch scale decreases with depth.
-The from-to policy key size is 128 in every stage, and the value head shape remains fixed.
+Each training quantum contains 500 optimizer steps. Eight ranks each process 256 positions for a global batch of
+2,048. The optimizer is Nesterov SGD with momentum 0.9 and weight decay 0.0001; gradients are clipped to norm 1.0.
+The learning rate warms from zero to 0.1 over the first 1,000 optimizer steps and then follows the configured linear
+schedule to 0.01. Training uses bfloat16 and persistent trainer processes; `torch.compile` is disabled.
 
-The independently initialized largest candidate exposed the failure of loss-based promotion: its additional
-optimizer work lowered replay loss before it matched playing strength. Promotion is now match-based. The later grown
-candidate preserved the medium model's function and recovered INT8 fidelity through QAT, but did not establish a
-stronger plateau. The reported checkpoint is therefore the 14-block, 160-channel model. This is a bounded capacity
-result for the tested recipe, not a claim that larger networks are generally ineffective.
+INT8 quantization-aware training is active from the beginning. Calibration uses 516 real evaluation positions and is
+refreshed at every publication boundary. The trainable model remains pre-fold; deployment folding, recalibration,
+ONNX export, and TensorRT refitting operate on a copy. This keeps serving conversion from changing the optimizer's
+parameterization.
 
-## Data curriculum
+## Self-play, replay, and curriculum
 
-The recipe increases three resources over time:
+Self-play runs 32 actor processes, four assigned to each GPU, with 512 interleaved games per process. During a
+training quantum, half of the actor processes on every GPU pause while the others continue producing games. Native
+inference uses batch 320 with two outstanding batches per worker.
 
-- search visits increase as the policy becomes capable of using deeper search;
-- replay capacity grows from 600,000 to 20 million positions, limiting early stale-data dilution while preserving
-  broader later experience;
-- the network grows only when the current stage's measured improvement per hour falls below its threshold.
+The fixed search budget grows from 300 to 800 visits per move. Search uses exploration constant 1.5, reduced-parent
+FPU with reduction 0.2, forced playout coefficient 1.5, Dirichlet epsilon 0.25, and alpha 0.3. Fixed visits were
+retained after adaptive allocation and learned stopping failed to improve wall-clock strength.
 
-Meanwhile, game length caps increase from 150 to 250 plies, greedy move selection is delayed later in mature games,
-and a root-value blend rises from zero to 0.1. These schedules are part of the data curriculum, not incidental knobs.
+Half of games begin after up to eight random legal plies. The other half use recent restart states filtered by value,
+remaining length, age, and branchable visit mass; restart selection retains a 30% uniform component. Game caps grow
+from 150 to 250 plies, and greedy move selection begins later as training matures. Calibrated resignation begins only
+after sufficient evidence, constrains the false-nonloss upper bound to 2.5%, and continues 20% of triggered games for
+ongoing safety measurement.
 
-## Search and diversity
+Replay capacity grows through ten stages from 600,000 to 20 million live rows. Each admitted position funds four
+training presentations. Sampling reserves 30% uniform probability and otherwise prioritizes bounded policy surprise.
+Eight materializers convert completed games into the fixed-layout memory-mapped store; credit is committed only
+against durable admitted data.
 
-Every self-play position uses the generation's fixed visit cap; the rejected learned adaptive systems are absent.
-Forced playouts broaden root exploration, while reduced-parent-value FPU discourages an unexplored move without
-treating it as maximally bad. Dirichlet noise and temperature provide early exploration, with lower temperature after
-the configured greedy threshold.
+## Progressive sizing
 
-Random openings cover up to eight legal plies. Restart states must pass value, branch-mass, age, and remaining-length
-filters, and selection retains a uniform component. This combination seeks variety without turning the entire start
-distribution into a narrow hard-position curriculum.
+Candidate start and promotion are separate decisions. The primary 64-search ladder is smoothed and used to detect
+stage-specific plateaus; the full thresholds and window semantics are documented in
+[Progressive model sizing](../architecture/progressive-model-sizing.md). An eligible successor receives an average
+of 1.5 optimizer quanta per active-model quantum on the captured replay snapshot and uses its own catch-up
+learning-rate clock.
 
-## What the recipe does not prove
+Promotion is decided by candidate-versus-active matches, not training loss. The configured gate requires a score of
+at least 0.48 in two consecutive paired evaluations. This distinction matters because extra candidate presentations
+made the earlier loss comparison systematically favorable to the candidate and admitted a much weaker model.
 
-Presence in the final configuration does not mean every component has an isolated Elo estimate. Progressive sizing,
-the from-to head, inference backends, and several search decisions have focused evidence. Restart states, the two
-retained auxiliary heads, and interactions among replay growth, surprise weighting, and resignation are principally
-supported as an assembled recipe. The final run evaluates the bundle.
+The completed capacity study also grew the trained 14×160 network into 19×176 while preserving its function, then
+recovered deployment fidelity through QAT. The larger continuation reached parity but did not establish a stronger
+plateau. The reported checkpoint is therefore the 14×160 model. This result says that capacity was not the immediate
+bottleneck under this recipe; it does not establish a general limit on larger networks.
+
+## Training-time and terminal evaluation
+
+During training, evaluation ran every 20 minutes on 50 paired openings. The searched ladder used 64 searches per move
+against a three-rung adaptive bracket of fixed-node Stockfish 13 opponents; a policy-only ladder used the same opening
+and opponent framework. These measurements controlled progress and candidate timing but are distinct from the
+terminal result matrix.
+
+The terminal matrix evaluated the selected 14×160 checkpoint over 100 games per row from 50 paired openings, with
+each opening played from both colours. Stockfish 13 used one thread, 1,024 MiB hash, and fixed node budgets from the
+published anchor curve. The reported rung for each model budget is the one whose observed score is closest to 0.5;
+both rungs and confidence intervals remain in the result record. Searched play used the frozen INT8 TensorRT artifact.
+Policy-only play used the matching float TorchScript export because it bypasses the native search service.
+
+The measured curve spans policy only and 100, 1,000, 10,000, and 100,000 searches per move. Parallelism is one at
+100 and 1,000 searches, four at 10,000, and sixteen at 100,000. It is therefore an attainable operating curve, not a
+single-variable search-scaling experiment. Absolute values are protocol-specific benchmark Elo and must not be
+presented as FIDE ratings or unrestricted engine ratings.
+
+## What the final result establishes
+
+The terminal matches evaluate the assembled recipe. They do not allocate its strength gain among replay growth,
+restart states, auxiliary targets, resignation, progressive sizing, or any other bundled choice. Some components
+have isolated throughput, fidelity, proxy, or correctness evidence; fewer have controlled online strength ablations.
+The investigation chapters state those boundaries individually.
+
+Likewise, the `$43.20` reported cost is 60 hours of accepted-lineage time at the recorded hourly price through the
+selected checkpoint. It excludes discarded work, later capacity experiments, distillation, terminal evaluation, and
+idle rental time. It is a reproducible denominator for the reported checkpoint, not total project expenditure.
