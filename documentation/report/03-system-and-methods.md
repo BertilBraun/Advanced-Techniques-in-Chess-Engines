@@ -9,7 +9,7 @@ machinery outside the main argument.
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
-Figure 3.1. A published model returns to batched native self-play; searched positions become replay targets for the
+Figure 1. A published model returns to batched native self-play; searched positions become replay targets for the
 trainer. Paired evaluation measures the published checkpoint and feeds selection decisions back to Python. The
 diagram shows ownership and data flow, not the number or scheduling of every worker.
 
@@ -88,11 +88,11 @@ controller, the immediate larger candidate starts from an independent initializa
 model. Candidate starts are triggered by an Elo-improvement plateau, and promotion requires two qualifying
 head-to-head matches. A separate final investigation tested function-preserving growth from the trained medium model;
 it is not the controller's ordinary initialization path. A promotion publishes the new model without changing replay
-identity or generation accounting. Chapter 6 states the final schedule and gate.
+identity or generation accounting. Chapter 7 states the final schedule and gate.
 
 Rank zero publishes a complete training checkpoint and a trimmed inference artifact. In the final path, QAT-aware
 ONNX artifacts are refit into TensorRT templates for self-play and evaluation. Numerical fidelity is a publication
-condition and is discussed in Chapter 5.
+condition and is discussed in Chapter 6.
 
 ## Evaluation
 

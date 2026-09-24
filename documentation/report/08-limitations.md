@@ -1,4 +1,4 @@
-# 8. What the evidence does not establish
+# 9. What the evidence does not establish
 
 The complete run establishes the strength of the assembled system, not an Elo contribution for every retained
 ingredient. Several component comparisons used one seed, a short horizon, frozen replay, or a local proxy. They
@@ -10,7 +10,7 @@ The final ratings come from 100-game paired matches against fixed-node Stockfish
 calibration. They are benchmark Elo, not FIDE ratings or current unrestricted-engine rankings. Match sampling and
 anchor calibration both matter; the displayed bootstrap intervals include only the former. Opponent rungs disagree
 at shallow budgets. Policy-only and searched play also use different inference artifacts, while deep-search
-parallelism varies with budget. Figure 7.2 is thus a measured operating curve, not an isolated search-scaling law.
+parallelism varies with budget. Figure 9 is thus a measured operating curve, not an isolated search-scaling law.
 
 The rejected methods' economics depend on this workload. Exact graph reuse and inference-cache hits were too rare
 in diverse chess self-play; adaptive stopping saved simulations but barely shortened training under actor/trainer

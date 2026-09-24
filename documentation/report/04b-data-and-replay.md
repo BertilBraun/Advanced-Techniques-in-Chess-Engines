@@ -1,4 +1,4 @@
-# 4B. Getting more learning from each game
+# 4.2. Getting more learning from each game
 
 Self-play positions are not interchangeable units of data. Some contain a large correction from search; some repeat
 an opening the model already understands; some carry a reliable terminal result; and some end only because the
@@ -11,6 +11,12 @@ search. *Admission* turns eligible observations into durable rows. *Selection* c
 changes their contribution after selection. A fifth mechanism, presentation credit, governs when training may
 advance. This vocabulary matters because a technique that prioritizes future games is not the same as prioritized
 replay, and drawing a row more often is not the same as increasing its loss weight.
+
+![Generation, admission, selection, weighting, and presentation credit as distinct replay decisions](figures/replay-decision-path.svg)
+
+Figure 3: The retained curriculum changes where games start and which valid positions recur, but leaves admitted
+rows at unit loss weight. The separate presentation-credit ledger allows optimizer work only after replay append
+and flush; a sampled row is not the same unit as a newly generated row.
 
 ## Replay is both memory and clock
 
@@ -130,7 +136,7 @@ The cut policy also closes the most damaging data failure found in the project. 
 searched endgame rows while broadcasting one shallow cutoff estimate back through each affected game. Weak endgame
 targets then produced weak conversion, more capped games, and more weak targets; replay eviction could remove the
 bad rows while their effect remained in the weights. The full reconstruction, measured incidence, and two-stage
-repair are described in the late-game target-poisoning failure study in Chapter 5. The relevant data rule is that
+repair are described in the late-game target-poisoning failure study in Chapter 6. The relevant data rule is that
 cut-value provenance and policy-row eligibility must be audited together.
 
 ## Knowing what each target means

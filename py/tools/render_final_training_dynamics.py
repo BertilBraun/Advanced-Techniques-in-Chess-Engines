@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import os
 from dataclasses import dataclass
@@ -80,15 +81,15 @@ def configure_axes(axes: Axes, ylabel: str) -> None:
     axes.axvline(SMALL_TO_MEDIUM_STEPS / 1000, color=MUTED, linewidth=1, linestyle='--', alpha=0.8)
 
 
-def configure_style() -> None:
+def configure_style(*, paper: bool) -> None:
     plt.rcParams.update(
         {
             'font.family': 'Segoe UI',
-            'font.size': 10,
-            'axes.titlesize': 14,
-            'axes.labelsize': 10,
+            'font.size': 13 if paper else 10,
+            'axes.titlesize': 16 if paper else 14,
+            'axes.labelsize': 13 if paper else 10,
             'svg.fonttype': 'path',
-            'svg.hashsalt': 'alphazero-final-training-dynamics',
+            'svg.hashsalt': 'alphazero-final-training-dynamics-paper' if paper else 'alphazero-final-training-dynamics',
         }
     )
 
@@ -111,7 +112,7 @@ def save_figure(figure: Figure, path: Path) -> None:
         output.write(normalized)
 
 
-def render_loss_figure(points: tuple[TrainingPoint, ...]) -> None:
+def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> None:
     x = [point.optimizer_steps / 1000 for point in points]
     figure: Figure
     axes: list[Axes]
@@ -123,30 +124,36 @@ def render_loss_figure(points: tuple[TrainingPoint, ...]) -> None:
     configure_axes(loss_axes, 'Training loss')
     configure_axes(rate_axes, 'Learning rate')
     for label, values, color in (
-        ('Total', [point.total_loss for point in points], BLUE),
-        ('Policy', [point.policy_loss for point in points], TEAL),
-        ('WDL', [point.wdl_loss for point in points], ORANGE),
+        ('Total', [point.total_loss for point in points], '#1f5875' if paper else BLUE),
+        ('Policy', [point.policy_loss for point in points], '#1f7065' if paper else TEAL),
+        ('WDL', [point.wdl_loss for point in points], '#a45d1e' if paper else ORANGE),
     ):
-        loss_axes.plot(x, values, color=color, linewidth=0.55, alpha=0.16)
-        loss_axes.plot(x, smooth(values), color=color, linewidth=1.9, label=label)
-    loss_axes.legend(loc='upper right', frameon=False, ncol=3, fontsize=9)
+        loss_axes.plot(x, values, color=color, linewidth=0.55, alpha=0.12 if paper else 0.16)
+        loss_axes.plot(x, smooth(values), color=color, linewidth=2.3 if paper else 1.9, label=label)
+    loss_axes.legend(loc='upper right', frameon=False, ncol=3, fontsize=11 if paper else 9)
     loss_axes.annotate(
         'Medium model active',
         (244, loss_axes.get_ylim()[0]),
         xytext=(6, 8),
         textcoords='offset points',
         color=MUTED,
-        fontsize=9,
+        fontsize=11 if paper else 9,
     )
-    rate_axes.plot(x, [point.learning_rate for point in points], color=BLUE, linewidth=1.8)
+    rate_axes.plot(
+        x,
+        [point.learning_rate for point in points],
+        color='#1f5875' if paper else BLUE,
+        linewidth=2.2 if paper else 1.8,
+    )
     rate_axes.set_xlabel('Completed optimizer steps (thousands)')
     rate_axes.set_xlim(0, 410)
     figure.suptitle('Final lineage: training objectives and learning rate', x=0.09, ha='left', color='#203444')
     figure.subplots_adjust(left=0.10, right=0.98, top=0.91, bottom=0.11, hspace=0.12)
-    save_figure(figure, FIGURE_DIRECTORY / 'final-training-loss-and-rate.svg')
+    suffix = '-paper.svg' if paper else '.svg'
+    save_figure(figure, FIGURE_DIRECTORY / f'final-training-loss-and-rate{suffix}')
 
 
-def render_volume_figure(points: tuple[TrainingPoint, ...]) -> None:
+def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> None:
     x = [point.optimizer_steps / 1000 for point in points]
     figure: Figure
     axes: list[Axes]
@@ -159,30 +166,48 @@ def render_volume_figure(points: tuple[TrainingPoint, ...]) -> None:
     configure_axes(replay_axes, 'Positions (millions)')
     configure_axes(trainer_axes, 'Trainer samples/s (thousands)')
     games = [float(point.completed_games) for point in points]
-    games_axes.plot(x, games, color=TEAL, linewidth=0.55, alpha=0.16)
-    games_axes.plot(x, smooth(games), color=TEAL, linewidth=1.8)
+    games_axes.plot(x, games, color='#1f7065' if paper else TEAL, linewidth=0.55, alpha=0.12 if paper else 0.16)
+    games_axes.plot(x, smooth(games), color='#1f7065' if paper else TEAL, linewidth=2.2 if paper else 1.8)
     replay_axes.plot(
-        x, [point.materialized_positions / 1e6 for point in points], color=BLUE, linewidth=1.9, label='Net materialized'
+        x,
+        [point.materialized_positions / 1e6 for point in points],
+        color='#1f5875' if paper else BLUE,
+        linewidth=2.3 if paper else 1.9,
+        label='Net materialized',
     )
     replay_axes.plot(
-        x, [point.replay_live_rows / 1e6 for point in points], color=ORANGE, linewidth=1.7, label='Live replay'
+        x,
+        [point.replay_live_rows / 1e6 for point in points],
+        color='#a45d1e' if paper else ORANGE,
+        linewidth=2.1 if paper else 1.7,
+        label='Live replay',
     )
-    replay_axes.legend(loc='upper left', frameon=False, ncol=2, fontsize=9)
+    replay_axes.legend(loc='upper left', frameon=False, ncol=2, fontsize=11 if paper else 9)
     throughput = [point.training_samples_per_second / 1000 for point in points]
-    trainer_axes.plot(x, throughput, color=BLUE, linewidth=0.55, alpha=0.16)
-    trainer_axes.plot(x, smooth(throughput), color=BLUE, linewidth=1.8)
+    trainer_axes.plot(x, throughput, color='#1f5875' if paper else BLUE, linewidth=0.55, alpha=0.12 if paper else 0.16)
+    trainer_axes.plot(x, smooth(throughput), color='#1f5875' if paper else BLUE, linewidth=2.2 if paper else 1.8)
     trainer_axes.set_xlabel('Completed optimizer steps (thousands)')
     trainer_axes.set_xlim(0, 410)
     figure.suptitle('Final lineage: games, replay, and trainer supply', x=0.09, ha='left', color='#203444')
     figure.subplots_adjust(left=0.13, right=0.98, top=0.92, bottom=0.09, hspace=0.15)
-    save_figure(figure, FIGURE_DIRECTORY / 'final-training-volume-and-throughput.svg')
+    suffix = '-paper.svg' if paper else '.svg'
+    save_figure(figure, FIGURE_DIRECTORY / f'final-training-volume-and-throughput{suffix}')
 
 
 def main() -> None:
-    configure_style()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--paper-only',
+        action='store_true',
+        help='Render enlarged paper figures without rewriting the archived originals.',
+    )
+    arguments = parser.parse_args()
     points = read_points(SOURCE_PATH)
-    render_loss_figure(points)
-    render_volume_figure(points)
+    variants = (True,) if arguments.paper_only else (False,)
+    for paper in variants:
+        configure_style(paper=paper)
+        render_loss_figure(points, paper=paper)
+        render_volume_figure(points, paper=paper)
 
 
 if __name__ == '__main__':

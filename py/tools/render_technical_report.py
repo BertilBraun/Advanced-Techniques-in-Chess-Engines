@@ -50,6 +50,7 @@ PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
 \usepackage{titlesec}
 \usepackage{enumitem}
 \usepackage{caption}
+\usepackage{float}
 \usepackage{placeins}
 \usepackage{balance}
 \definecolor{vlteal}{HTML}{16615A}
@@ -106,7 +107,12 @@ SPECIAL_CHARACTERS = {
     '”': "''",
 }
 CITATION = re.compile(r'(?<!\[)\[(1[0-2]|[1-9])\](?!\])')
-PLAIN_CAPTION = re.compile(r'^(Figure\s+[0-9A-D.]+)\s*[.:-]\s*')
+PLAIN_CAPTION = re.compile(r'^Figure\s+[0-9A-D.]+\s*(?:[.:—-])?\s*')
+TABLE_CAPTIONS = {
+    ('appendix-b-evaluation-tables.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
+    ('appendix-c-supporting-comparisons.md', 1): 'Actor overlap and training supply',
+    ('appendix-c-supporting-comparisons.md', 2): 'Parallel-search strength and wall time',
+}
 MARKDOWN = MarkdownIt('commonmark').enable('table')
 
 
@@ -179,42 +185,31 @@ def convert_figure(source: Path, build_directory: Path) -> str:
     return output.as_posix()
 
 
-def caption_tex(value: str) -> str:
-    match = PLAIN_CAPTION.match(value)
-    if match is None:
-        return r'\caption{' + escape_tex(value.strip('*')) + '}'
-    label = match.group(1).removeprefix('Figure ').rstrip('.')
-    body = value[match.end() :].strip().replace('**', '')
-    return (
-        r'\renewcommand{\thefigure}{'
-        + label
-        + '}'
-        + r'\caption{'
-        + escape_tex(body)
-        + '}'
-        + r'\label{fig:'
-        + label
-        + '}'
-    )
+def caption_tex(value: str, figure_name: str) -> str:
+    body = PLAIN_CAPTION.sub('', value.strip('*').replace('**', ''), count=1).strip()
+    return r'\caption{' + escape_tex(body) + r'}\label{fig:' + figure_name + '}'
 
 
-def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path) -> str:
+def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path, *, appendix: bool) -> str:
     address = image.attrGet('src')
     if address is None:
         raise ValueError('Figure has no source path.')
     figure_path = convert_figure(source.parent / address, build_directory)
     caption_text = caption.content.replace('\n', ' ').strip()
-    if caption_text.startswith('**'):
-        caption_text = caption_text[2:]
-        caption_text = caption_text.replace('**', '')
+    if appendix:
+        environment, placement, width, height = 'figure', 'H', '0.98', '0.50'
+    elif source.name == '07-final-run-results.md':
+        environment, placement, width, height = 'figure*', '!t', '0.87', '0.36'
+    else:
+        environment, placement, width, height = 'figure*', '!t', '0.98', '0.43'
     return (
-        '\\begin{figure*}[!t]\n'
+        f'\\begin{{{environment}}}[{placement}]\n'
         '\\centering\n'
-        r'\includegraphics[width=0.92\textwidth,height=0.38\textheight,keepaspectratio]{'
+        rf'\includegraphics[width={width}\textwidth,height={height}\textheight,keepaspectratio]{{'
         + figure_path
         + '}\n'
-        + caption_tex(caption_text)
-        + '\n\\end{figure*}\n'
+        + caption_tex(caption_text, Path(address).stem)
+        + f'\n\\end{{{environment}}}\n'
     )
 
 
@@ -237,16 +232,19 @@ def parse_table(tokens: list[Token], start: int) -> tuple[list[list[str]], int]:
     return rows, index + 1
 
 
-def table_tex(rows: list[list[str]], *, appendix: bool) -> str:
+def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendix: bool) -> str:
     columns = len(rows[0])
     if any(len(row) != columns for row in rows):
         raise ValueError('Inconsistent Markdown table width.')
     specification = '@{}' + 'l' * columns + '@{}'
-    environment = 'table*'
-    lines = [r'\begin{center}' if appendix else r'\begin{table*}[!t]']
-    lines.append(r'\centering\small' if not appendix else r'\small')
+    environment = 'table' if appendix else 'table*'
+    lines = [r'\begin{' + environment + '}[H]' if appendix else r'\begin{table*}[!t]']
+    lines.append(r'\centering\normalsize' if appendix else r'\centering\small')
     if appendix:
-        lines.append(r'\resizebox{\columnwidth}{!}{%')
+        caption = TABLE_CAPTIONS[(source.name, table_number)]
+        lines.append(r'\caption{' + escape_tex(caption) + r'}\label{tab:' + source.stem + '-' + str(table_number) + '}')
+        lines.append(r'\renewcommand{\arraystretch}{1.15}')
+        lines.append(r'\resizebox{0.87\textwidth}{!}{%')
     lines.extend([r'\begin{tabular}{' + specification + '}', r'\toprule'])
     for row_index, row in enumerate(rows):
         lines.append(' & '.join(row) + r' \\')
@@ -255,95 +253,45 @@ def table_tex(rows: list[list[str]], *, appendix: bool) -> str:
     lines.extend([r'\bottomrule', r'\end{tabular}'])
     if appendix:
         lines.append('}')
-    lines.append(r'\end{center}' if appendix else r'\end{' + environment + '}')
+    lines.append(r'\end{' + environment + '}')
     return '\n'.join(lines) + '\n'
-
-
-def appendix_a_tex(build_directory: Path) -> str:
-    source = REPORT_ROOT / APPENDIX_FILES[0]
-    tokens = MARKDOWN.parse(source.read_text(encoding='utf-8'))
-    paragraphs = [tokens[index + 1] for index, token in enumerate(tokens) if token.type == 'paragraph_open']
-    if len(paragraphs) != 6:
-        raise ValueError('Unexpected Appendix A structure.')
-    introduction, first_image, first_caption, second_image, second_caption, conclusion = paragraphs
-    figures: list[str] = []
-    for image_token, caption in ((first_image, first_caption), (second_image, second_caption)):
-        image = (image_token.children or [])[0]
-        address = image.attrGet('src')
-        if address is None:
-            raise ValueError('Appendix A image has no source.')
-        path = convert_figure(source.parent / address, build_directory)
-        body = PLAIN_CAPTION.sub('', caption.content.replace('\n', ' '), count=1)
-        figures.append(
-            r'\begin{minipage}[t]{0.48\textwidth}'
-            + '\n'
-            + r'\centering\includegraphics[width=\linewidth,height=0.28\textheight,keepaspectratio]{'
-            + path
-            + '}\n'
-            + r'\captionof{figure}{'
-            + escape_tex(body)
-            + '}\n'
-            + r'\end{minipage}'
-        )
-    return (
-        r'\twocolumn[{'
-        + '\n'
-        + r'\begin{@twocolumnfalse}'
-        + '\n'
-        + r'\section{Training diagnostics}\label{app:A}'
-        + '\n'
-        + inline_tex(introduction.children or [])
-        + '\n\n'
-        + r'\noindent '
-        + figures[0]
-        + r'\hfill'
-        + '\n'
-        + figures[1]
-        + '\n'
-        + r'\vspace{0.7em}'
-        + '\n'
-        + r'\end{@twocolumnfalse}'
-        + '\n'
-        + '}]\n'
-        + inline_tex(conclusion.children or [])
-        + '\n\n'
-    )
 
 
 def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str, source: Path) -> str:
     if level == 1:
         if appendix:
             title = re.sub(r'^Appendix [A-D]\.\s*', '', title)
-            return r'\section{' + escape_tex(title) + r'}\label{app:' + appendix_letter + '}' + '\n'
-        heading = re.sub(r'^([0-9]+[A-C]?)\.\s*', '', title)
-        prefix = re.match(r'^([0-9]+[A-C]?)\.', title)
-        if prefix:
-            number = prefix.group(1)
-        elif source.name == '05a-three-failures.md':
-            number = '5A'
-        else:
-            raise ValueError(f'Main report section is not numbered: {source}')
-        return (
-            r'\renewcommand{\thesection}{'
-            + number
-            + '}'
-            + '\n'
-            + r'\section{'
-            + escape_tex(heading)
-            + r'}\label{sec:'
-            + source.stem
-            + '}'
-            + '\n'
-        )
+            return (
+                r'\setcounter{figure}{0}\setcounter{table}{0}'
+                + '\n'
+                + r'\section{'
+                + escape_tex(title)
+                + r'}\label{app:'
+                + appendix_letter
+                + '}'
+                + '\n'
+            )
+        heading = re.sub(r'^\d+(?:\.\d+)?\.\s*', '', title)
+        if source.name.startswith(('04a-', '04b-', '04c-')):
+            introduction = (
+                r'\section{Research investigations}\label{sec:research}' + '\n'
+                if source.name.startswith('04a-')
+                else ''
+            )
+            return introduction + r'\subsection{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
+        return r'\section{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
     if level == 2:
+        if source.name.startswith(('04a-', '04b-', '04c-')) and not appendix:
+            return r'\subsubsection{' + escape_tex(title) + '}' + '\n'
         return r'\subsection{' + escape_tex(title) + '}' + '\n'
-    return r'\subsubsection{' + escape_tex(title) + '}' + '\n'
+    return r'\paragraph{' + escape_tex(title) + '}' + '\n'
 
 
 def markdown_tex(source: Path, build_directory: Path, *, appendix: bool = False) -> str:
     tokens = MARKDOWN.parse(source.read_text(encoding='utf-8'))
     lines: list[str] = []
     index = 0
+    table_number = 0
     appendix_letter = source.name[len('appendix-')].upper() if appendix else ''
     while index < len(tokens):
         token = tokens[index]
@@ -372,7 +320,7 @@ def markdown_tex(source: Path, build_directory: Path, *, appendix: bool = False)
                     if next_index >= len(tokens) or tokens[next_index].type != 'paragraph_open':
                         raise ValueError(f'Figure has no caption: {source}')
                     caption = tokens[next_index + 1]
-                    lines.append(figure_tex(children[0], caption, source, build_directory))
+                    lines.append(figure_tex(children[0], caption, source, build_directory, appendix=appendix))
                     index = next_index + 3
                 else:
                     lines.append(inline_tex(children) + '\n\n')
@@ -397,7 +345,8 @@ def markdown_tex(source: Path, build_directory: Path, *, appendix: bool = False)
                 index += 1
             case 'table_open':
                 rows, index = parse_table(tokens, index)
-                lines.append(table_tex(rows, appendix=appendix))
+                table_number += 1
+                lines.append(table_tex(rows, source=source, table_number=table_number, appendix=appendix))
             case 'paragraph_close':
                 index += 1
             case _:
@@ -439,14 +388,13 @@ def build_report(output: Path) -> None:
         [
             r'\FloatBarrier' + '\n',
             bibliography_tex(),
-            r'\clearpage' + '\n',
+            r'\clearpage\onecolumn\raggedbottom' + '\n',
             r'\appendix' + '\n',
-            r'\renewcommand{\thefigure}{A.\arabic{figure}}\setcounter{figure}{0}' + '\n',
-            appendix_a_tex(build_directory),
+            r'\renewcommand{\thefigure}{\Alph{section}.\arabic{figure}}' + '\n',
+            r'\renewcommand{\thetable}{\Alph{section}.\arabic{table}}' + '\n',
         ]
     )
-    for filename in APPENDIX_FILES[1:]:
-        parts.append(r'\FloatBarrier' + '\n')
+    for filename in APPENDIX_FILES:
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory, appendix=True))
     parts.append(r'\end{document}' + '\n')
     latex_source = build_directory / 'technical-report-review.tex'

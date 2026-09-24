@@ -1,4 +1,4 @@
-# 4A. Spending search where it matters
+# 4.1. Spending search where it matters
 
 Search was the clearest way to make a fixed network play better, but also one of the most expensive parts of the
 learning loop. That made allocation an unusually attractive research target: if easy positions could be recognized
@@ -12,6 +12,13 @@ chooses stronger moves. Target fidelity asks whether a shallow policy resembles 
 asks whether the resulting data makes the next network improve faster. Throughput is a fourth, systems-level
 quantity. Success on any one of these axes did not guarantee success on the others. Chapter 2 states the
 measurement rules used below.
+
+![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
+
+Figure 2: Each rejected idea met a different constraint. Fast/full search damaged target coverage and endgame
+semantics; predicted allocation improved its fidelity proxy but lost online strength; in-search stopping saved mostly
+non-critical-path work; and exact graph or cache reuse failed to repay overhead. These are results under the measured
+chess workload, not universal impossibility claims.
 
 ## The fixed-budget baseline
 
@@ -184,7 +191,7 @@ The selected system returned to fixed visits, but not to a bare or naive search.
 first-play urgency, root noise and temperature for self-play exploration, forced root playouts followed by pruning
 of visits that should not become policy supervision, batched native inference, a 0.99 per-ply value discount, and
 tree retention with 60% of visits carried across a played move. Every recorded move receives the current staged
-visit cap. The current settings are summarized in Chapter 6 and defined by the public configuration [10].
+visit cap. The current settings are summarized in Chapter 7 and defined by the public configuration [10].
 
 Those ingredients do not form an additive ablation table. Search depth has direct strength and target-fidelity
 evidence. Evaluation and self-play clearly need consistent first-play-urgency semantics. Parallel leaves have a

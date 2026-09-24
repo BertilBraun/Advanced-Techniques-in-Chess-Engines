@@ -43,6 +43,7 @@ dev = [
 ]
 publication = [
     "markdown-it-py",
+    "matplotlib>=3.11.2",
     "pypdf",
     "reportlab",
     "svglib",

@@ -1,4 +1,4 @@
-# 7. Final training and evaluation results
+# 8. Final training and evaluation results
 
 Teacher training, the ten-row terminal matrix, the parallel-search sweep, and both distilled student experiments
 are complete and checksum-covered. The protocols and all ten terminal rows are reproduced in Appendix B.
@@ -39,7 +39,7 @@ plateau arithmetic and its transfer assumption are given in Appendix B.
 
 ![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
-Figure 7.1: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
+Figure 8: Each curve uses the bias-corrected 0.95 exponential moving average used by the project's earlier
 training-dynamics plots. The final recipe is cut at 2.5 days and the previous four-day baseline at 3.0 days. The
 figure is descriptive; the +74.1
 Elo claim comes from the matched-estimator plateau audit rather than from subtracting its displayed endpoints.
@@ -86,7 +86,7 @@ not FIDE ratings or estimates on a current unrestricted-engine list.
 
 ![Final model playing strength across measured search budgets](figures/final-search-curve.svg)
 
-Figure 7.2: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
+Figure 9: The connected points use the opponent rung with score nearest 0.5; pale diamonds show the other
 measured rung at each budget. Vertical bars are the reported 95% confidence intervals. The categorical horizontal
 axis keeps policy-only play visible alongside the searched conditions; it does not imply equal compute spacing.
 Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes

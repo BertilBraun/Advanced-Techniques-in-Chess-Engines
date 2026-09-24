@@ -5,14 +5,14 @@ include the reverted INT8 conversion, the invalid capacity-promotion branch, or 
 the larger model. A quantum comprises 500 optimizer steps at a configured global batch of 2,048. The selected
 checkpoint follows 817 contiguous quanta and records 408,500 optimizer steps and 836,608,000 presentations.
 
-![Training losses and learning rate through the selected checkpoint](figures/final-training-loss-and-rate.svg)
+![Training losses and learning rate through the selected checkpoint](figures/final-training-loss-and-rate-paper.svg)
 
 Figure A.1: Total, policy, and WDL training losses are shown with an 11-quantum moving average over faint raw
 observations. The dashed line marks the small-to-medium active-model transition at 240,000 optimizer steps. Loss
 levels across model stages are optimization diagnostics, not paired playing-strength measurements. The active
 learning rate fell from about 0.10 to 0.0266 by selection.
 
-![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput.svg)
+![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput-paper.svg)
 
 Figure A.2: Per-quantum completed games, net materialized positions, live replay occupancy, and training samples
 per second share an optimizer-step axis. The small model's median measured trainer throughput was 16,977 samples/s

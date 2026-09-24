@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" role="img" aria-labelledby="title description">
+  <title id="title">The supported and unresolved stages of progressive chess model sizing</title>
+  <desc id="description">A small active model produces early self-play quickly. A medium candidate trains on the same data and becomes active only after paired matches; this handoff worked repeatedly. A larger candidate can start independently or from function-preserving growth, but the measured continuation reached parity without a clear gain.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #172b36; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 19px; fill: #344c58; }
+      .stage { fill: #f6f9f8; stroke: #255c5a; stroke-width: 3; }
+      .candidate { fill: #f9f8f3; stroke: #9b7840; stroke-width: 3; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .body { font-size: 19px; }
+      .note { font-size: 18px; fill: #344c58; }
+      .good { font-size: 19px; fill: #17615b; font-weight: 700; }
+      .uncertain { font-size: 19px; fill: #805e2e; font-weight: 700; }
+      .solid { stroke: #17615b; stroke-width: 5; fill: none; }
+      .dashed { stroke: #9b7840; stroke-width: 5; stroke-dasharray: 11 8; fill: none; }
+    </style>
+    <marker id="solid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#17615b"/>
+    </marker>
+    <marker id="dashed-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#9b7840"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="500" fill="#fff"/>
+  <text x="48" y="49" class="title">Use capacity only when the learner can exploit it</text>
+  <text x="48" y="81" class="subtitle">A candidate trains alongside the active model; a paired match, not training loss, gates publication.</text>
+
+  <rect x="47" y="131" width="320" height="248" rx="8" class="stage"/>
+  <rect x="440" y="131" width="320" height="248" rx="8" class="stage"/>
+  <rect x="833" y="131" width="320" height="248" rx="8" class="candidate"/>
+
+  <text x="72" y="173" class="heading">Small active model</text>
+  <text x="72" y="216" class="body">Fast early game generation</text>
+  <text x="72" y="250" class="body">Limited eventual capacity</text>
+  <text x="72" y="320" class="good">Retained starting stage</text>
+
+  <text x="465" y="173" class="heading">Medium candidate</text>
+  <text x="465" y="216" class="body">Learns from the same replay</text>
+  <text x="465" y="250" class="body">Promoted after paired gate</text>
+  <text x="465" y="320" class="good">Handoff worked repeatedly</text>
+
+  <text x="858" y="173" class="heading">Larger candidate</text>
+  <text x="858" y="216" class="body">Independent catch-up or</text>
+  <text x="858" y="246" class="body">function-preserving growth</text>
+  <text x="858" y="320" class="uncertain">No clear gain measured</text>
+
+  <path d="M370 258 H429" class="solid" marker-end="url(#solid-arrow)"/>
+  <path d="M763 258 H822" class="dashed" marker-end="url(#dashed-arrow)"/>
+  <text x="400" y="216" text-anchor="middle" class="good">supported</text>
+  <text x="793" y="216" text-anchor="middle" class="uncertain">unresolved</text>
+  <text x="48" y="441" class="note">The medium model is the reported checkpoint; the larger stage is a capacity hypothesis, not a demonstrated improvement.</text>
+</svg>

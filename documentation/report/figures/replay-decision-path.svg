@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="title description">
+  <title id="title">Four separate decisions in the chess replay curriculum</title>
+  <desc id="description">Generation selects game starts; admission checks target eligibility and durability; selection samples rows by policy surprise with uniform coverage; weighting leaves retained rows at unit weight. Presentation credit separately gates optimizer work after durable replay append.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #172b36; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 19px; fill: #344c58; }
+      .card { fill: #f7f9f8; stroke: #365f60; stroke-width: 3; }
+      .head { font-size: 23px; font-weight: 700; fill: #17615b; }
+      .body { font-size: 19px; }
+      .small { font-size: 18px; fill: #344c58; }
+      .arrow { stroke: #17615b; stroke-width: 4; fill: none; }
+      .credit { fill: #e7f1ef; stroke: #255c5a; stroke-width: 3; }
+    </style>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#17615b"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="560" fill="#fff"/>
+  <text x="48" y="47" class="title">Replay is four decisions, not one priority score</text>
+  <text x="48" y="79" class="subtitle">Each stage changes a different part of the self-play learning problem.</text>
+
+  <rect x="48" y="125" width="242" height="217" rx="8" class="card"/>
+  <rect x="334" y="125" width="242" height="217" rx="8" class="card"/>
+  <rect x="620" y="125" width="242" height="217" rx="8" class="card"/>
+  <rect x="906" y="125" width="242" height="217" rx="8" class="card"/>
+  <path d="M292 232 H327" class="arrow" marker-end="url(#arrowhead)"/>
+  <path d="M578 232 H613" class="arrow" marker-end="url(#arrowhead)"/>
+  <path d="M864 232 H899" class="arrow" marker-end="url(#arrowhead)"/>
+
+  <text x="69" y="161" class="head">1. Generation</text>
+  <text x="69" y="204" class="body">Which games start?</text>
+  <text x="69" y="244" class="small">Shallow openings and</text>
+  <text x="69" y="272" class="small">branch-reserved difficult</text>
+  <text x="69" y="300" class="small">restart positions</text>
+
+  <text x="355" y="161" class="head">2. Admission</text>
+  <text x="355" y="204" class="body">Which rows are valid?</text>
+  <text x="355" y="244" class="small">Searched policy, target</text>
+  <text x="355" y="272" class="small">provenance, durable</text>
+  <text x="355" y="300" class="small">append, growing FIFO</text>
+
+  <text x="641" y="161" class="head">3. Selection</text>
+  <text x="641" y="204" class="body">Which rows recur?</text>
+  <text x="641" y="244" class="small">Policy-surprise sampling</text>
+  <text x="641" y="272" class="small">plus a uniform coverage</text>
+  <text x="641" y="300" class="small">component</text>
+
+  <text x="927" y="161" class="head">4. Weighting</text>
+  <text x="927" y="204" class="body">How much does each</text>
+  <text x="927" y="232" class="body">selected row count?</text>
+  <text x="927" y="272" class="small">Retained training uses</text>
+  <text x="927" y="300" class="small">unit row weights.</text>
+
+  <path d="M455 344 V386 H600" class="arrow" marker-end="url(#arrowhead)"/>
+  <rect x="247" y="408" width="706" height="99" rx="8" class="credit"/>
+  <text x="272" y="443" class="head">Separate clock: presentation credit</text>
+  <text x="272" y="474" class="body">Only flushed replay rows fund optimizer work: four presentations per new row.</text>
+</svg>

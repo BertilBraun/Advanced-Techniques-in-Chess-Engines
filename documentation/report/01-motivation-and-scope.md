@@ -12,7 +12,7 @@ and quantization calibration. It has 6.3 million parameters. Under the project's
 calibration it measured **1,658 benchmark Elo without search** and **3,251 benchmark Elo at 100,000 searches per
 move**. The previous four-day training baseline trails the final recipe by approximately **74 Elo** in an
 estimator-matched 64-search plateau comparison. These numbers describe the stated match protocols; they are not
-FIDE ratings or unrestricted-engine rankings. Chapter 7 gives the plotted results; Appendix B contains every
+FIDE ratings or unrestricted-engine rankings. Chapter 8 gives the plotted results; Appendix B contains every
 terminal match row and interval.
 
 The most useful finding is the interaction among decisions. Search determines which targets are worth paying for.
@@ -34,7 +34,7 @@ in this report.
 The report contributes:
 
 1. A fully recorded, locally auditable chess self-play run whose readable recipe starts at
-   `chess-final-config.yaml` [10]; Chapter 7 and Appendix B state the selected checkpoint and evaluation.
+   `chess-final-config.yaml` [10]; Chapter 8 and Appendix B state the selected checkpoint and evaluation.
 2. Substantial investigations of search allocation, graph search, inference caching, policy representation,
    model sizing, replay, restart states, resignation, auxiliary targets, and quantized serving. Each conclusion is
    bounded by the workload and evidence actually measured.

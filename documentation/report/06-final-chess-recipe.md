@@ -1,4 +1,4 @@
-# 6. Integrated chess recipe
+# 7. Integrated chess recipe
 
 ## Living recipe and frozen result
 
@@ -7,7 +7,7 @@ The readable entry point for reproducing or extending the system is the fully ex
 trainer, replay, self-play, deployment, and online-evaluation settings without an inheritance chain. It is a living
 recipe: future project work may revise it.
 
-The reported experiment is immutable. Chapter 7 and Appendices B and D identify the selected checkpoint, evaluation
+The reported experiment is immutable. Chapter 8 and Appendices B and D identify the selected checkpoint, evaluation
 rows, and provenance boundary. These frozen facts—not a future state of the editable YAML—are the authority for
 published numbers.
 

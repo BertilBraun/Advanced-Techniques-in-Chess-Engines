@@ -11,11 +11,11 @@
     <style>
       text { font-family: "Segoe UI", Inter, Arial, sans-serif; fill: #182b3d; }
       .heading { font-size: 26px; font-weight: 700; }
-      .subtitle { font-size: 15px; fill: #465c6e; }
-      .card-title { font-size: 20px; font-weight: 700; }
-      .body { font-size: 15px; }
-      .small { font-size: 13px; fill: #465c6e; }
-      .label { font-size: 14px; font-weight: 600; fill: #33485e; }
+      .subtitle { font-size: 17px; fill: #344c58; }
+      .card-title { font-size: 22px; font-weight: 700; }
+      .body { font-size: 16px; }
+      .small { font-size: 15px; fill: #344c58; }
+      .label { font-size: 16px; font-weight: 600; fill: #33485e; }
       .path { fill: none; stroke: #33485e; stroke-width: 3; marker-end: url(#arrow); }
       .feedback { fill: none; stroke: #c27030; stroke-width: 3; stroke-dasharray: 8 6; marker-end: url(#feedback-arrow); }
     </style>
@@ -24,24 +24,24 @@
   <text x="50" y="50" class="heading">One learning loop, one shared compute budget</text>
   <text x="50" y="77" class="subtitle">Throughput matters when it delivers more useful positions and measurable strength per hour.</text>
 
-  <rect x="355" y="108" width="490" height="82" rx="12" fill="#eaf2fa" stroke="#8bb1d6" stroke-width="2"/>
+  <rect x="355" y="108" width="490" height="82" rx="12" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="600" y="142" text-anchor="middle" class="card-title">Python orchestration</text>
   <text x="600" y="168" text-anchor="middle" class="body">configuration · generations · publication · evaluation cadence</text>
 
-  <rect x="50" y="240" width="320" height="180" rx="14" fill="#f0eafa" stroke="#9f88d5" stroke-width="2"/>
+  <rect x="50" y="240" width="320" height="180" rx="14" fill="#ebe5f5" stroke="#745a9c" stroke-width="3"/>
   <text x="75" y="278" class="card-title">C++ self-play and MCTS</text>
   <text x="75" y="307" class="body">many interleaved chess games</text>
   <text x="75" y="334" class="body">tree selection and backup</text>
   <text x="75" y="361" class="body">visit policy and game result</text>
   <text x="75" y="397" class="small">Native ownership keeps Python off the search hot path.</text>
 
-  <rect x="440" y="260" width="320" height="140" rx="14" fill="#eaf5ed" stroke="#82b98d" stroke-width="2"/>
+  <rect x="440" y="260" width="320" height="140" rx="14" fill="#e0efe4" stroke="#4d8d62" stroke-width="3"/>
   <text x="465" y="299" class="card-title">Replay and curriculum</text>
   <text x="465" y="329" class="body">admit searched positions</text>
   <text x="465" y="356" class="body">sample fresh and difficult states</text>
   <text x="465" y="384" class="small">Targets carry policy, value, and eligibility.</text>
 
-  <rect x="830" y="240" width="320" height="180" rx="14" fill="#eaf2fa" stroke="#8bb1d6" stroke-width="2"/>
+  <rect x="830" y="240" width="320" height="180" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="855" y="278" class="card-title">Distributed training</text>
   <text x="855" y="307" class="body">eight GPU ranks</text>
   <text x="855" y="334" class="body">policy and value objectives</text>
@@ -53,7 +53,7 @@
   <text x="405" y="313" text-anchor="middle" class="label">games</text>
   <text x="795" y="313" text-anchor="middle" class="label">batches</text>
 
-  <rect x="50" y="520" width="320" height="130" rx="14" fill="#fff3dd" stroke="#d6aa5d" stroke-width="2"/>
+  <rect x="50" y="520" width="320" height="130" rx="14" fill="#f8ebcb" stroke="#a57935" stroke-width="3"/>
   <text x="75" y="559" class="card-title">TensorRT leaf inference</text>
   <text x="75" y="589" class="body">batch neural evaluations</text>
   <text x="75" y="617" class="small">legal policy priors and WDL values</text>
@@ -62,7 +62,7 @@
   <text x="117" y="472" class="label">leaves</text>
   <text x="290" y="472" class="label">outputs</text>
 
-  <rect x="830" y="520" width="320" height="130" rx="14" fill="#eaf2fa" stroke="#8bb1d6" stroke-width="2"/>
+  <rect x="830" y="520" width="320" height="130" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="855" y="559" class="card-title">Published model</text>
   <text x="855" y="589" class="body">QAT checkpoint → verified ONNX</text>
   <text x="855" y="617" class="small">The deployed artifact feeds the next games.</text>
@@ -70,7 +70,7 @@
   <path d="M 1150 585 H 1175 V 213 H 210 V 240" class="path"/>
   <text x="1037" y="211" class="label">model refresh</text>
 
-  <rect x="440" y="520" width="320" height="130" rx="14" fill="#f8efe8" stroke="#cb9c76" stroke-width="2"/>
+  <rect x="440" y="520" width="320" height="130" rx="14" fill="#f2e6d9" stroke="#a87853" stroke-width="3"/>
   <text x="465" y="559" class="card-title">Paired evaluation</text>
   <text x="465" y="589" class="body">native search versus Stockfish</text>
   <text x="465" y="617" class="small">strength and uncertainty by protocol</text>

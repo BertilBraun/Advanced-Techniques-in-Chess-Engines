@@ -44,7 +44,7 @@ Wider node throughput remains open; total project spend is intentionally not a r
 | Narrative chapters and report figures | Complete owner-review edition; owner pass outstanding | [Opening](01-motivation-and-scope.md), [reader path](#reader-path) |
 | Archive-derived training dynamics and throughput | Selected-checkpoint counters and figures complete; wider throughput open | [Completion plan](publication-plan.md) |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
-| Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 7](07-final-run-results.md) |
+| Exact run identity and terminal strength | Complete and checksum-covered | [Chapter 8](07-final-run-results.md) |
 | External bibliography | Clean review references plus a separate working source plan | [References](references-publication.md), [source plan](bibliography.md) |
 | Research-question and artifact coverage | Audited | [Coverage matrix](coverage-matrix.md) |
 | Final publication workflow | Planned | [Publication plan](publication-plan.md) |
@@ -59,3 +59,8 @@ Build the PDF from the repository root with
 `output/pdf/technical-report-review.pdf`; Markdown remains the editable source. The PDF uses the same two-column
 LaTeX geometry and font as the Voice-Light report, with clickable numbered citations and vector figures. The paper
 does not use repository-file hyperlinks as substitutes for methods or results.
+
+To regenerate the larger-label training figures used in Appendix A, run
+`uv run --group publication python .\py\tools\render_final_training_dynamics.py --paper-only` first. This leaves the
+original evidence figures unchanged. The appendices switch to one column so the diagnostics and dense tables remain
+readable.

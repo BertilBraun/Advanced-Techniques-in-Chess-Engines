@@ -1,4 +1,4 @@
-# Three failures that changed the method
+# 6. Three failures that changed the method
 
 Most of the project can be explained by comparing alternatives without reconstructing when each experiment ran.
 Three failures are different. In each case, the order of events is part of the mechanism: an apparently reasonable
@@ -25,8 +25,8 @@ evicted, while their effect on the weights and subsequent self-play distribution
 
 ![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
 
-*The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at its
-source.*
+Figure 7: The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at
+its source.
 
 The repair happened in two stages. First, the cutoff stopped relying on the material heuristic and obtained a value
 from one full search at the final cut position. A controlled continuation study supported that choice: on 2,282
@@ -84,7 +84,7 @@ against the active deployment artifact and must score at least 0.48 in two conse
 failing score resets the sequence; a failed or cancelled match contributes no evidence. Candidate-start timing,
 extra catch-up training, and promotion are separate controls. Function-preserving growth is likewise a separate
 attempt to remove the larger model's initial relearning deficit, not a substitute for the playing-strength gate.
-Chapter 6 states the retained candidate-start and promotion procedure.
+Chapter 7 states the retained candidate-start and promotion procedure.
 
 Training loss remains valuable for optimization diagnostics. It is not a promotion criterion when the compared
 models have seen different numbers of presentations or when the artifact intended for deployment can be tested

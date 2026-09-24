@@ -27,7 +27,7 @@ The frozen local result record identifies these layers of provenance:
 - raw terminal match records, aggregate reports, commands, and confidence-interval method;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
-The selected hashes and evaluation values are summarized in Chapter 7 and Appendix B. The
+The selected hashes and evaluation values are summarized in Chapter 8 and Appendix B. The
 large run archives and some exact evaluation inputs are currently local rather than published with the Git
 repository. The public recipe and model artifact support inspection and a new run, but they are not yet a
 self-contained package for bitwise or exact-match reproduction of the reported experiment.

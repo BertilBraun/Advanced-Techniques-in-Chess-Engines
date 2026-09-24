@@ -66,7 +66,7 @@ quantization, quantizes the backbone convolutions, and leaves the start block, p
 layers at higher precision. Each published checkpoint is recalibrated, exported through an explicit Q/DQ ONNX
 graph, and refitted into shape-specific TensorRT templates. Fidelity is checked on encoded chess positions with
 legal-action masking, policy divergence, and WDL error; engine construction success is not treated as semantic
-validation. The corresponding architectural failure and retained block are described in Chapter 4C.
+validation. The corresponding architectural failure and retained block are described in Section 4.3.
 
 Model shape remained a systems variable even at similar parameter counts. Width and depth changed kernel efficiency,
 TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN
@@ -127,11 +127,11 @@ effect of the 1.86x benchmark. Faster actors can finish shorter games, actor pop
 checkpoint publication consumes time, and replay credit appears only after complete-game materialization. Within
 the live stage, the measured accepted-position rate predicted the observed optimizer cadence exactly.
 
-The relevant sequence is visualized in Figure 5.1.
+The relevant sequence is visualized in Figure 6.
 
 ![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
 
-Figure 5.1: The denominator changes at each boundary. Model evaluations and search simulations describe local
+Figure 6: The denominator changes at each boundary. Model evaluations and search simulations describe local
 service capacity; completed games and admitted rows determine training supply; only the final stage measures the
 playing-strength gain per unit wall-clock time.
 

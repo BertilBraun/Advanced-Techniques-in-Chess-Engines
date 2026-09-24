@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from markdown_it import MarkdownIt
-from tools.render_technical_report import bibliography_tex, escape_tex, inline_tex
+from tools.render_technical_report import bibliography_tex, caption_tex, escape_tex, inline_tex, section_tex, table_tex
 
 
 @pytest.mark.parametrize(
@@ -29,3 +31,33 @@ def test_report_prose_rejects_external_markdown_links() -> None:
     paragraph = markdown.parse('[external](https://example.com)')[1]
     with pytest.raises(ValueError, match='bibliography citations'):
         inline_tex(paragraph.children or [])
+
+
+def test_investigations_use_numeric_section_hierarchy() -> None:
+    search = Path('04a-search.md')
+    assert r'\section{Research investigations}' in section_tex(
+        '4.1. Search', appendix=False, level=1, appendix_letter='', source=search
+    )
+    assert r'\subsection{Search}' in section_tex(
+        '4.1. Search', appendix=False, level=1, appendix_letter='', source=search
+    )
+    assert section_tex('Search budgets', appendix=False, level=2, appendix_letter='', source=search) == (
+        '\\subsubsection{Search budgets}\n'
+    )
+
+
+def test_figure_caption_uses_latex_counter_instead_of_manual_number() -> None:
+    assert caption_tex('Figure 7.2: Strength across budgets.', 'strength') == (
+        r'\caption{Strength across budgets.}\label{fig:strength}'
+    )
+
+
+def test_appendix_table_has_caption_and_readable_width() -> None:
+    output = table_tex(
+        [['Heading', 'Value'], ['Item', '1']],
+        source=Path('appendix-c-supporting-comparisons.md'),
+        table_number=2,
+        appendix=True,
+    )
+    assert r'\caption{Parallel-search strength and wall time}' in output
+    assert r'\resizebox{0.87\textwidth}{!}{%' in output

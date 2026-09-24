@@ -15,23 +15,23 @@
     </pattern>
     <style>
       .page { fill: #ffffff; }
-      .panel { fill: #f8fafc; stroke: #d0d5dd; stroke-width: 1.5; }
-      .selected { fill: #f4f8ff; stroke: #2878bd; stroke-width: 2.5; }
-      .box { fill: #ffffff; stroke: #98a2b3; stroke-width: 1.5; }
-      .accent-box { fill: #eaf3ff; stroke: #2878bd; stroke-width: 1.6; }
-      .muted-box { fill: #f2f4f7; stroke: #98a2b3; stroke-width: 1.2; }
+      .panel { fill: #f4f7f8; stroke: #667985; stroke-width: 2.2; }
+      .selected { fill: #eaf3f1; stroke: #17615b; stroke-width: 3; }
+      .box { fill: #ffffff; stroke: #536d7b; stroke-width: 2; }
+      .accent-box { fill: #dceeea; stroke: #17615b; stroke-width: 2.2; }
+      .muted-box { fill: #e9eff0; stroke: #536d7b; stroke-width: 1.8; }
       .plane-a { fill: #dcecff; stroke: #4b89c6; stroke-width: 1.2; }
       .plane-b { fill: #ecf4fd; stroke: #79a6d2; stroke-width: 1.2; }
       .plane-c { fill: #f7fbff; stroke: #9cbddb; stroke-width: 1.2; }
-      .arrow { fill: none; stroke: #667085; stroke-width: 1.7; marker-end: url(#arrow); }
-      .accent-arrow { fill: none; stroke: #2878bd; stroke-width: 2.2; marker-end: url(#arrow); }
+      .arrow { fill: none; stroke: #344f5d; stroke-width: 2.2; marker-end: url(#arrow); }
+      .accent-arrow { fill: none; stroke: #17615b; stroke-width: 2.8; marker-end: url(#arrow); }
       .title { font: 600 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
-      .subtitle { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; }
+      .subtitle { font: 400 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344c58; }
       .panel-title { font: 600 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
-      .panel-kicker { font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #2878bd; letter-spacing: 1.2px; }
-      .label { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344054; }
-      .small { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; }
-      .tiny { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }
+      .panel-kicker { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17615b; letter-spacing: 1.2px; }
+      .label { font: 600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #203845; }
+      .small { font: 400 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344c58; }
+      .tiny { font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344c58; }
       .number { font: 600 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #101828; }
       .accent { fill: #175b91; }
       .mono { font: 500 13px ui-monospace, SFMono-Regular, Consolas, monospace; fill: #344054; }

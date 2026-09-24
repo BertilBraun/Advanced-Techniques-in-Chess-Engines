@@ -1,4 +1,4 @@
-# 4C. Choosing what the network predicts
+# 4.3. Choosing what the network predicts
 
 The network had to satisfy two objectives that are easy to conflate. It had to learn useful chess representations
 from self-play, and it had to evaluate thousands of search leaves cheaply enough that those representations improved
@@ -20,7 +20,7 @@ predict them. The project implemented three materially different policy families
 
 ![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
-**Figure 4C.1 — Policy representation changes the learned output geometry.** Dense heads learn an action-sized
+**Figure 4 — Policy representation changes the learned output geometry.** Dense heads learn an action-sized
 projection, move-plane heads preserve spatial move types, and the retained from-to head scores square pairs before a
 fixed gather. The parameter counts are from the same controlled convolutional-trunk comparison; no count is shown for
 the plane family because its implementations and external interfaces differed. The diagram is architectural, not a
@@ -158,6 +158,12 @@ the tested alternatives.
 
 ## Progressive model sizing
 
+![Small-to-medium promotion is supported while the larger-model transition remains unresolved](figures/progressive-model-sizing.svg)
+
+Figure 5: The small model buys early self-play throughput, and a medium candidate trains on the same replay before
+paired-match promotion. The larger candidate may avoid catch-up with function-preserving growth, but the limited
+continuation did not demonstrate a strength gain; the reported checkpoint remains medium-sized.
+
 KataGo provided the precedent [2]: start with a small, fast network, train the next size on the same data, and
 switch when it catches up. Early in self-play, extra model capacity may contribute less than the additional searched
 games a small network can produce. The measured small-model throughput supports that premise here, and the
@@ -166,8 +172,8 @@ so its exact Elo-per-currency contribution remains unknown.
 
 Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
 matches against the active model. The former loss-based gate promoted a candidate that was about 270 Elo weaker
-because extra catch-up updates made its training loss incomparable. The failure study in Chapter 5 explains that
-correction; Chapter 6 states the retained thresholds and promotion gate.
+because extra catch-up updates made its training loss incomparable. The failure study in Chapter 6 explains that
+correction; Chapter 7 states the retained thresholds and promotion gate.
 
 The larger stage remains unresolved. An independently initialized candidate needed substantial catch-up. Explicit
 function-preserving growth avoided relearning the medium model's function, but may also bias optimization toward its
