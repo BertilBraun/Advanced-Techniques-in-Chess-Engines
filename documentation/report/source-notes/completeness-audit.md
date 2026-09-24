@@ -147,13 +147,14 @@ isolated strength tests, and the matched INT8/FP16 online pair does not explain 
 TorchScript throughput difference. The +30/+44 policy/search decomposition is an outcome decomposition, not a
 feature attribution.
 
-### Capacity conclusion is bounded
+### Progressive-sizing conclusion is stage-dependent
 
-The independently initialized larger candidate was promoted by an invalid loss comparison and remained far weaker
-in play. Function-preserving growth removed the relearning deficit, restored INT8 fidelity through QAT, and reached
-parity, but the larger continuation then stayed flat. The reported checkpoint remains the 14-by-160 model. This is
-evidence that capacity was not binding under the tested learning-rate floor, search targets, and replay stream; it
-is not evidence that larger networks are generally ineffective.
+The small-to-medium transition worked repeatedly and is the well-supported progressive-sizing result. The
+medium-to-large transition remains unresolved. An independently initialized candidate was promoted by an invalid
+loss comparison and remained far weaker in play. Function-preserving growth removed the initial relearning deficit,
+restored INT8 fidelity through QAT, and reached parity, but the limited continuation then stayed flat. The reported
+checkpoint remains the 14-by-160 model; the evidence cannot distinguish insufficient training, post-growth
+optimization, target or replay limits, or lack of useful additional capacity.
 
 ### Standalone promotion configuration repair is complete
 

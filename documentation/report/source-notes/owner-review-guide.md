@@ -42,43 +42,54 @@ may explain a decision, but they do not support quantitative claims.
    Rare late-stage parameter ablations resumed a strong checkpoint, but those are diagnostic continuations rather
    than pretraining or part of the main training claim.
 
-## Priority 2 — consequential interpretations to spot-check
+## Priority 2 — consequential interpretations
 
-These are not requests to reread the sections. Confirm or correct the summaries below.
+The owner review of these interpretations is complete.
 
-1. **Fast/full search:** correct? The Go-inspired scheme was discarded because cheap positions created no direct
+1. **Fast/full search — confirmed:** The Go-inspired scheme was discarded because cheap positions created no direct
    training row; chess supplied terminal outcomes more cheaply and its value objective was already learning well, so
    completing more games did not compensate for the lost policy/value targets. There was no clean chess Elo ablation,
    so this is a mechanism-and-observation conclusion rather than a measured effect size.
    [Context](search-and-inference.md#randomized-fast-and-full-searches)
-2. **Graph search:** correct? A complete, corrected implementation was rejected because exact reusable
+2. **Graph search — confirmed:** A complete, corrected implementation was rejected because exact reusable
    transpositions were too rare to repay graph-maintenance overhead. It was not merely proposed, and no strength match
    was run after the corrected economics made continuation unattractive.
    [Context](search-and-inference.md#monte-carlo-graph-search-and-transpositions)
-3. **Inference cache:** correct? There were two decisions: a bounded process-local cache was implemented and measured
+3. **Inference cache — confirmed:** There were two decisions: a bounded process-local cache was implemented and measured
    unfavorably; a later wider-sharing architecture was declined after an exact-input opportunity audit showed too few
    hits even after reorganizing workers to share more traffic.
    [Context](search-and-inference.md#neural-inference-caching)
-4. **Late-game poisoning:** correct? Excluding deep policy rows while assigning one shallow cut value across the game
-   over-weighted drawn, unconvertible tails; removing those rows did not instantly undo the learned damage, and searched
-   root-value cut targets were the effective repair.
+4. **Late-game poisoning — corrected mechanism:** After a configured ply, self-play switched to fast searches whose
+   positions were not admitted as proper policy targets. The model therefore saw too few endgames, played those tails
+   almost randomly, rarely converted before the early cutoff, and repeatedly fell back to a poor heuristic cut value.
+   That value then trained the same weak endgame behavior, forming a non-self-correcting feedback loop. The first
+   repair replaced the heuristic with one final full search at the cut position; the later repair removed fast-search
+   tails and restored properly searched endgame positions to training.
    [Context](evaluation-and-pitfalls.md#transferable-failure-study-late-game-target-poisoning)
-5. **Progressive growth:** correct? Training loss was an invalid promotion signal because a candidate receiving more
-   presentations could show lower loss while remaining much weaker. Function-preserving growth fixed the initialization
-   discontinuity, but the larger model subsequently remained flat; the evidence therefore suggests capacity was not
-   the immediate bottleneck, without proving which alternative bottleneck was responsible.
+5. **Progressive sizing — stage-dependent conclusion:** The small-to-medium transition has worked well across the
+   completed campaigns: the small model buys early throughput, then the medium model supplies capacity when the small
+   curve slows. The medium-to-large transition is unresolved. Independently initialized large candidates took too
+   long to catch up; function-preserving growth was introduced only in the final investigation and preserved the
+   parent's outputs, but the available continuation did not establish that the added capacity generalized better.
+   The experiment is insufficient to conclude that capacity was unimportant or that growth initialization is optimal.
    [Context](training-data-and-replay.md#progressive-candidate-training-and-promotion)
-6. **Parallel search:** should the report emphasize this conclusion? Four-way parallelism was the useful practical
-   operating point in the measured 1,000-search comparison, while the final strength curve used serial search for the
-   shallow points and higher parallelism for the deep points. Consequently, that curve demonstrates attainable
-   strength at each budget, not a single fixed-parallelism scaling law.
+6. **Parallel search — report the frontier:** Parallel leaves save wall time but select against stale tree state. The
+   relative damage should shrink as the total budget grows because many temporarily suboptimal branches would be
+   visited eventually. The project measured about 19 Elo loss for four-way and 45 Elo for sixteen-way parallelism at
+   1,000 searches, but it did not measure enough budget/parallelism cells to publish a universal scaling curve. The
+   useful future figure is maximum near-free parallelism versus search budget—or the Elo/latency frontier—not a claim
+   that the mixed-parallelism terminal curve is fixed-protocol scaling.
    [Context](search-and-inference.md#parallel-search-batching-and-tree-retention)
-7. **Compilation:** correct? `torch.compile` helped one eager inference diagnostic and attention training, but lost to
-   the actual fused TorchScript serving path and hurt convolutional distributed training. The conclusion is boundary-
-   specific, not “compilation failed.” [Context](evaluation-and-pitfalls.md#transferable-failure-study-torchcompile-was-not-one-result)
-8. **Quantized deployment:** correct? A float-trained model was not safely deployable as INT8; quantization-aware
-   training and a quantization-compatible residual design were necessary. Promotion and reporting should use the
-   deployed INT8 artifact because the float model overstated strength.
+7. **Compilation — repository-derived:** The owner no longer recalls the details. Preserved benchmarks show that
+   `torch.compile` helped one eager inference diagnostic and attention training, but lost to fused TorchScript serving
+   and hurt convolutional distributed training. TensorRT later superseded both for production serving. Keep this as a
+   bounded historical systems result, not an owner-asserted conclusion or a claim that compilation generally failed.
+   [Context](evaluation-and-pitfalls.md#transferable-failure-study-torchcompile-was-not-one-result)
+8. **Quantized deployment — corrected rule:** A float-trained model could not simply be converted to faithful INT8;
+   the retained INT8 route needed a compatible residual design and QAT. Promotion must measure the artifact intended
+   for deployment. If INT8 is the chosen serving path, a stronger float checkpoint cannot stand in for a weaker INT8
+   artifact. Conversely, if float deployment is operationally preferable and stronger, the project should deploy and
+   report float rather than treating INT8 as intrinsically mandatory.
    [Context](network-architecture-and-policy.md#quantization-driven-residual-architecture)
 
 ## Priority 3 — choices for the public report

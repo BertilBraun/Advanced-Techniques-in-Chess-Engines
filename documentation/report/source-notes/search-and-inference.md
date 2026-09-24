@@ -506,6 +506,12 @@ The retained topology balances device fill against stale-tree quality, memory, C
 workload-specific systems choice. The project correctly treats realistic actor throughput and isolated search
 quality as two sides of the decision.
 
+The expected relationship is budget-dependent: with a larger total search, more of the temporarily suboptimal leaves
+selected from stale tree state would eventually have been visited anyway, so a fixed parallel count should cost less
+relative strength. The owner's rough operating intuition was approximately two leaves from 400–500 searches, four
+from 800–1,000, eight around 2,000, and sixteen around 4,000. Those thresholds were not established by a complete
+grid and must remain hypotheses, not a published scaling law.
+
 ### Pitfalls
 
 - A non-binding parameter produces a convincing but meaningless null result.
@@ -519,6 +525,8 @@ quality as two sides of the decision.
 - The precise quality cost of the final low parallel count at each fixed budget is not resolved.
 - The final all-full workload removes the original fast/full tail, so older topology optima should not be treated as
   timeless.
+- A useful future result would estimate the largest parallel count whose Elo loss is practically negligible at each
+  total budget, together with latency or throughput. The existing measurements do not identify that frontier.
 
 ### Sources
 

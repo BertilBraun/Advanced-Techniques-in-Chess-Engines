@@ -53,11 +53,11 @@ their raw time in the source export:
    seen different numbers of examples. The larger candidate was still roughly 270 Elo weaker. Training returned to
    the last valid checkpoint and removed 4,040,112 contaminated replay rows.
 
-The second incident changed the method, not merely the operational state. Promotion now uses a match between deployed
-artifacts rather than training-loss parity, and capacity growth starts from a function-preserving widening of the
-parent. The corrected larger model reached parity but did not break through the plateau. This is evidence against
-capacity being the immediate bottleneck under the tested recipe; it is not evidence that larger networks cannot help
-under a different learning-rate, target-quality, or replay regime.
+The second incident changed the method, not merely the operational state. Promotion now uses a match between the
+artifacts intended for deployment rather than training-loss parity, and the tested capacity-growth recovery starts
+from a function-preserving widening of the parent. The corrected larger model reached parity but did not break
+through the plateau during its limited continuation. This does not identify the limiting factor: longer training,
+post-growth optimization, target quality, replay composition, and useful additional capacity remain confounded.
 
 The selected checkpoint records 408,500 completed optimizer steps. With the configured global batch of 2,048 this
 corresponds to **836,608,000 training presentations**. Final games, admitted positions, replay occupancy, and
@@ -110,7 +110,9 @@ parallel search, 2,804 with four, and 2,778 with sixteen. Four-way parallelism t
 The operational timing definition reports approximately 5.3x speedup for four-way and 13.9x for sixteen-way
 parallelism. The result manifests' broader aggregate-duration fields imply smaller 4.8x and 10.1x ratios. Both are
 preserved pending a final timing-definition choice. At only 100 searches, sixteen-way parallelism cost 235 Elo, so
-parallelism cannot be changed silently across a compute curve.
+parallelism cannot be changed silently across a compute curve. The available points suggest that a fixed parallel
+count becomes less harmful as the total budget grows, but they are too sparse to define how much parallelism is
+effectively free at each budget. That frontier would require a dedicated budget-by-parallelism grid.
 
 ## What the student establishes—and what it does not
 

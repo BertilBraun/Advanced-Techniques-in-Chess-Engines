@@ -75,9 +75,10 @@ promotion admitted a much weaker larger network. The controller now indexes the 
 boundary and gates promotion on repeated head-to-head matches.
 
 A separate function-preserving growth procedure widened and deepened the trained medium network, trained the added
-capacity, and rebuilt its QAT state. The larger model reached parity but did not establish a stronger plateau. The
-reported checkpoint is therefore the medium network. This supports a bounded conclusion that capacity was not the
-immediate constraint under the tested recipe, not a general claim that larger models cannot help.
+capacity, and rebuilt its QAT state. It removed the initial relearning deficit, but the limited larger-model
+continuation reached only parity. The reported checkpoint is therefore the medium network. This leaves the reason
+unresolved: longer training, better post-growth optimization, improved targets or replay, or genuinely useful added
+capacity could still change the outcome.
 
 The frozen provenance must still identify the exact source revision, configuration, checkpoint, and inference
 artifact for every accepted or discarded interval. Those identifiers belong in the reproducibility manifest rather

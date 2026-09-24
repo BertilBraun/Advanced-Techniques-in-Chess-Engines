@@ -25,7 +25,7 @@ that still require archive reconciliation remain explicitly marked rather than i
    [lineage and decision chronology](04d-lineage-and-decisions.md)
 5. [Systems optimization](05-systems-optimization.md)
 6. [Final chess recipe](06-final-chess-recipe.md)
-7. [Final-run results](07-final-run-results.md) — pending measurements live here
+7. [Final-run results](07-final-run-results.md) — completed teacher, search, parallelism, and distillation results
 8. [Limitations](08-limitations.md)
 9. [Reproducibility](09-reproducibility.md)
 10. [Conclusion](10-conclusion.md)

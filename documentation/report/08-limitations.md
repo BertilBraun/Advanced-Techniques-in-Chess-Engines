@@ -57,7 +57,8 @@ parameter and hardware constraints; this does not establish a universal CNN adva
 - Fully asynchronous learner updates were not implemented; concurrency exists around explicit training quanta.
 - Auxiliary-head contributions were not individually measured at full-run scale.
 - Restart-state selection and policy-surprise replay were not isolated from the rest of the final bundle.
-- The final run's terminal archive and evaluation are pending at this draft's cutoff.
+- The terminal evaluation is complete, but archive-derived training-dynamics figures, reconciled replay/self-play
+  totals, and complete project-cost accounting remain unfinished.
 - Repository and model licensing must be explicit before redistribution claims are made.
 
 ## Reproducibility boundary

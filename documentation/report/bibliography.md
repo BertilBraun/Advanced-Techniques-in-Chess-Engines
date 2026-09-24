@@ -102,7 +102,8 @@ marked **verify** require metadata, version, and section checks during the publi
 
 ## Repository sources to cite as first-party evidence
 
-- [Final run result record](../results/final-chess-run.md) — pending quantitative authority.
+- [Final run result record](../results/final-chess-run.md) — quantitative authority for the selected checkpoint,
+  terminal evaluation, parallel-search sweep, distillation, and cross-campaign comparison.
 - [Final configuration](../../py/configs/production/chess-final-config.yaml) — living reproduction entry point.
 - [Previous-baseline terminal strength](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
 - [Previous-baseline training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).

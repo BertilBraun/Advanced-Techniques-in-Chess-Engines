@@ -185,8 +185,10 @@ The probe measured maximum policy and value differences of `1.34e-05` and `1.07e
 nonzero gradient at every newly zeroed reader. The grown float model was then trained for one replay-window epoch at
 the active model's learning rate. Because quantizer structure changes with depth and width, it could not inherit the
 parent's QAT state: it was wrapped and calibrated anew, then needed ten QAT quanta to recover acceptable INT8
-fidelity. The float match was therefore not a valid deployment gate. This tooling is intentionally explicit and is
-not yet folded into the generic progressive state machine.
+fidelity. Because this experiment intended to publish an INT8 engine, its float match could not decide the INT8
+artifact's promotion. If float serving were selected instead, the float artifact would require its own deployment
+evaluation and could legitimately be retained. This tooling is intentionally explicit and is not yet folded into the
+generic progressive state machine.
 
 ## Persistence, publication, and recovery
 
@@ -255,10 +257,10 @@ a promotion signal.
 
 The independently initialized larger candidate exposed why the former controller was unsafe: its greater replay
 exposure lowered training loss before it reached the active model's playing strength. Function-preserving growth
-removed the need to relearn the parent's function and brought the larger network to parity, but continued training
-then remained flat. The reported checkpoint is consequently the 14-by-160 model, not the later 19-by-176
-continuation. This supports only a bounded conclusion: capacity was not the binding constraint for the tested
-training recipe and data regime. It does not show that larger chess networks are generally unhelpful.
+removed the initial need to relearn the parent's function and brought the larger network to parity, but its limited
+continuation then remained flat. The reported checkpoint is consequently the 14-by-160 model, not the later
+19-by-176 continuation. This does not identify the limiting factor: training duration, post-growth optimization,
+target quality, replay composition, and useful additional capacity remain confounded.
 
 The current candidate multiplier is indexed by the outer generation. This matters for fractional values: indexing
 1.5 by candidate-local progress caused the sequence to settle at two quanta per generation, whereas the outer clock

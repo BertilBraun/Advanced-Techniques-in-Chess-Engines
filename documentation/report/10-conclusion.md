@@ -28,10 +28,12 @@ engine ratings, and the search curve mixes parallelism at the deeper points. The
 counts, artifact hashes, and cost boundary are recorded in the
 [final result record](../results/final-chess-run.md).
 
-The campaign also bounded the progressive-capacity result. A loss-based gate promoted a larger but much weaker
-candidate because unequal replay presentations made training losses incomparable. Function-preserving growth and QAT
-recovery brought the larger network back to parity, but it did not improve the strength curve. The reported model
-therefore remains the medium network; capacity was not the immediate constraint under this recipe.
+The campaign also clarified where progressive sizing is established and where it is not. Small-to-medium progression
+reliably combined faster early self-play with a successful capacity increase. A loss-based gate later promoted a
+larger but much weaker candidate because unequal replay presentations made training losses incomparable.
+Function-preserving growth and QAT recovery removed that initial relearning deficit, but the limited large-model
+continuation reached only parity. The reported model therefore remains the medium network, while the value and
+optimization of the larger model remain open.
 
 The final publication work is specified in the [publication plan](publication-plan.md), and the
 [coverage matrix](coverage-matrix.md) keeps supporting, superseded, and primary evidence reviewable rather than

@@ -73,7 +73,9 @@ The rejected alternatives matter. Full-trunk post-training INT8 was fast but cat
 value outputs. Calibration sweeps, partial early-block quantization, SmoothQuant, weight-only variants, and FP8 did
 not pass the joint speed/fidelity gate. These are local implemented negative results in the
 [salvage investigation](../benchmarks/tensorrt-int8-salvage-rtx4070s-20260912/README.md), not universal claims about
-those methods. `torch.compile` improved an eager diagnostic but did not beat the then-production TorchScript path.
+those methods. `torch.compile` improved an eager diagnostic but did not beat the then-production TorchScript path;
+TensorRT subsequently became the final serving compiler, so this remains historical boundary evidence rather than an
+open production-backend choice.
 
 The final networks use activation caps and scaled post-activation residual branches to make quantization tractable.
 Only the backbone convolutions are quantized; policy/value heads, linear layers, and the start block remain outside
@@ -107,6 +109,10 @@ intermediate hypotheses, is in
 
 This episode motivates a general rule: inference artifacts must be evaluated as semantic models, not accepted because
 conversion APIs return success or because an unrepresentative aggregate error is small.
+
+Promotion and reporting must measure the artifact intended for deployment. That rule does not privilege INT8: an
+INT8 serving decision must be judged on the INT8 engine, while a stronger float artifact may be selected, evaluated,
+and reported if its operational cost is acceptable.
 
 Refit and rebuild must remain distinct. A template fixes graph structure and tactic choices; recurring refit updates
 named weights and quantization constants cheaply. A rebuild is slower and can be periodic insurance, but rebuilding

@@ -79,6 +79,13 @@ across serving regimes; the other supports the actual high-fill conclusion
 ([sweep](../benchmarks/parallel-searches-sweep-rtx4070s-20260906/README.md),
 [rerun](../benchmarks/parallel-searches-rerun-batch1600-rtx4070s-20260906/README.md)).
 
+Parallelism should be reported as a budget-dependent strength/latency frontier. At 1,000 searches, the terminal sweep
+measured losses of 19 Elo for four-way and 45 Elo for sixteen-way parallelism; at 100 searches, sixteen-way
+parallelism was much more damaging. It is plausible that a fixed parallel count matters less at larger budgets because
+many stale selections would eventually be visited anyway, but the project did not run the full grid needed to derive
+a universal rule. A future figure should ask how much parallelism is effectively free at each budget, not present the
+mixed-parallelism terminal operating curve as fixed-protocol search scaling.
+
 ## Tree reuse, FPU, forced playouts, and discount
 
 The final bundle retains 60% of root visits across moves, reduced-parent-value FPU with reduction 0.2, forced

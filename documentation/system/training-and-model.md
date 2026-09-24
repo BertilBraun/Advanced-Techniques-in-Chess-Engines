@@ -91,9 +91,9 @@ machine and recovery record are in
 [`training/progressive.py`](../../py/src/training/progressive.py) and
 [`training/session.py`](../../py/src/training/session.py).
 
-The standalone final YAML currently names the gate's `progressive-candidate` definition without declaring the
-matching `progressive_candidate` evaluation entry. The campaign continuation configuration contains that entry, but
-the standalone recipe must be repaired before reuse or it will never receive a promotion observation.
+The standalone final YAML includes the `progressive_candidate` evaluation referenced by the gate. It is the living
+entry point for reproducing the current recipe; exact historical reproduction still requires the frozen resolved
+configuration and source revision.
 
 The completed capacity investigation also used a manual function-preserving transition from 14×160 to 19×176. New
 units were wired random-in/zero-out, appended residual blocks were initialized as identities, branch scales were
@@ -105,9 +105,11 @@ the grown network required ten QAT quanta to restore acceptable INT8 fidelity. T
 [`quantize_grown_checkpoint.py`](../../py/tools/quantize_grown_checkpoint.py); it is not yet the controller's
 automatic initialization policy.
 
-The grown network reached parity but did not improve the strength curve. The reported checkpoint therefore remains
-the 14×160 model. This establishes only that added capacity was not the binding constraint under the tested learning
-rate, self-play targets, and replay stream; it is not a general claim that 19×176 or larger networks cannot help.
+The small-to-medium transition worked reliably across the completed runs. The medium-to-large transition did not:
+independently initialized candidates took too long to catch up, while the function-preserving continuation reached
+parity but did not improve within its limited training window. The reported checkpoint therefore remains 14×160.
+This result does not show that capacity was unimportant; it leaves training duration, post-growth optimization,
+target quality, replay composition, and usable additional capacity confounded.
 
 ## Checkpoint publication and recovery
 

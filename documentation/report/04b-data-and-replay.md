@@ -58,9 +58,12 @@ censoring did not explain the difference. Resignation rate alone did not disting
 data finding was an early window in which forced fast continuation excluded the last plies of long games from
 primary policy training while shallow cutoff values were propagated across trajectories.
 
-That window later aged out of replay, but weight damage could persist. The final design eliminates the forced-fast
-tail, lengthens game caps over time, censors unknown remaining-length labels, and uses the search-root value for a cut
-game. The [conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
+This created a closed loop: the model received too few properly searched endgame positions, its cheap-search tails
+played almost randomly and failed to convert, and the early cutoff repeatedly replaced a natural result with the
+same poor heuristic supervision. That window later aged out of replay, but weight damage could persist. The first
+repair replaced the heuristic with one full search at the cut position; the later design removed the forced-fast
+tail so searched endgame positions re-entered training. It also lengthens game caps over time and censors unknown
+remaining-length labels. The [conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
 [sample-stream comparison](../analysis/v8-training-data-comparison-20260826.md), and
 [cut-value benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md) together provide
 observational, diagnostic-proxy, and mechanics evidence—not a clean factorial ablation.

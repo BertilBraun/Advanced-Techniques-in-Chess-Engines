@@ -110,8 +110,8 @@ does not change the stored rows or their sampling probabilities.
 
 ### Question
 
-- How can a larger successor catch up from an independent initialization without slowing active-model progress so
-  much that the comparison never becomes informative, and what exactly qualifies it for promotion?
+- How can early training exploit a smaller model's throughput, introduce additional capacity as progress slows, and
+  determine whether a successor is ready without sacrificing the active model's progress?
 
 ### Current mechanism
 
@@ -157,6 +157,12 @@ does not change the stored rows or their sampling probabilities.
   same replay distribution, its training loss was systematically advantaged and could reach parity while its playing
   strength remained far behind. It promoted a larger candidate that then lost about 270 Elo. Match-based promotion
   replaced the loss comparison rather than merely adjusting its threshold.
+- The small-to-medium handoff has worked consistently across the completed runs: the small model supplies high early
+  throughput, then the medium model takes over as the small model's capacity-limited progress slows.
+- The medium-to-large handoff is unresolved. Independently initialized large candidates took an impractically long
+  time to catch up and did not demonstrate a clear gain. The final function-preserving experiment removed the initial
+  relearning deficit, but its limited continuation only established parity; it did not test whether longer training
+  would turn the additional capacity into better generalization.
 
 ### Pitfalls and unknowns
 
@@ -166,6 +172,8 @@ does not change the stored rows or their sampling probabilities.
   recovery but reduces the unique rows seen during candidate catch-up.
 - The exact 1.5 multiplier, catch-up schedule, 0.48 match threshold, and two-match confirmation do not have a
   fixed-model or alternative-controller counterfactual. They are current control semantics, not isolated Elo results.
+- The large-model outcome cannot establish that capacity was unimportant. Insufficient continuation, the
+  optimization dynamics of newly exposed units, self-play targets, and replay composition remain confounded.
 - Final reporting must record candidate start, candidate-local optimizer steps, extra wall time, promotion comparisons,
   promotions or reversions, and which model produced each admitted replay interval.
 
@@ -765,9 +773,13 @@ the two discounts interchangeable.
   was propagated to every admitted row in the game, affecting roughly 36–38% of rows in the worst window.
 - The bad rows later aged out of replay, but the network weights retained the learned damage. Current-replay analysis
   therefore looked healthy even while play still produced drawn-out, unconvertible wins.
-- The repair removed the cheap-search tail, restored a more conservative cap schedule, added per-ply target discount,
-  increased continuation evidence, and searched the cut position directly. Conversion recovered, but these changes
-  were bundled, so no single component can receive exclusive causal credit.
+- The resulting loop was self-reinforcing: absent full-search endgame rows produced a weak late-game policy; cheap
+  searches driven by that policy played nearly randomly and failed to finish; the cutoff heuristic then supplied the
+  same poor value supervision instead of a natural result.
+- The first repair replaced that heuristic with one full search at the cut position and used its root value. The later
+  repair removed the cheap-search tail and restored properly searched endgame positions to replay. A more
+  conservative cap schedule, per-ply target discount, and continuation changes were bundled around this work, so no
+  single component can receive an isolated Elo effect.
 
 ### Decision rationale
 

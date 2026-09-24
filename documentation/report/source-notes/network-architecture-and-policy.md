@@ -456,11 +456,16 @@ into publication text.
 - One float epoch over the live replay window brought the grown network to a 0.495 match score against its parent.
   Direct INT8 conversion nevertheless failed fidelity (`0.759` top-one agreement, `0.102` mean KL, `2.01` maximum
   KL). Ten QAT quanta recovered fidelity to `0.878` / `0.036` / `0.227`; the deployed INT8 network then scored
-  0.440, about 42 Elo below the parent estimate. The float match therefore could not decide deployment.
+  0.440, about 42 Elo below the parent estimate. Because this experiment intended to serve the INT8 artifact, the
+  float match could not decide that artifact's promotion. This is not a general preference for INT8: if float serving
+  is selected operationally, the float artifact should instead be evaluated and reported as the deployed model.
 
 ### Evidence and decision rationale
 
 - The throughput premise is measured: small networks can evaluate materially more positions early in the workload.
+- The small-to-medium transition is the strongest empirical part of the sizing policy. Across the completed runs,
+  the small model exploited its early throughput advantage and the medium model successfully took over when the
+  small model's progress slowed.
 - The implementation has explicit candidate order, same-replay comparison, private checkpointing, ordered
   publication, and crash-idempotent recovery. These are strong mechanism and reliability facts.
 - The stage thresholds deliberately differ. The first transition is allowed while the small network still gains
@@ -475,8 +480,9 @@ into publication text.
   270 Elo. The candidate received more presentations of each replay sample because of its step multiplier, so lower
   training loss was not comparable evidence of equal playing strength. The deployed engine passed its fidelity
   checks, ruling out an INT8 conversion failure as the explanation. Promotion is now match-based.
-- Function-preserving growth solved a different problem: instead of asking a random larger model to relearn the
-  parent's function, it began at the parent's behavior and exposed only the added capacity to learning.
+- Function-preserving growth solved the initial-function problem: instead of asking a random larger model to relearn
+  the parent's behavior, it began at that behavior and exposed only the added capacity to learning. The limited
+  continuation does not yet establish that the added capacity can be optimized efficiently or generalizes better.
 - Retention is an assembled system decision. There is no fixed-model equal-cost counterfactual proving the causal
   Elo-per-currency gain of this exact sequence, start controller, or promotion controller.
 
@@ -491,20 +497,20 @@ into publication text.
   not create fresh self-play data or extra replay credit.
 - The function-preserving growth tools were an explicit recovery experiment, not yet the initialization path inside
   the general progressive controller.
-- The standalone final YAML names the match-gate evaluation but currently omits the corresponding
-  `progressive_candidate` evaluation definition. The campaign continuation configuration contains it, while the
-  typed loader does not validate the cross-reference. This is a reproducibility defect to fix before reusing the
-  standalone recipe, not evidence against the gate itself.
+- The standalone final YAML now contains the `progressive_candidate` evaluation referenced by the match gate. Exact
+  historical reproduction still requires the frozen resolved configuration and source revision rather than a future
+  revision of this living entry point.
 
 ### Unresolved evidence
 
 - No fixed 12-by-128, fixed 14-by-160, or fixed 19-by-176 run provides an equal-cost counterfactual to the full policy.
 - The independent contribution of the 50/4 thresholds, six-interval smoothing, two confirmations, 1.5 catch-up
   multiplier, catch-up learning-rate floor, and match threshold has not been ablated.
-- The larger grown network reached parity and then remained flat. The reported checkpoint is therefore the retained
-  14-by-160 model, not the promoted 19-by-176 continuation. This bounds the result to the tested recipe: added
-  capacity was not the binding constraint under the same learning-rate floor, self-play targets, and replay stream.
-  It is not a general upper bound on larger networks.
+- Independently initialized large candidates took too long to catch up and did not establish a benefit. The later
+  function-preserving transition reached parity and then remained flat during its limited continuation, so the
+  reported checkpoint is the retained 14-by-160 model. This does not identify the limiting factor: the experiment
+  cannot distinguish insufficient training, optimization after growth, target or replay limits, or genuinely unused
+  capacity. Larger professional engines motivate the capacity hypothesis, but do not prove it for this system.
 
 ### Sources
 

@@ -44,16 +44,18 @@ architecture/deployment result, not evidence that the residual block is stronger
 ## Progressive sizing
 
 The throughput premise is measured: small early models can generate substantially more search on the production
-GPU. The mechanism is also durable: active and candidate trainers consume the same replay-batch identity; candidate
-start is triggered by searched-Elo gain per hour; paired candidate-versus-active matches govern promotion; private
-candidate checkpoints survive restart; publication is ordered and idempotent. The former loss-EMA gate was removed
-after unequal candidate training made its losses incomparable and promoted a much weaker larger model.
+GPU. The small-to-medium handoff then worked repeatedly: the medium model took over when progress from the faster,
+lower-capacity small model slowed. The mechanism is also durable: active and candidate trainers consume the same
+replay-batch identity; candidate start is triggered by searched-Elo gain per hour; paired candidate-versus-active
+matches govern promotion; private candidate checkpoints survive restart; publication is ordered and idempotent. The
+former loss-EMA gate was removed after unequal candidate training made its losses incomparable and promoted a much
+weaker larger model.
 
-Function-preserving growth later mapped the trained 14x160 network into 19x176, recovered INT8 fidelity with QAT,
-and removed the need for the larger model to relearn its parent's function. The larger continuation reached parity
-but did not improve the strength curve, so the reported model remains 14x160. This bounds the conclusion to the
-tested recipe: capacity was not the immediate bottleneck, but the experiment does not establish a general limit on
-larger networks.
+The medium-to-large handoff remains unresolved. Independently initialized large candidates needed too long to catch
+up. Function-preserving growth later mapped the trained 14x160 network into 19x176, recovered INT8 fidelity with QAT,
+and removed the initial need to relearn its parent's function. The limited continuation reached parity but did not
+improve the strength curve, so the reported model remains 14x160. That outcome cannot distinguish inadequate
+continuation or post-growth optimization from target, replay, or capacity limits.
 
 The exact 12x128 → 14x160 → 19x176 ladder has no fixed-model counterfactual. Its causal strength-per-dollar gain is
 unresolved. The evidence establishes throughput and controller mechanics; the completed campaign establishes online

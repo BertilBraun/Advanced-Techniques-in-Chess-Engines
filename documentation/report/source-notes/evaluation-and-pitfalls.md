@@ -53,7 +53,9 @@ the report because apparently identical labels otherwise hide a real protocol di
 
 The previous terminal suite retained a 400-game direct-policy match alongside searched matches. That made it
 possible to report the network's policy floor and the incremental benefit from search under one opening suite. The
-same structure should be retained for the final model, but all numerical values remain pending.
+final suite retains that structure: direct masked-policy play measured 1,658 benchmark Elo, while the searched matrix
+measured the incremental benefit across four search budgets. The protocol details and intervals are in the final
+result record.
 
 Policy-only strength is also a useful diagnostic. If searched strength falls while policy-only strength does not,
 the search or serving path becomes a stronger suspect. If both deteriorate together, training data, optimization,
@@ -322,12 +324,22 @@ The model then produced drawn-out games it could not reliably convert. By the ti
 looked healthy, the poisoned rows had been evicted, but the damaged weights and resulting self-play distribution
 could persist. Looking only at the current replay buffer therefore initially hid the causal event.
 
+The owner describes this as a closed feedback loop: missing full-search endgame targets left the late-game policy
+weak; cheap searches driven by that policy played nearly randomly and rarely converted; the early cutoff then supplied
+the heuristic value that trained the same weak behavior. Neither better play nor a trustworthy terminal target entered
+the loop often enough for it to self-correct.
+
 ### Correction and lesson
 
 The safe design aligns search eligibility and game termination: do not create an untrained late-game dead zone, and
 do not propagate a low-quality cap estimate through an entire trajectory. Current cut semantics, restart-state
 storage, auxiliary eligibility, and final-value provenance must be audited together rather than as independent
 knobs.
+
+The repair had two stages. First, the cutoff heuristic was replaced by one full search at the final cut position and
+that searched root value supplied the bootstrap target. Later, the forced fast-search tail was removed so properly
+searched endgame positions again entered replay. Other late-game changes were bundled around the same period, so this
+chronology explains the mechanism without assigning an isolated Elo effect to either step.
 
 This incident also demonstrates why replay snapshots are insufficient for diagnosing online learning. Telemetry and
 historical materialization semantics are necessary when transient bad data can alter weights after the rows vanish.
@@ -618,8 +630,9 @@ replace that boundary without redesigning hot swap and deployment.
 
 Compilation is not a global feature flag. It must be evaluated per model family, batch shape, hardware, training or
 inference boundary, and actual deployed artifact. The project did not retain it for native search inference and does
-not enable it in the final convolutional trainer configuration. This does not contradict its benefit in an attention
-training microbenchmark.
+not enable it in the final convolutional trainer configuration. For serving, TensorRT later superseded the historical
+TorchScript comparison as the final compiler. This does not contradict compilation's benefit in an attention training
+microbenchmark.
 
 ### Sources
 
@@ -644,5 +657,6 @@ Before a numerical result enters the report, record:
    optimizer cadence, or learning cadence;
 10. every known confound, failed gate, unavailable raw artifact, and non-isolated component.
 
-Final training volume, checkpoint selection, policy-only strength, fixed-search results, deep-search results,
-training-dynamics plots, cost, and the cross-generation progression figure remain intentionally pending.
+Final checkpoint selection, policy-only strength, fixed- and deep-search results, distillation results, and the
+cross-generation progression figure are complete. Archive-derived training-dynamics plots, reconciled self-play and
+replay totals, and full cost accounting remain pending.

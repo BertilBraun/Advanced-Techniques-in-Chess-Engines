@@ -34,7 +34,8 @@ parallelism, as documented below; it should not be interpreted as a controlled s
 
 The stitched multi-rung ladder was strongest in a window around generations 1020--1080. **Generation 1026** was
 selected because it was the last checkpoint in that window retained with the complete training, optimizer, QAT,
-ONNX, and TensorRT artifact set. A later, larger model reached parity but did not establish a stronger plateau.
+ONNX, and TensorRT artifact set. A later, larger model reached parity but did not establish a stronger plateau during
+its limited continuation.
 
 | Field | Final value |
 | --- | --- |
@@ -129,7 +130,9 @@ sixteen-way parallelism cost **45 Elo** in this sweep.
 The operational recap reports match wall times of 18.1, 3.4, and 1.3 minutes, or approximately **5.3x** speedup for
 four-way and **13.9x** for sixteen-way parallelism. The archived result manifests record slightly broader aggregate
 durations of 18.5, 3.8, and 1.8 minutes. Publication should preserve the named timing definition rather than blend
-the two. A separate 100-search comparison found a much larger **235-Elo** penalty for sixteen-way parallelism.
+the two. A separate 100-search comparison found a much larger **235-Elo** penalty for sixteen-way parallelism. The
+budget dependence is important, but these two budgets do not determine a universal “safe parallelism” curve; the
+measured result is a strength/latency trade-off at specific operating points.
 
 ## Distilled student: separate, not part of the teacher result
 
