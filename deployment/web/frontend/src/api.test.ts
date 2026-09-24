@@ -97,4 +97,30 @@ describe("ChessApi", () => {
       ),
     );
   });
+
+  it("explains when Modal disables the workspace after its GPU budget is exhausted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("modal-http: workspace ac-example is disabled\n", { status: 404 }),
+      ),
+    );
+
+    await expect(new ChessApi("").createGame("fen", [])).rejects.toEqual(
+      new ApiError(
+        "The monthly GPU allowance has been used up. Sorry—the chess engine will be available again when the €30 monthly compute credits reset.",
+      ),
+    );
+  });
+
+  it("does not describe an ordinary missing endpoint as a budget error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("Not found", { status: 404 })),
+    );
+
+    await expect(new ChessApi("").createGame("fen", [])).rejects.toEqual(
+      new ApiError("Request failed (404)"),
+    );
+  });
 });

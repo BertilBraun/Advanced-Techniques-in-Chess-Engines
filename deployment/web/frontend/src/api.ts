@@ -13,7 +13,10 @@ export class ApiError extends Error {
 
 const NETWORK_ERROR_MESSAGE =
   "The chess engine did not respond. It may be starting up or analyzing another game. Wait a moment, then try again.";
+const GPU_BUDGET_EXHAUSTED_MESSAGE =
+  "The monthly GPU allowance has been used up. Sorry—the chess engine will be available again when the €30 monthly compute credits reset.";
 const TRANSIENT_HTTP_STATUSES = new Set([429, 502, 503, 504]);
+const MODAL_DISABLED_WORKSPACE_RESPONSE = /^modal-http: workspace \S+ is disabled\s*$/;
 
 export function normalizeApiBaseUrl(value: string | undefined): string {
   return (value ?? "").trim().replace(/\/+$/, "");
@@ -25,11 +28,16 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
 
   let detail = `Request failed (${response.status})`;
+  const responseBody = await response.text();
   try {
-    const body = (await response.json()) as { detail?: string };
-    if (body.detail) detail = body.detail;
+    const body = JSON.parse(responseBody) as { detail?: unknown };
+    if (typeof body.detail === "string" && body.detail) detail = body.detail;
   } catch {
-    if (TRANSIENT_HTTP_STATUSES.has(response.status)) detail = NETWORK_ERROR_MESSAGE;
+    if (response.status === 404 && MODAL_DISABLED_WORKSPACE_RESPONSE.test(responseBody)) {
+      detail = GPU_BUDGET_EXHAUSTED_MESSAGE;
+    } else if (TRANSIENT_HTTP_STATUSES.has(response.status)) {
+      detail = NETWORK_ERROR_MESSAGE;
+    }
   }
   throw new ApiError(detail);
 }
