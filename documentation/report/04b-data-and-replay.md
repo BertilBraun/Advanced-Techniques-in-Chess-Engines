@@ -1,110 +1,251 @@
-# 4B. Data, replay, and curriculum investigations
+# 4B. Getting more learning from each game
 
-The final model is inseparable from the data system that trained it. This chapter distinguishes changes to which
-positions are generated, which stored positions are sampled, and how often they are presented. The complete status
-ledger is [Data generation and replay experiments](../experiments/data-and-replay.md).
+Self-play positions are not interchangeable units of data. Some contain a large correction from search; some repeat
+an opening the model already understands; some carry a reliable terminal result; and some end only because the
+runtime reached a wall-clock-motivated cap. The replay system decides which of those positions survive, how often
+they return to the optimizer, and which parts of each target are actually known. Those decisions shape the learning
+problem as directly as the network or optimizer does.
 
-## Replay reuse is also a clock
+The project gradually separated four operations that are easy to confuse. *Generation* chooses the trajectories to
+search. *Admission* turns eligible observations into durable rows. *Selection* chooses rows for a batch. *Weighting*
+changes their contribution after selection. A fifth mechanism, presentation credit, governs when training may
+advance. This vocabulary matters because a technique that prioritizes future games is not the same as prioritized
+replay, and drawing a row more often is not the same as increasing its loss weight. The underlying investigations
+are indexed in the [data and replay experiment ledger](../experiments/data-and-replay.md).
 
-Replay ratio is training presentations divided by admitted fresh positions. In a credit-funded runtime it determines
-how quickly a generation completes, so it also changes every generation-indexed visit, learning-rate, replay-size,
-temperature, and evaluation schedule in wall-clock time. Earlier reuse comparisons therefore changed more than
-sample efficiency.
+## Replay is both memory and clock
 
-The final value of 4 is retained, but there is no clean online optimum from the accepted training lineage. The
-[production-topology decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md) contains
-useful throughput arithmetic, while the
-[previous baseline dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) show why high
-presentations without enough fresh target diversity can have diminishing returns. Final reporting must include both
-configured reuse and empirical presentations per admitted unique row.
+A replay window mediates between freshness and breadth. A small FIFO quickly removes targets made by weak old
+policies, but concentrates learning on a narrow recent distribution. A large window preserves more openings,
+endgames, and policy eras, yet can keep stale targets alive after the acting model has moved on. Merely allocating a
+large capacity does not create information: early in training, a twenty-million-row store may contain only a small
+fraction of that amount.
 
-## Growing replay
+The retained design therefore preallocates the physical memory map once while growing its logical capacity through
+0.6, 1.2, 2.0, 2.8, 4, 6, 8, 12, 16, and 20 million rows. Growth avoids pretending that an empty early window offers
+diversity and later allows a broader policy history to remain available. A mature earlier campaign showed why
+freshness must be measured rather than inferred: strength continued to improve after fixed-dataset policy accuracy
+largely saturated, while larger models and deeper search reduced the rate of new positions. That observation
+motivates the wider window but does not isolate this exact schedule as a strength improvement
+([training-dynamics audit](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)).
 
-Capacity grows from 600,000 to 20 million rows rather than allocating the terminal window immediately. Early in a
-run, a huge nominal capacity contains no extra information; later, a wider window preserves strategic variety and
-reduces concentration on a narrow recent policy. The exact staged schedule was not compared with a fixed-window
-control. It is supported by design rationale, tested mechanics, and observational evidence rather than a measured
-strength multiplier.
+Replay reuse introduces a second tradeoff. The configured ratio is the number of optimizer presentations funded by
+each newly admitted row. In the retained setting, four presentations are credited per row; a 500-step quantum at a
+global batch of 2,048 therefore requires 256,000 newly appended rows. Credits are issued only after append and flush,
+and a persistent ledger prevents a restart from spending them twice.
 
-Replay reporting should include occupancy, age percentiles, unique rows presented, wrap behavior, and age by sample
-probability. A raw capacity number is insufficient.
+This ratio is not merely a sample-efficiency knob. Because training, evaluation, model publication, visit schedules,
+and replay growth advance at quantum boundaries, changing reuse also changes their wall-clock pace. Higher reuse
+funds more optimizer work from the same generated data; lower reuse exposes each update to more fresh positions if
+the actors can supply them. Short controls at ratios four, 6.25, and eight remained matched at their shared
+evaluation boundaries despite different update rates, but all ended within roughly 90 minutes and their full raw
+curves are not preserved in the benchmark archive. The completed campaign also changed replay capacity, optimizer,
+objective weighting, and inference alongside reuse. Ratio four is consequently a deliberate freshness bias, not a
+measured standalone explanation for final strength. Both configured reuse and effective presentations per distinct
+admitted row are needed to describe what the learner actually saw.
 
-## Sampling and sample weight
+## Choosing information without inventing it
 
-Policy-surprise sampling emphasizes rows where search disagreed with the network prior while reserving 30% uniform
-probability and capping surprise. It changes draw probability. Typed sample weights are a different objective input;
-ordinary final-recipe rows have primary weight 1.0. The report must not describe surprise sampling as proof that
-arbitrary loss weighting worked.
+Within the live window, the sampler asks where search most revised the raw policy. Policy surprise is the divergence
+between the visit distribution and the network prior. Seventy percent of draws are allocated in proportion to this
+signal, capped at 2.0, while 30% remain uniform. The cap keeps a few extreme rows from monopolizing training and the
+uniform component preserves broad coverage. The same row may reappear across optimizer steps, but sampling is
+without replacement within one global batch.
 
-TD-error prioritized replay, recency weighting, and deduplication were proposed but not established. Literature
-motivates surprise weighting; no isolated online final-lineage ablation assigns it Elo credit.
+This is prioritization, not an unbiased estimate of the uniform-replay objective. The implementation deliberately
+does not apply inverse-probability correction, so the optimizer learns from the prioritized distribution. Surprise
+can also reflect search noise, target age, phase of play, or the number of legal moves—not only genuine difficulty.
+The sampler is part of the successful retained bundle, but there is no isolated online ablation for its 70/30 mix or
+cap.
 
-## Random openings and restart states
+Loss weighting is a separate path. Each row has a typed positive sample weight which, after batch-mean
+normalization, multiplies the primary and eligible auxiliary losses. Ordinary rows in the selected recipe use weight
+1.0. Historical replay could aggregate duplicate positions and encode multiplicity through weights; that verifies
+that the mechanism worked, not that arbitrary weighting improved play. Claims that the final system “weights hard
+positions more” should therefore refer to draw probability unless a non-unit loss-weight schedule is explicitly
+being discussed. TD-error priority, recency weighting, and global deduplication remained proposals rather than
+completed current experiments ([sample-stream audit](../analysis/v8-training-data-comparison-20260826.md)).
 
-Half of games begin after zero to eight uniformly sampled legal plies. The other half begin from recent archived
-states filtered by value, remaining length, age, and branchable visit mass. Restart selection includes a uniform
-component and a difficult-state preference. This is not the learned regret network in RGSC; it is the project's
-typed restart heuristic.
+Admission happens earlier still. Random opening-prefix moves and the reconstructed prefix of a restart game have no
+search observation and create no replay row. A normal searched move does. A final search performed only to value a
+cut position can also become a row even though it selects no played action. Sparse policy storage retains at most 60
+actions and records how much visit mass was discarded. These rules define the data set before sampling or weighting
+can act on it ([replay system](../system/replay-and-data.md)).
 
-The mechanism broadens data generation in two ways: shallow openings diversify early trajectories, while restarts
-spend complete games on positions the current policy found consequential. Both are retained but were not isolated in
-one-variable Elo arms.
+## Starting games where information is likely
 
-## Endgame conversion and target poisoning
+The retained start mixture attacks two different coverage problems. Half of games begin after a uniformly selected
+zero to eight random legal plies. These prefixes cheaply diversify the opening without pretending to be a balanced
+opening book. They are reconstructed in the recorded history but not searched or trained directly; their value is
+the downstream positions they expose. Drawing zero plies naturally retains some games from the ordinary initial
+position.
 
-Two post-runtime-rework training attempts often reached overwhelmingly won positions and hit the ply cap. The causal
-audit separated several hypotheses that initially looked equivalent. Tablebase removal and remaining-length
-censoring did not explain the difference. Resignation rate alone did not distinguish the attempts. The strongest
-data finding was an early window in which forced fast continuation excluded the last plies of long games from
-primary policy training while shallow cutoff values were propagated across trajectories.
+The other half begin from archived self-play states. A position is eligible only if at least 15 plies remained in its
+source game, its absolute root value was at most 0.8, and two or three leading actions covered 85% of visit mass. The
+branch actually played is marked used. A later restarted game reserves one untried plausible alternative and forces
+that action after reconstructing the prefix, so new compute explores a branch the source game did not.
 
-This created a closed loop: the model received too few properly searched endgame positions, its cheap-search tails
-played almost randomly and failed to convert, and the early cutoff repeatedly replaced a natural result with the
-same poor heuristic supervision. That window later aged out of replay, but weight damage could persist. The first
-repair replaced the heuristic with one full search at the cut position; the later design removed the forced-fast
-tail so searched endgame positions re-entered training. It also lengthens game caps over time and censors unknown
-remaining-length labels. The [conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
-[sample-stream comparison](../analysis/v8-training-data-comparison-20260826.md), and
-[cut-value benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md) together provide
-observational, diagnostic-proxy, and mechanics evidence—not a clean factorial ablation.
+Selection from this archive gives 30% probability to uniform choice. The remaining reservations favor the square
+root of *value correction*: half the absolute difference between the searched root value and the raw network value.
+The square root softens the priority so one extreme correction cannot dominate. Age and capacity bounds remove old
+states, reservations prevent duplicate claims within a worker, and exhausted positions leave the archive. This is
+the project's practical difficult-state curriculum, but “difficult” is an interpretation of disagreement, not a
+ground-truth label. The mechanism does not train a regret network, and archives are local to workers rather than
+globally deduplicated.
 
-## Calibrated resignation
+Restart priority and replay surprise are related only in motivation. One changes which future trajectories are
+generated; the other changes which already stored rows are selected for optimization. Their individual Elo effects,
+the 50% start mixture, and the exact filters were not isolated. They should be presented as a coherent curriculum
+design grounded in branch coverage rather than as independent measured gains
+([reference-recipe analysis](../analysis/reference-recipes-for-a-compute-poor-run.md)).
 
-Production resignation begins only after enough generations for calibration. It chooses a threshold using recent
-triggered games under a false-nonloss upper confidence bound, relaxes gradually, and permanently continues 20% of
-triggered games. The early canary established persistence and audit mechanics with an intentionally aggressive
-threshold. It did not prove final safety.
+## Ending games without corrupting their labels
 
-The terminal archive must report threshold trajectory, trigger counts, continuation outcomes, false non-losses,
-saved plies/search, and any interaction with restart games. Until then the claim is “calibrated and audited,” not
-“zero false resignations.”
+Resignation can save a large amount of search, but a false resignation turns a drawable or winning position into an
+incorrect terminal label. A fixed value threshold was therefore replaced by continuing measurement. Twenty percent
+of games are designated at creation as continuation games and can never resign. They reveal the outcomes of
+hypothetical triggers for thresholds from -0.99 through -0.70. A trigger requires both the root value and the best
+visited child's backed-up value to cross the threshold; evidence from capped games is excluded because their natural
+outcome remains unknown.
 
-## Auxiliary target materialization
+Over a rolling window, a candidate threshold needs at least 100 triggered continuation games and a one-sided 95%
+upper confidence bound on false non-loss no greater than 2.5%. The threshold may become more conservative
+immediately but relaxes by at most 0.01 per publication. An intentionally aggressive canary verified trigger
+journaling, persistence, and exclusion of a capped continuation, but did not establish a safe production threshold
+([resignation canary](../benchmarks/resignation-audit-canary-20260723/README.md)). The defensible conclusion is that
+resignation is calibrated and continuously audited—not that it has zero error or a measured independent Elo gain.
 
-The next-policy target depends on a later observation, so a cheap or missing future search can affect an otherwise
-valid primary row. Remaining game length becomes unknown when a game is cut and is explicitly censored. These
-eligibility rules are part of replay semantics, not training-loop conveniences. Overfit and sample audits establish
-that the targets are trainable and wired correctly; they do not isolate Elo.
+A ply cap creates a harder target problem because there is no observed result at all. The project compared material
+heuristics, raw network value, values from adjacent searches, and a fresh search at the cut position. Playing games
+beyond the normal cap supplied later outcomes for evaluation. At the earlier measured checkpoint, the cut-position
+search achieved Brier score 0.444 and cross-entropy 0.756, compared with 0.491 and 0.851 for material divided by 39.
+At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Search-root sign
+accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
+therefore performs one full search at the actual cut position and uses its root value as the bootstrap
+([cut-position benchmark](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md)).
 
-## Reanalysis and publication freshness
+### The late-game poisoning incident
 
-A bounded synchronous reanalysis path existed in an earlier replay design. It used materialized override sidecars
-and was removed when replay ownership changed. No controlled current-pipeline efficacy experiment exists. Reanalysis
-is therefore superseded infrastructure, not a negative result.
+This decision became urgent after two training attempts struggled to convert overwhelmingly won positions. The
+initial hypotheses—tablebase removal, resignation behavior, and remaining-length censoring—did not explain the
+difference. Replay forensics instead found an early interval in which the recipe switched to cheap searches before
+the game cap. Because only full-search observations were admitted, about 14.4% of all played plies disappeared from
+primary policy training, specifically the final plies of the longest games. At the same time, an 81–136-simulation
+cheap search supplied the cutoff value propagated to every admitted row in the game, affecting roughly 36–38% of
+rows in the worst interval.
 
-A historical attempt to publish every 100 optimizer steps was rejected because publication cost outweighed expected
-freshness. This is a local engineering result, not evidence that more frequent publication can never help.
+The failure reinforced itself. Too few well-searched endgame targets produced a weak conversion policy. Cheap late
+searches driven by that policy played nearly randomly and failed to finish. The shallow cutoff then replaced a
+natural result with another weak bootstrap. By the time the failure was diagnosed, the offending rows had aged out
+of replay, making the current buffer look healthy while the learned weights still carried the damage.
 
-## Overlap is not full asynchrony
+The first repair replaced the heuristic cutoff with the fresh cut-position search. The later design eliminated the
+forced cheap tail, returning searched endgames to replay, and allowed the maximum game length to grow as training
+advanced. These changes were bundled with other conversion repairs, so the incident identifies a credible causal
+chain without assigning a clean Elo effect to each component. Its broader lesson is stronger: target provenance must
+be audited over time, because replay eviction can remove the evidence before it removes the learned consequence
+([conversion investigation](../analysis/chess-conversion-investigation-20260826.md),
+[replay forensics](../analysis/v8-training-data-comparison-20260826.md)).
 
-The final topology pauses two of four self-play processes per GPU while all GPUs train. Other actors continue, so
-self-play and optimization overlap. Credit quanta, checkpoint publication, and actor refresh remain coordinated.
-The pause sweep showed that the best fraction changed with visit regime, supporting a configured topology rather
-than a universal 50% rule. Fully asynchronous learning was proposed but not implemented.
+## Knowing what each target means
 
-## Replay infrastructure as evidence
+Three value mechanisms act at different boundaries and should not be collapsed into “value discount.” During
+materialization, the terminal WDL target is blurred toward uniform by 0.998 for each remaining game ply. During
+optimization, a scheduled coefficient eventually blends up to 10% of the stored search-root scalar into that
+discounted outcome. Inside search, a separate 0.99 per-tree-ply discount changes backups, selection, and the root
+value before replay is written. The cut-position benchmark supports searched values as better bootstraps than the
+tested material heuristic; it does not isolate the ordinary 10% blend or either discount as a strength gain.
 
-The fixed-layout columnar store, parallel materialization, atomic claims, quarantine path, rejection-rate ceiling,
-prefetch, and credit ledger are systems contributions. Loader and credit benchmarks establish throughput and
-mechanical correctness. They do not show stronger chess directly, but they prevent corrupted or stalled ingestion
-from masquerading as a learning plateau.
+Future-dependent auxiliary targets require equally explicit eligibility. The retained next-policy target uses the
+sparse visit distribution from the following searched observation; it is unavailable if that observation does not
+exist. Remaining game length is known only when the game reaches a natural result or valid resignation, so every row
+from a cut game marks that target ineligible. The objective masks and renormalizes auxiliary losses over eligible
+rows rather than treating missing labels as zeros. Overfit tests established that the supplied multi-head targets
+were learnable, while replay audits established that censoring and offsets were wired correctly. Neither establishes
+an independent playing-strength gain ([multi-head overfit study](../benchmarks/chess-overfit-rtx3090-20260819/README.md)).
+
+Broader auxiliary bundles were removed during a period with several simultaneous training problems. That was a
+precautionary simplification, not a controlled negative ablation. Retaining next-policy and remaining length later
+does not prove that either head helped, just as removing the others does not prove that they harmed. The firm result
+is semantic: labels derived from the future must be materialized from complete trajectories and masked when the
+future is unknown.
+
+## Fresh targets versus fresh positions
+
+Old replay targets were once refreshed through bounded synchronous reanalysis. After a publication, one worker
+re-searched a fraction of recent positions with the new model and wrote immutable, source-bound override sidecars.
+Those overrides updated policy visits and root values without pretending to add a new position, terminal outcome, or
+presentation credit. The implementation and recovery behavior were real, but no controlled study established
+better learning per unit search. The path disappeared when replay ownership moved to the fixed-layout columnar
+store, whose rows no longer preserve the trajectory provenance that implementation required. Reanalysis is thus
+superseded infrastructure, not an experiment that proved reanalysis harmful
+([historical implementation record](../history/v10-training-quality-implementation.md)).
+
+The unresolved comparison is economic: is a stale position worth re-searching, or should the same search budget
+generate a fresh trajectory with a new state and outcome? Reanalysis should return only after measuring target age
+and current-versus-source policy divergence, then comparing refreshed-target value directly with fresh self-play.
+
+Model publication addresses freshness from the other side. Publishing every 100 optimizer steps was implemented
+historically and rejected because repeated serialization, deployment preparation, validation, synchronization, and
+activation outweighed the observed benefit. The raw timing bundle and matched strength curve were not preserved, so
+this remains a qualitative decision record, not an effect-size result. The retained 500-step boundary is a
+compromise, not a universal optimum; its cost and freshness also depend on replay reuse
+([publication-cadence record](../history/historical-research-backlog-20260822.md),
+[current decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)).
+
+## Overlap without full asynchrony
+
+Training proceeds in credit-funded quanta, but self-play does not stop completely. Two of four actor processes per
+GPU are requested to pause while all GPUs optimize; the others continue searching. Publication, actor refresh,
+replay identity, and optimizer commits remain coordinated. The correct description is overlapped self-play and
+training, not fully asynchronous AlphaZero.
+
+The pause sweep demonstrates why the exact fraction is operational rather than universal. In a deeper-search
+workload, leaving zero, eight, sixteen, or thirty-two actors running reduced trainer throughput from 25,275 to
+21,492, 17,139, and 9,210 samples per second, while concurrent search rose from none to 505,509, 605,762, and 741,508
+searches per second. Converting both streams to estimated quantum time left only about a 5% spread. In an earlier
+cheaper-search regime the spread was 2.3%. An initial placement mistake had even produced a false 2.53-fold advantage
+by loading only the first GPUs and slowing the distributed trainer at its most contended rank. Round-robin placement
+removed the artifact ([pause tradeoff](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md)).
+
+Partial overlap was retained because it converts otherwise idle actor capacity into fresh data without accepting the
+severe trainer slowdown of leaving every actor active. Fully asynchronous learning—continuous optimization and
+publication with actors consuming arbitrary model ages—was proposed but not implemented. Its potential throughput
+must be weighed against the loss of auditable replay snapshots, exact credit accounting, and simple recovery.
+
+## Making the data trustworthy
+
+These experiments depend on infrastructure that can preserve their meaning under load. Completed games are written
+atomically, dispatched into bounded worker-owned queues, reconstructed and validated in parallel, and materialized
+into typed columnar shards. Bad games are quarantined individually, while a rolling rejection ceiling turns a
+systemic schema failure into a loud stop rather than silent data loss. Sealed shards enter one preallocated circular
+memory map; trainers capture an immutable replay description and receive deterministic, non-overlapping sample
+slices across data-parallel ranks.
+
+This design followed a concrete bottleneck. The older shard loader managed only 3,943 samples per second across
+5,000 producer files, then reached 32,579 after compaction into 25 containers. The production distributed path later
+sustained 22,599 samples per second with real decoding, partitioning, transfer, and synchronization, or 15,026 under
+simultaneous self-play contention ([loader benchmark](../benchmarks/replay-loader-20260724/README.md),
+[distributed-training benchmark](../benchmarks/ddp-production-training-20260720/README.md)). The current mapped store,
+vectorized gather, bounded prefetch, deterministic shard adoption, and credit-after-flush rule turn those systems
+lessons into the active pipeline
+([pipeline design](../architecture/replay-pipeline-rework.md),
+[materialization design](../architecture/replay-materialization-rework.md)).
+
+Those are throughput, durability, and correctness results—not direct evidence of stronger chess. Their scientific
+role is to prevent corrupt rows, duplicate credit, loader starvation, or a growing inbox from masquerading as a
+learning plateau.
+
+## What the retained curriculum establishes
+
+The final data recipe combines staged replay growth, reuse four, policy-surprise sampling with a uniform component,
+unit row weights, shallow random openings, branch-reserved restart states, calibrated resignation, direct
+cut-position bootstraps, explicit target eligibility, coordinated publication, and partial actor/trainer overlap.
+Most of these choices coexist in one successful system and do not have one-variable online Elo estimates.
+
+The strongest direct comparison favors a searched value over the tested material heuristic at a cut position. The
+strongest incident evidence is the late-game poisoning chain. The clearest systems lesson is that more presentations
+are not necessarily more information: replay reuse, target freshness, state diversity, and schedule pace move
+together. The retained design spends compute on a broad, inspectable stream of searched positions and preserves the
+meaning of every admitted target. It should be understood as an integrated curriculum, not a collection of additive
+strength bonuses.
