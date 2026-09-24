@@ -76,7 +76,8 @@ The final INT8 ONNX is published at the immutable Hugging Face revision
 Its repository LFS SHA-256 is `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658`,
 matching the frozen final-run evidence. The Hugging Face model card, `latest` aliases, and top-level `SHA256SUMS`
 still describe the previous public checkpoint and must be refreshed before the model repository is presented as a
-complete final-model release.
+complete final-model release. That release rework is currently in progress and is expected to make generation 1026
+the model-card and live-deployment target before publication.
 
 The stitched multi-rung ladder reached its strongest window at approximately generations 1020--1080. Generation
 1026 was selected because it was the last checkpoint in that window retained with a complete model, optimizer, QAT,

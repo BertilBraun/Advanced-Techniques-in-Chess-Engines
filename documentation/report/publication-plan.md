@@ -47,20 +47,25 @@ the quantitative placeholder chapter; it does not contain provisional result val
 6. **Negative-result summary:** technique, tested claim, strongest evidence dimension, outcome, and why it was not
    retained.
 
-## Figure budget
+## Visualization strategy
 
 The source and derivation of each figure must be machine-readable and retained beside the final archive.
 
-Main text contains exactly three figures:
+The report is intended to support a visual-first reading and has no arbitrary figure limit. Three figures are
+foundational:
 
 1. normal learning-system loop across Python, C++, TensorRT, replay, training, publication, and evaluation;
 2. cross-campaign 64-search ladder Elo, using the existing tracked SVG and keeping internal identifiers in its sidecar;
 3. selected-model strength versus search budget, with confidence intervals, both opponent rungs, and parallelism.
 
-The appendix may contain at most four additional figures: raw-versus-stitched lineage provenance, a compact training-
-diagnostics panel, a traceable pipeline/replay-health panel, and the quantization-fidelity transition. Omit any panel
-whose source counters cannot be reconciled. Use tables for the terminal matrix, rejected-technique catalogue,
-parallel-search sweep, student result, configuration, resignation evidence, and detailed topology.
+Additional main-text candidates include search-allocation alternatives, policy-head representations, replay and
+curriculum mechanisms, the end-to-end throughput funnel, late-game poisoning, the quantized-deployment boundary, and
+progressive sizing. Include them when they materially clarify the argument rather than to satisfy a count.
+
+Appendix figures may cover raw-versus-stitched lineage provenance, training diagnostics, pipeline/replay health,
+quantization fidelity, detailed topology, calibration, and resignation. Omit any panel whose source counters cannot
+be reconciled. Dense numerical comparisons should usually be tables, but neither the main text nor appendix has a
+fixed table or figure count.
 
 ## Final inputs
 

@@ -6,8 +6,8 @@ implementation archaeology, and benchmark transcription.
 
 ## Central question and answer
 
-**Question:** How strong can an AlphaZero-style chess system become when self-play, training, and evaluation share
-eight consumer GPUs?
+**Question:** How strong can an AlphaZero-style chess system become under a very limited compute budget when the
+entire learning loop is engineered for efficiency?
 
 **Answer:** Training entirely from self-play produced a 6.3-million-parameter chess model that measured 1,658
 benchmark Elo without search and 2,456, 2,925, 3,114, and 3,251 Elo across four increasing search budgets. Under a
@@ -144,11 +144,10 @@ artifacts as semantic models.
 
 ### Promotion using incomparable training losses
 
-A larger candidate received extra presentations of the same replay data, so its lower training loss was structurally
-advantaged and did not imply equal playing strength. Loss-based promotion admitted a much weaker model. Head-to-head
-matches between the artifacts intended for deployment replaced loss parity. Function-preserving growth separately
-addressed the cost of relearning the parent's behavior. The transferable lesson is that unequal optimization exposure
-invalidates loss as a promotion criterion.
+A larger candidate received extra presentations of the same replay data, so its lower loss did not imply equal
+playing strength and promoted a much weaker model. Promotion now uses repeated head-to-head matches between the
+artifacts intended for deployment; function-preserving growth separately addresses initial relearning. Keep this
+incident short and point readers to the [old and current promotion schedules](../architecture/progressive-model-sizing.md#promotion-semantics).
 
 ## 8. The integrated chess recipe
 
@@ -192,6 +191,9 @@ Combine limitations, reproducibility, and conclusion:
 - large-model optimization and the precise safe-parallelism frontier remain open;
 - public artifacts require source, configuration, model, inference, and evaluation identities rather than mutable
   aliases.
+- an unimplemented improvement may appear briefly as explicitly proposed future work when it is concrete and grounded
+  in the observed bottlenecks; it must not be written as a finding. If results arrive before publication freeze, place
+  it in the relevant investigation or results section according to its evidence.
 
 End with three takeaways:
 
@@ -199,21 +201,26 @@ End with three takeaways:
 2. Search-saving proxies mattered only when their savings reached wall-clock learning.
 3. Architecture, training, deployment, and evaluation had to be designed together.
 
-## Publication tables
+## Table strategy
 
-Keep the main text to four tables:
+Use tables wherever precise comparisons would otherwise overload prose. Likely main-text tables include:
 
 1. selected checkpoint and terminal strength summary;
 2. integrated retained recipe;
 3. substantial rejected or inconclusive techniques;
 4. distilled-student result.
 
-The complete terminal matrix, exact configuration, topology sweeps, and evidence manifests remain linked supporting
-tables rather than duplicated in the narrative.
+The complete terminal matrix, exact configuration, topology sweeps, and evidence manifests belong in appendices or
+linked supporting material unless a compact subset is necessary for the argument. There is no numeric table limit;
+placement depends on whether the table advances the narrative or serves as reference.
 
-## Figure budget
+## Visualization strategy
 
-Use three main-text figures:
+The report should support a visual-first reading. A reader scanning figures and captions should be able to reconstruct
+the system, the major design choices, the important failures, and the final result before reading the full prose.
+There is no fixed figure limit; every figure must explain a relationship or mechanism better than text or a table.
+
+Three figures are foundational:
 
 1. **Learning-system loop — new SVG.** Python orchestration, native C++ self-play/MCTS, TensorRT leaf inference,
    replay, distributed training, publication, and compact evaluation feedback.
@@ -223,12 +230,31 @@ Use three main-text figures:
 3. **Selected-model strength versus search budget — new.** Logarithmic search axis, Elo confidence intervals, both
    opponent-rung estimates shown lightly, and parallelism labeled at every searched point.
 
-Allow at most four appendix figures:
+Additional strong main-text candidates are:
+
+- **Search-allocation design map:** fixed, fast/full, predicted-budget, learned-stopping, and parallel-search paths,
+  showing which positions create targets and where compute is saved or wasted.
+- **Policy-head representation diagram:** dense reduced-action, structured plane, and from-to factorization shown on
+  one chess move, making the architectural alternatives visually concrete.
+- **Replay and curriculum flow:** completed games, row eligibility, admission, uniform/surprise sampling, loss
+  weighting, random openings, restart states, resignation, and cut values as distinct mechanisms.
+- **Throughput funnel:** neural evaluations → searches → completed games → admitted positions → optimizer progress →
+  Elo/hour, explaining why isolated kernel gains need not improve learning.
+- **Late-game poisoning feedback loop:** missing searched endgames → weak tail policy → failed conversion → heuristic
+  cut targets → further weak supervision, followed by the two-stage repair.
+- **Quantized deployment boundary:** float/QAT model → ONNX → TensorRT refit → semantic fidelity gate, including the
+  invalid-refit failure and correction.
+- **Progressive sizing:** small-to-medium successful handoff, independently initialized large-model catch-up problem,
+  and the separate function-preserving growth experiment.
+
+Appendix visualizations may include, without an arbitrary numeric limit:
 
 - raw versus stitched lineage with excluded intervals;
 - training diagnostics: losses, learning rate, gradient norm, and clipping;
 - pipeline/replay health where counters can be reconciled;
-- quantization-fidelity transition supporting the TensorRT failure study.
+- quantization-fidelity transition supporting the TensorRT failure study;
+- detailed topology, calibration diagnostics, resignation evidence, and other plots whose density would interrupt the
+  main argument.
 
 Use tables—not figures—for the complete terminal matrix, negative-result catalogue, parallel-search sweep, student
 results, detailed topology, configuration, and resignation evidence. The older showcase figures are predecessor-era
@@ -245,7 +271,7 @@ Review only:
 5. the matched-estimator improvement and cost wording;
 6. the plateau/capacity interpretation;
 7. the three concluding takeaways;
-8. the three-figure budget.
+8. the visualization strategy and which candidate diagrams deserve main-text placement.
 
 Benchmark transcription, implementation details, evidence links, manifests, and appendix material do not require
 owner line review.

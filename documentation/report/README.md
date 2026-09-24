@@ -34,7 +34,7 @@ that still require archive reconciliation remain explicitly marked rather than i
 11. [Bibliography and citation plan](bibliography.md)
 12. [Research coverage matrix](coverage-matrix.md)
 13. [Publication plan](publication-plan.md)
-14. [Narrative outline and figure budget](narrative-outline.md)
+14. [Narrative outline and visualization strategy](narrative-outline.md)
 
 ## Report status
 

@@ -131,8 +131,9 @@ The owner review of these decisions is complete.
    60 hours on the accepted-lineage axis equals `$43.20`. This is not actual billed spend: it excludes discarded work,
    experiments, evaluation, distillation, and idle time. Total project experimentation cost was substantially larger
    but will remain unreconciled and unreported.
-4. **Reported model — confirmed:** Generation/checkpoint 1026 is the reported teacher. The owner confirms it is
-   preserved and published in the project's Hugging Face repository. The larger function-preserving continuation is
+4. **Reported model — confirmed:** Generation/checkpoint 1026 is the reported teacher. Its final ONNX is preserved and
+   hash-matched in the project's Hugging Face repository. The owner is updating the model card, aliases, and live site
+   so generation 1026 becomes the public final model before release. The larger function-preserving continuation is
    an unresolved capacity experiment, not the reported model.
 5. **Student result — confirmed:** Describe the student as 13.4 times smaller and 417 Elo below the teacher at 10,000
    searches after the longer run. Avoid an Elo percentage. Tripling training improved the matched point estimate by
