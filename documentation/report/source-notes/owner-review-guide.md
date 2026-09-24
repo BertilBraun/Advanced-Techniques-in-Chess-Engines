@@ -116,30 +116,33 @@ The editorial scope review is complete.
    term for one training-and-publication cycle. Define it once and reserve *checkpoint* for the durable model artifact
    written at such a boundary. Use *optimizer quantum* only where the distinction is technically necessary.
 
-## Final-result decisions now ready for review
+## Final-result presentation decisions
 
-The recap closes most former terminal-result placeholders. The following choices should be settled before those
-results become headline prose:
+The owner review of these decisions is complete.
 
-1. **Headline calibration:** approve selecting, at each search budget, the Stockfish anchor whose observed score is
-   closest to 0.5. This minimizes extrapolation and draw distortion. The two deepest anchors agree within four Elo,
-   which is useful calibration evidence—not proof that every shallower anchor is unbiased.
+1. **Headline calibration — confirmed:** At each search budget, select the Stockfish anchor whose observed score is
+   closest to 0.5. This minimizes extrapolation. The two deepest anchors agree within four Elo, which is useful
+   calibration evidence—not proof that every shallower anchor is unbiased.
    [Evaluation context](evaluation-and-pitfalls.md#stockfish-calibration-openings-colours-adjudication-and-uncertainty)
-2. **Compute-curve wording:** approve reporting 1,658 policy-only Elo and 2,456 / 2,925 / 3,114 / 3,251 Elo across
+2. **Compute-curve wording — confirmed:** Report 1,658 policy-only Elo and 2,456 / 2,925 / 3,114 / 3,251 Elo across
    four search budgets, with confidence intervals and parallelism stated at every point. Do not describe the curve as
    fixed-parallelism scaling.
-3. **Cost denominator:** does the reported $43.20 mean actual billed compute through selection of the reported
-   checkpoint, or 60 hours on a stitched axis that excludes discarded work? The report should headline actual spend;
-   an effective/stitched time may appear separately but must not be called cost.
-4. **Reported model:** approve treating the strongest retained medium-sized checkpoint as the reported model, while
-   presenting the later function-preserving larger model as a negative capacity result rather than “the final model.”
-5. **Student result:** approve describing the student as 13.4 times smaller and 417 Elo below the teacher at 10,000
-   searches after the longer run. Avoid “86% of teacher Elo,” because Elo has no meaningful ratio origin. Tripling
-   training improved the matched point estimate by only 14 Elo, inside the overlapping intervals; describe this as
-   saturation for this student, replay snapshot, and schedule rather than a universal small-model limit.
-6. **Easy-rung explanation:** is the claim that the shallower anchor gap is caused by draws against weak opposition a
-   confirmed diagnosis, or only the leading explanation? If it was not separately tested, the report should call it
-   an interpretation.
+3. **Cost denominator — narrow effective cost:** The evidence record and final configuration specify `$0.72/hour`,
+   so 60 hours on the accepted-lineage axis equals `$43.20`. This is not actual billed spend: it excludes discarded
+   work, experiments, evaluation, distillation, and idle time. Total project experimentation cost was substantially
+   larger but will remain unreconciled and unreported. If a billing record later establishes `$0.75/hour`, the
+   60-hour product would be `$45.00`; until then the frozen `$0.72` evidence wins.
+4. **Reported model — confirmed:** Generation/checkpoint 1026 is the reported teacher. The owner confirms it is
+   preserved and published in the project's Hugging Face repository. The larger function-preserving continuation is
+   an unresolved capacity experiment, not the reported model.
+5. **Student result — confirmed:** Describe the student as 13.4 times smaller and 417 Elo below the teacher at 10,000
+   searches after the longer run. Avoid an Elo percentage. Tripling training improved the matched point estimate by
+   only 14 Elo inside overlapping intervals; this is saturation for this student, replay snapshot, and schedule.
+6. **Opponent-rung disagreement — observed, not diagnosed:** At each model search budget, two Stockfish node limits
+   imply somewhat different ratings even though ideal transitive Elo would agree. The discrepancy falls from 128 Elo
+   at the shallowest model budget to 4 Elo at the deepest. Draw behavior against the easier opponent is one plausible
+   explanation, but it was not isolated. Report the disagreement, select the score nearest 0.5, and do not claim a
+   proven draw-bias mechanism.
 
 ## What you do not need to review
 
@@ -150,5 +153,5 @@ The canonical configuration issue is resolved: its progressive-candidate gate no
 definition and the file loads successfully. Exact historical reproduction still requires the resolved configuration,
 source revision, and artifact hashes frozen in the evidence record.
 
-After the six final-result presentation choices above are answered, the next useful owner pass is a short narrative
-outline and selected figures, not the underlying 5,000 lines of source notes.
+The next useful owner pass is a short narrative outline and selected figures, not the underlying 5,000 lines of
+source notes.

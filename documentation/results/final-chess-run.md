@@ -115,11 +115,13 @@ The two 100,000-search estimates agree within four Elo despite using independent
 evidence that the anchor curve remains locally consistent at the top of the measured range; it is not a general
 validation outside these two rungs.
 
-### Easy-rung bias
+### Opponent-rung disagreement
 
 The harder opponent rung estimates a higher model rating at every budget, but the difference falls from **128 Elo**
-at 100 searches to **102**, **46**, and **4 Elo** at 1,000, 10,000, and 100,000 searches. This pattern is consistent
-with draw distortion against easy opponents at low model budgets. It is not material to the 100,000-search headline.
+at 100 searches to **102**, **46**, and **4 Elo** at 1,000, 10,000, and 100,000 searches. In an ideal transitive Elo
+model the two rungs would agree. Draw behavior against the easier opponent, calibration error, matchup effects, and
+sampling noise are possible contributors, but the project did not isolate them. Selecting the rung whose score is
+closest to 0.5 reduces extrapolation; the disagreement is not material to the 100,000-search headline.
 
 ### Parallel-search trade-off
 

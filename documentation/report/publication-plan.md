@@ -24,7 +24,7 @@ the quantitative placeholder chapter; it does not contain provisional result val
 | Final model strength | Frozen checkpoint, paired terminal matches, raw games, CI, exact calibration | Report the completed matrix with its protocol limits |
 | Improvement over the previous four-day baseline | Same protocol or explicit normalization, both artifact identities | Compare only matched ladder conditions |
 | Superhuman play | Calibrated fixed-node result with scale caveat and protocol | Use “benchmark Elo,” not FIDE or universal engine rating |
-| Training cost | Start/stop/downtime audit, node price, exclusions | No live extrapolation |
+| Training cost | Start/stop/downtime audit, node price, exclusions | `$43.20` is accepted-lineage effective cost, not actual billed project spend |
 | Training volume | Reconciled replay/coordinator/trainer counters | No dashboard snapshot |
 | INT8 enabled more data | Backend usage, matched backend-throughput results, admitted replay and generation rates | “Designed to improve throughput” |
 | Progressive sizing helped efficiency | Stage timing/throughput plus existing small-versus-large throughput benchmark | Do not claim causal Elo/dollar without counterfactual |

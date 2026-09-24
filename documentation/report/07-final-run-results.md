@@ -94,11 +94,13 @@ The complete ten-row matrix, including W/D/L and archive-capture status, is in t
 
 ## Two protocol effects that matter
 
-### Weak opponents bias low-budget estimates
+### Opponent rungs disagree at lower budgets
 
 At 100, 1,000, 10,000, and 100,000 searches, the harder opponent rung reads 128, 102, 46, and 4 Elo higher than the
-easier rung. The shrinking gap is consistent with draw distortion against weak opposition. It is a serious concern at
-low budgets but immaterial to the deepest result.
+easier rung. Ideal transitive Elo would give the same estimate from both. Draw behavior, anchor calibration error,
+matchup effects, and sampling noise are possible contributors, but the project did not isolate the cause. Choosing
+the score closest to 0.5 limits extrapolation. The disagreement matters at low budgets but is immaterial to the
+deepest result.
 
 ### Parallelism buys time by spending strength
 
