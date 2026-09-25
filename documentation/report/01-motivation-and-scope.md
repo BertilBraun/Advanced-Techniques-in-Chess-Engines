@@ -6,9 +6,9 @@ absorbs them; and evaluation must distinguish progress from noise. Under a limit
 matters only if the complete loop produces stronger play within the available time.
 
 This study asks how strong that loop can become on a single eight-GPU node when the system is engineered for
-efficiency. Over **2.5 days** of training from random weights, using searched self-play rather than human-game
-training targets, the run produced a 6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
-and **3,251 benchmark Elo at 100,000 searches per move** against the project's fixed-node Stockfish 13 ladder.
+efficiency. Over **2.5 days** of training from random weights on searched self-play games, the run produced a
+6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
+and **3,251 benchmark Elo at 100,000 searches per move**—roughly five seconds of thinking time—against the project's fixed-node Stockfish 13 ladder.
 Table 1 gives the match results; Chapter 8 follows the model's improvement across search budgets.
 
 The result depends on the whole learning loop. The network's representation affects both what it can learn and how

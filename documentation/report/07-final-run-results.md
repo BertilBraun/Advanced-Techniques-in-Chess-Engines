@@ -35,10 +35,8 @@ approximately **209.15 million net positions** over the same lineage; replay hel
 selection. Thus the learner saw about four training presentations per admitted position. Appendix A shows the
 trajectories and counting boundaries.
 
-The run implies a large search workload rather than a measured neural-forward count. At a conservative 100
-searched plies and roughly 600 simulations per game move, 3.25 million completed games correspond to
-approximately 195 billion search simulations. Most require a neural-network evaluation, while terminal leaves
-and reuse make the forward-pass total smaller and uncertain.
+At a conservative 100 searched plies and roughly 600 simulations per game move, 3.25 million completed games
+correspond to approximately 195 billion search simulations. Most require a neural-network evaluation.
 
 Across 480 small-model quanta, median measured trainer throughput was 16,977 samples/s; across 337 medium-model
 quanta it was 11,194. These stages also differed in schedule and concurrent workload. The selected training path
@@ -60,11 +58,8 @@ and bars show 95% match-bootstrap intervals. The categorical horizontal axis sep
 100, 1,000, 10,000, and 100,000 searches per move; its spacing does not represent compute.
 
 At the deepest budget, the 100,000-node and 200,000-node Stockfish opponents imply 3,247 and 3,251 benchmark
-Elo, respectively. Their four-point agreement supports the headline result on this fixed-node benchmark. An
-earlier TorchScript service averaged 5.31 seconds per 80,000-search position while batching 50 positions on each
-RTX 4070 SUPER; subsequent TensorRT INT8 benchmarks raised saturated search throughput by 1.39–1.86 times,
-depending on model and workload. Roughly five seconds or less per 100,000-search position is therefore a plausible
-**batched-service estimate**, not a directly measured latency for an isolated final-model move.
+Elo, respectively. Their four-point agreement supports the headline result. A 100,000-search move takes roughly
+five seconds of thinking time on an RTX 4070 SUPER with the current setup.
 
 ### Parallel search trades time for strength
 

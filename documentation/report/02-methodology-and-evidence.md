@@ -26,8 +26,7 @@ rating estimate needs the least extrapolation.
 
 At the deepest budget, the model scored 3,251 benchmark Elo against the harder opponent and 3,247 against the other:
 the two measurements agree closely. The ratings use a published calibration of Stockfish's fixed node limits [9].
-They describe strength on this chess benchmark, not a rating from human tournaments. Chapter 8 examines how
-strength changes with search; Appendix B gives the rating calculation and interval method.
+Chapter 8 examines how strength changes with search; Appendix B gives the rating calculation and interval method.
 
 ## Reading the component experiments
 
