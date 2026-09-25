@@ -1,27 +1,25 @@
 # 5. From inference speed to learning speed
 
-Search-based learning needs enough completed games to supply the trainer. Under a fixed hardware budget, the useful
-systems objective is therefore admitted self-play positions and strength per wall-clock hour, not model evaluations
-per second in isolation. The gap between those quantities determined where the engineering effort mattered.
+The model could learn only as fast as self-play supplied new games. Making one neural-network call faster helped,
+but a game still had to finish, its positions had to enter replay, and the trainer had to consume them. Figure 6
+follows that path from local speed to useful training data.
 
 ![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
 
-Figure 6: The denominator changes at each boundary. Model evaluations and search simulations describe local
-service capacity; completed games and admitted rows determine training supply; only the final stage measures the
-playing-strength gain per unit wall-clock time.
+Figure 6: Search speed passes through game completion, replay admission, and optimizer work before it can affect
+playing strength. Each boundary has its own throughput measure.
 
 ## Native ownership of the search loop
 
-Python coordinates configuration, processes, replay, training, evaluation, and publication. C++ owns game rules,
-encoding, search trees, selection and backup, and asynchronous inference requests and results. This division keeps
-Python message serialization and per-position dispatch off the dominant self-play path. The earlier Python search
-loop is a performance baseline, not an alternative production engine.
+Each search leaf needs a board update, legal moves, encoding, and a neural evaluation. Dispatching that sequence
+through Python for every position made host work a bottleneck. The production loop therefore keeps game rules,
+search trees, selection and backup, and asynchronous inference requests in C++. Python coordinates configuration,
+replay, training, publication, and evaluation outside that hot path.
 
-The native boundary also enables batching across many simultaneous games. Each self-play process advances 512 game
-roots, and requests from those roots share a preallocated asynchronous inference pipeline. Trees survive played moves
-so previous work can be retained rather than reconstructed. The final topology uses four actor processes per GPU,
-one inference worker per process, batches of at most 320 positions, and two outstanding batches. Those settings are a
-joint CPU, memory, batching, and latency choice; they should not be interpreted independently.
+That native loop can advance many games together: each process holds 512 roots whose leaf evaluations share one
+preallocated inference pipeline. Trees survive played moves, retaining useful search work. Four actor processes per
+GPU, one inference worker per process, batches of at most 320 positions, and two outstanding batches kept the GPUs
+busy in the retained topology.
 
 ## Batching and host-side submission
 
@@ -47,25 +45,22 @@ treats parallel search as an algorithmic quality-throughput trade, not a free sy
 
 ## Inference runtimes and precision
 
-TorchScript supplied the trimmed policy/WDL bootstrap and fallback artifact, making it the relevant comparator to a
-new serving runtime. `torch.compile` sped up eager batch-64 inference by roughly 27--33%, but fused TorchScript was
-faster than the compiled eager path. In the tested eight-GPU training workload, compilation reduced throughput by
-about 18% relative to eager execution; bfloat16 autocast improved it by 9.2%. Compilation was not retained for
-production inference or training on this workload.
+Once the host could submit full batches, the inference engine became the next lever. A native TensorRT FP16 engine
+reached 75,889 positions/s against 40,716 for a TorchScript BF16 control in a matched benchmark, a 1.86x gain.
+Quantization-aware INT8 added a further 1.31x over TensorRT FP16 on the tested quantization-oriented network.
+Production-topology tests found INT8 gains of 14.4% for the smaller network and 39.1% for the medium network.
 
-TensorRT quantization and engine refitting [8] provided the stronger serving path. A native FP16 engine reached
-75,889 positions/s against 40,716 for the
-TorchScript BF16 control in one matched backend benchmark, a 1.86x ratio. Quantization-aware INT8 inference added a
-further 1.31x over the TensorRT FP16 engine for the tested quantization-oriented network. Matched production-
-topology comparisons measured smaller but still material INT8 gains that depended strongly on model shape: 14.4%
-for the smaller network and 39.1% for the medium network.
+Speed was useful only if the deployed network still played the same chess. Post-training INT8 changed policy and
+value outputs too much, so the retained scaled post-activation blocks were trained with fake quantization. Backbone
+convolutions run in INT8; the start block, heads, and linear layers remain at higher precision. Publication
+recalibrates the checkpoint, exports an explicit Q/DQ ONNX graph, and refits a TensorRT template [8]. Policy and
+value outputs are then checked on encoded positions. Section 4.3 explains the block design; Chapter 6 shows why
+successful engine construction alone could not establish fidelity.
 
-Those gains depended on model design: post-training INT8 was fast but changed policy and value outputs too much.
-The retained scaled post-activation blocks are trained with fake quantization. Backbone convolutions run in INT8;
-the start block, heads, and linear layers remain at higher precision. Published checkpoints are recalibrated,
-exported as explicit Q/DQ ONNX graphs, and refitted into shape-specific TensorRT templates. Legal-move policy and
-WDL fidelity are checked on encoded positions, because a built engine is not necessarily a faithful one. Section
-4.3 describes the block design; Chapter 6 describes a refit failure that made semantic checks necessary.
+`torch.compile` was another attempted speedup. It accelerated eager batch-64 inference by roughly 27--33%, but
+fused TorchScript remained faster. In the tested eight-GPU training workload, compilation reduced throughput by
+about 18% relative to eager execution, while bfloat16 autocast improved it by 9.2%. Compilation was not retained
+for production inference or training on this workload.
 
 Model shape remained a systems variable even at similar parameter counts. Width and depth changed kernel efficiency,
 TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN

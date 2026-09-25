@@ -1,43 +1,42 @@
 # 4.3. Choosing what the network predicts
 
-A network that fits self-play targets but evaluates too slowly leaves search without enough games to learn from.
-Policy geometry, global context, auxiliary targets, quantization, and model size were therefore judged against both
-learning and inference cost.
-
-The model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks, repetition,
-the eight most recent moves, material counts, and the fifty-move counter. File reflection is the only augmentation;
-it also mirrors action targets and exchanges kingside and queenside castling planes. Rule-sensitive planes prevent
-positions with different legal or draw states from becoming indistinguishable. Some component comparisons used an
-older 29-plane input, so their absolute scores are not input-matched to the final model.
+A chess network must make accurate predictions quickly enough for search to finish millions of games. The move
+policy was the first design pressure: on a small model, a dense output layer can consume much of the parameter
+budget, yet a compact head still has to distinguish the legal moves of a position. We compared three ways of
+representing moves, then tested how the trunk, value prediction, model size, and quantization affected learning and
+inference speed.
 
 ## Three policy representations
 
-The retained chess interface defines 1,880 canonical actions. Three implemented policy families represented move
-logits differently: a dense action projection, spatial move planes, and scores for origin--destination square pairs.
+The same legal move can be assigned a score by a dense action list, by its move type on a spatial board, or by its
+origin and destination squares. All three families were implemented against the chess move interface; the selected
+interface gathers 1,880 canonical actions. Figure 4 shows what each head asks the network to predict.
 
 ![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
-**Figure 4 — Policy representation changes the learned output geometry.** Dense heads learn an action-sized
-projection, move-plane heads preserve spatial move types, and the retained from-to head scores square pairs before a
-fixed gather. The parameter counts are from the same controlled convolutional-trunk comparison; no count is shown for
-the plane family because its implementations and external interfaces differed. The diagram is architectural, not a
-playing-strength comparison.
+Figure 4: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
+head scores square pairs before gathering legal actions.
 
-The **dense head** flattened a small spatial projection into 1,880 logits. Its tested variants changed projection
-width, spatial reduction, and the rank of the final map. A rank-96 variant reduced head size from roughly 484,000 to
-207,000 parameters and was recorded as matching its immediate baseline. The result bundle is unavailable, so those
-variants cannot be ranked quantitatively here. Dense heads trained successful models; they were superseded, not
-shown intrinsically weak.
+The **dense head** flattened a small spatial projection into 1,880 logits. Dense heads trained successful models,
+but on a small trunk their projection could dominate the parameter count. Variants changed projection width,
+spatial reduction, and final-map rank. A rank-96 variant reduced head size from roughly 484,000 to 207,000
+parameters and was recorded as matching its immediate baseline; the result bundle is unavailable, so those variants
+cannot be ranked quantitatively here.
 
-The **move-plane head** represented 56 sliding directions, eight knight moves, and 12 promotions in 76 spatial
-planes. One implementation gathered 1,880 canonical logits from the plane tensor; another exposed all 4,864
-plane-square cells and normalized only legal moves. Native mapping checks covered 83,651 moves without a
-discrepancy, and inference controls did not attribute the slowdown to the larger action interface. In a short
+The **move-plane head** represented sliding directions, knight moves, and promotions as spatial move types. It
+could preserve board structure, but its experiments did not show an advantage over the dense control. In a short
 supervised comparison, the repaired plane head reached 2.1828 held-out policy cross-entropy after about 2,500
-steps versus 2.0824 for the dense control, while its curve was still improving faster. Neither convergence nor a
-clean online strength comparison was established. An online plane-head trial was also retired after slower learning
-and weaker play, but its result artifact and exact representation have not been recovered. The plane approach is
-technically viable, but its relative playing strength remains unquantified.
+steps versus 2.0824 for the dense control, while its curve was still improving faster. An online plane-head trial
+was retired after slower learning and weaker play; its result artifact and exact representation have not been
+recovered. The plane approach is technically viable, but its relative playing strength remains unquantified.
+
+The two implementations differed: one gathered 1,880 canonical logits from 76 planes (56 sliding directions,
+eight knight moves, and 12 promotions); the other exposed all 4,864 plane-square cells and normalized only legal
+moves. Native mapping checks covered 83,651 moves without a discrepancy, and inference controls did not attribute
+the slowdown to the larger action interface. The supervised comparison stopped before convergence, and no clean
+online strength comparison was preserved. Figure 4 omits a plane-head parameter count because the implementations
+and output interfaces differed; its counts for the other heads come from one controlled convolutional-trunk
+comparison.
 
 The retained **from-to head** preserves square structure without predicting a mostly empty plane tensor. It projects the
 64 trunk squares into query and key vectors, scores all origin-destination pairs, and gathers the canonical actions
@@ -49,24 +48,33 @@ Holding that trunk fixed, the from-to head improved the held-out policy gap by 0
 0.0285--0.0311). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
 the missing fourth cell prevents a full factorial conclusion. The head cost approximately 1.9% of batch-512
 forward throughput and 9% at batch 64. This short, single-seed teacher-data comparison establishes better policy
-fit, not an isolated self-play Elo gain.
+fit; it did not measure a separate self-play Elo gain.
+
+## Board input and rule state
+
+The selected model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks,
+repetition, the eight most recent moves, material counts, and the fifty-move counter. Rule-sensitive planes keep
+positions with different legal or draw states distinguishable. File reflection is the only augmentation; it also
+mirrors action targets and exchanges kingside and queenside castling planes. Some earlier component comparisons
+used a 29-plane input, so their absolute scores are not input-matched to the final model.
 
 ## Convolution, attention, and global context
 
-The convolutional residual tower is shared by policy, value, and training-only heads. On the smallest networks, an
-oversized dense policy head and a second policy-shaped auxiliary consumed a large fraction of the parameters. The
-project did not test separate trunks.
+The next question was whether attention could learn board-wide relationships better than a convolutional tower at
+the same practical serving cost. Both designs used a shared trunk for policy, value, and training-only heads. An
+earlier small model had spent a large fraction of its parameters on a dense policy head and a second policy-shaped
+auxiliary, making head choice especially important when comparing trunks.
 
-Pure attention trunks used 64 square tokens, learned row and column embeddings, pre-normalized self-attention, and
-GELU feed-forward blocks. No-bias, relative-offset, and input-dependent Smolgen-style attention biases were
-implemented; only no-bias and Smolgen received a preserved efficacy comparison. A CNN-attention hybrid was proposed
-but not built.
+The attention alternative treated the 64 squares as tokens, with learned row and column embeddings,
+pre-normalized self-attention, and GELU feed-forward blocks. No-bias, relative-offset, and input-dependent
+Smolgen-style attention biases were implemented; only no-bias and Smolgen have a preserved efficacy comparison. A
+CNN-attention hybrid was proposed but not built. Separate policy and value trunks were not tested.
 
-Once bootstrap policy shape, head, runtime, and precision were controlled, the convolutional trunk beat bare
-attention by 0.0060 nats on held-out teacher data. Smolgen gave the best attention cell, but the larger effect was
-head choice: replacing the dense head on the attention trunk with from-to improved the held-out gap by 0.1573
-nats. Attention also consumed more memory and served more slowly at the relevant batches. Convolution won this
-workload; the comparison does not establish a general limit of attention in chess.
+With bootstrap policy shape, head, runtime, and precision controlled, the convolutional trunk beat bare attention
+by 0.0060 nats on held-out teacher data. Smolgen gave the best attention cell, but changing the attention model's
+dense head to from-to improved the held-out gap by a much larger 0.1573 nats. Attention also consumed more memory
+and served more slowly at the relevant batches. The tested convolutional design was the better choice for this
+workload; the result does not rule out attention in other chess systems.
 
 Local convolution receives global context every second residual block: board-wide means and maxima from one
 quarter of the channels are projected back as biases on local features. Squeeze-excitation was another implemented
@@ -84,8 +92,8 @@ parameters and reduced measured training throughput by 1.31%, while improving to
 short seed and slightly worsening WDL loss. This justified keeping the smaller head, not a claim that its capacity is
 universally optimal. Likewise, the earlier scalar-to-WDL transition has no preserved isolated strength comparison.
 
-Training also predicts a later player's policy at a configured ply offset and normalized remaining game length,
-with loss weights 0.15 and 0.1. The later-policy target uses the future state's own side-to-move action space,
+Training also predicts the next move's searched policy and normalized remaining game length, with loss weights
+0.15 and 0.1. The next-policy target uses the following state's own side-to-move action space,
 legality mask, and symmetry transformation. Both heads are removed from the serving artifact. Their target wiring,
 masking, gradients, and checkpoint behavior were tested, but neither objective has a long matched self-play
 ablation. Other auxiliaries were set aside while debugging potential interference, not shown harmful. Their

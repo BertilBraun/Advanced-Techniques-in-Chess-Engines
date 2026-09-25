@@ -14,8 +14,11 @@ For score `s` against an opponent anchor `R`, benchmark Elo is `R + 400 log10(s 
 resamples the 50 colour-swapped opening pairs 10,000 times, then transforms the 2.5th and 97.5th percentiles of
 the resulting match scores with the anchor held fixed.
 
-The two deepest-search anchors agree within four Elo; the shallow pairs disagree more substantially. The ladder is
-an attainable operating curve, not a constant-parallelism search ablation.
+The two deepest-search anchors agree within four Elo. At 100, 1,000, 10,000, and 100,000 searches, the harder
+opponent rung reads 128, 102, 46, and 4 Elo higher than the easier rung. Ideal transitive Elo would give the same
+estimate from both. Draw behavior, anchor calibration error, matchup effects, and sampling noise are possible
+contributors, but the project did not isolate the cause. Choosing the score closest to 0.5 limits extrapolation.
+The ladder is an attainable operating curve, not a constant-parallelism search ablation.
 
 ## Matched-estimator comparison
 
@@ -27,6 +30,11 @@ transfer, summarized from 35 paired observations in the operator recap, brings i
 underlying paired-observation table is not preserved with the report; approximately ±15 Elo is a sensitivity
 allowance for this transfer, not a bootstrap interval. This limitation does not apply to the terminal match
 intervals above, which come from their game records.
+
+For orientation only, the preceding four-day baseline is plotted through 3.0 days, retaining 143 observations and
+ending at 2,265.4 Elo before its noisy terminal interval; subtracting this from the final endpoint gives 106.8 Elo.
+The final endpoint also sits 348.2 Elo above the early baseline's terminal observation. Neither visual subtraction
+measures cross-campaign strength because the original estimators differ.
 
 ## Distilled student controls
 

@@ -1,101 +1,88 @@
 # 3. System and training method
 
-## Runtime boundary
+## One learning cycle
 
-Within 2.5 days, the learner needs a steady supply of searched games and fresh positions. Figure 1 follows that
-flow from model publication through self-play, replay, training, and evaluation. Chapter 5 measures the cost of its
-main interfaces.
+The system improves by repeatedly turning played games into a stronger player. A published network guides search
+in many self-play games; the resulting positions and search policies enter replay; the trainer learns from that
+replay and publishes the next network. Evaluation checks whether the new player is actually stronger. Figure 1
+shows this cycle and the components that carry it. Chapter 5 asks which parts of the cycle limit how much learning
+can happen in a fixed time.
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
-Figure 1. A published model returns to batched native self-play; searched positions become replay targets for the
-trainer. Paired evaluation measures the published checkpoint and feeds selection decisions back to Python. The
-diagram shows ownership and data flow, not the number or scheduling of every worker.
+Figure 1: A published model guides batched native self-play; searched positions become replay targets for the
+trainer. Paired evaluation measures the published checkpoint and informs model-promotion decisions.
 
-Native C++ owns game state, legal actions, encodings, tree search, self-play, and batched inference. Python
-coordinates validated configuration, workers, replay, distributed training, model publication, and evaluation.
-Tests enforce the action mapping, tensor shapes, feature planes, symmetry, and output order across the native and
-Python boundary.
+Native C++ plays the games and runs search so Python does not handle every position or tree operation. Python
+coordinates workers, replay, training, publication, and evaluation. Both sides must interpret chess positions and
+network outputs identically; tests check their action mapping, features, symmetries, tensor shapes, and output order.
 
 ## Chess representation and outputs
 
-The network receives a board-aligned tensor of current state, history, and additional chess features. Its reduced
-action space has 1,880 chess actions; a game symmetry transforms the position and its action targets together. The
-serving artifact exposes only policy and win/draw/loss value outputs. Auxiliary heads train the shared
-representation but are absent from inference.
-
-The retained network is convolutional, with scaled post-activation residual blocks, capped activations, and
-global-pooling context in every second block. A from-to attention policy head scores move origins and destinations
-more compactly than a dense action projection. The value path reduces to two channels before a small fully
-connected layer. Chapter 4 examines the representation alternatives; Chapter 7 gives the selected shapes.
+The network sees the board, recent history, and rule-relevant state. It predicts a move policy and the probabilities
+of winning, drawing, or losing. Search uses those two outputs to choose moves and to create training targets. The
+retained model shares a convolutional representation between its outputs and scores moves by origin and destination;
+training-only auxiliary heads are removed from the serving artifact. Section 4.3 explains the representation
+choices, including the 1,880-action interface; Chapter 7 gives the selected model shape.
 
 ## Search and self-play
 
-Self-play uses PUCT-style Monte Carlo tree search with neural policy priors and value estimates. Search visits follow
-a staged fixed budget, rather than a budget adapted separately to each position. Root exploration uses Dirichlet
-noise, reduced-parent-value first-play urgency, and forced playouts; a fraction of root visits is retained after a
-move. Chapter 4 explains why the tested adaptive alternatives were not retained.
+Self-play searches each played position with neural policy priors and value estimates. The visit budget grows in
+stages as training progresses, but is fixed across positions within a stage. Each search produces both a move and a
+policy target for learning. Section 4.1 explains the search rules and why the tested ways of varying the budget
+within a stage were not retained.
 
-Thousands of games are interleaved to fill GPU batches. Native workers retain their trees; one inference worker
-per process submits batches to TensorRT. Parallel simulations improve batch fill but can select leaves using stale
-search information. Concurrent games can raise aggregate throughput while lengthening an individual game. Search
-parallelism and worker topology must therefore be tuned together.
+Many games run concurrently so their neural evaluations can share GPU batches. Native workers retain search trees
+between moves, and TensorRT serves the batches. Searching several leaves of one tree at once can fill a batch when
+fewer independent games are ready, but the leaves then see partly stale search information. Sections 4.1 and 5
+measure that quality–throughput tradeoff and the worker topology.
 
-Starting positions mix shallow random legal openings with archived restart states. Restart candidates favor
-uncertain, consequential positions rather than uniformly sampling history. The random-opening share preserves games
-that evolve from the opening, while restarts revisit positions where additional search may matter. Resignation is
-enabled only after a calibrated false-nonloss gate is met; continuation games check the gate and retain terminal
-examples.
+Games start either from shallow random openings or from archived self-play positions worth revisiting. This keeps
+ordinary opening-to-endgame games in the stream while spending some games on consequential branches that search
+found difficult. Section 4.2 explains how restart states are selected and how resignation is checked against games
+allowed to continue to their natural result.
 
 ## Replay and materialization
 
-Native workers publish complete trajectories atomically. Parallel materializers reconstruct observations into
-fixed-layout columnar shards; a circular memory-mapped store is the training replay. Search policies remain sparse
-in storage and are densified only when a training batch is formed.
+After a game finishes, its searched positions become replay rows containing the position, legal actions, search
+policy, and outcome target. The workers publish complete trajectories; materializers convert them to a circular
+memory-mapped store. Policies stay sparse until a training batch is assembled. Admission checks prevent incomplete
+or rejected games from being counted as usable data.
 
-Each row retains the state, legal moves, search policy, WDL target, root value, sample weight, source generation,
-policy-surprise information, and configured auxiliary targets. Exactly-once trajectory claims and rejection
-telemetry protect the boundary between completed games and admitted replay rows.
-
-Sampling mixes uniform draws with policy surprise: positions where search disagreed with the network prior are drawn
-more often without losing broad coverage. Replay capacity grows in stages. A configured replay ratio ties optimizer
-work to materialized positions, preventing training from silently outrunning data generation. Chapter 4 separates
-the measured effects of these data choices from the integrated recipe.
+The trainer sees a mix of broadly sampled positions and positions where search substantially changed the network's
+move preference. Replay grows as more games arrive, while the amount of optimizer work is tied to newly admitted
+positions. Section 4.2 follows these distinct choices—where games begin, what becomes a row, and which rows recur
+in training—and gives the retained settings.
 
 ## Training
 
-Eight persistent NCCL trainer ranks, one per GPU, use a global batch of 2,048 in bfloat16. Training runs in
-500-step optimizer blocks while some self-play workers remain active. Each training-and-publication cycle is called
-a *generation*; a *checkpoint* is its durable model artifact. Because training and self-play overlap, fewer search
-simulations may leave wall-clock training unchanged. This becomes decisive in the adaptive-stopping experiment in
-Chapter 4.
+Training minimizes errors in the search policy and the game outcome. Two auxiliary tasks use information from a
+completed game: predicting the next move's searched policy and the remaining game length. They help train
+the shared network but do not run during self-play. Section 4.2 explains when those future-dependent targets exist.
 
-The primary objective combines policy cross-entropy with WDL/value loss. Outcome value is discounted by ply, and a
-small scheduled blend of search-root value is introduced later. Two training-only targets—the next position's
-search policy and normalized remaining game length—provide auxiliary learning signals. Search does not query them.
+Eight persistent trainer processes, one per GPU, train in 500-step blocks with a global batch of 2,048 while some
+self-play workers continue producing games. A block followed by publication is a *generation*; its saved model is a
+*checkpoint*. Overlap matters: saving search work does not necessarily shorten a generation if training was already
+the limiting step. The adaptive-stopping test in Section 4.1 measures that distinction.
 
 ## Progressive models and publication
 
-Training begins with a smaller network because its higher inference throughput supplies more early games. The
-production controller trains the next larger candidate from an independent initialization alongside the active
-model. A strength-improvement plateau triggers candidate training, while two qualifying head-to-head matches gate
-promotion. Function-preserving growth from a trained medium model was tested separately, not as the controller's
-ordinary path. Chapter 7 gives the selected schedule and gate.
+Training starts with a small network: its speed produces more searched games while the learner has little use for
+extra capacity. A larger candidate trains on the same replay alongside the active model and takes over only after
+paired matches show it has caught up. Growing a trained model into a larger one was also tested, but is not the
+ordinary promotion path. Section 4.3 examines this choice; Chapter 7 specifies the plateau and match gates.
 
-Rank zero publishes both a recoverable training checkpoint and a trimmed inference artifact. The final path refits
-quantization-aware-trained ONNX weights into TensorRT templates for self-play and evaluation. Numerical fidelity is
-checked at publication; Chapter 6 describes the failure that made this check necessary.
+Publication saves a recoverable training checkpoint and a smaller inference artifact. The deployed path exports
+quantization-aware-trained weights to ONNX and refits a TensorRT engine for self-play and evaluation. The engine's
+outputs are checked against the source model: a successful build alone does not prove that it plays the same moves.
+Chapter 6 explains the failure that prompted this check.
 
 ## Evaluation
 
-Short-lived evaluations run on a fixed cadence beside training. Fixed-dataset metrics and paired-opening Stockfish
-ladders monitor policy-only and searched play. Terminal evaluation uses larger matches and deeper search budgets.
-The run records the engine binaries, datasets, opening books, and their hashes as part of the protocol.
+During training, fixed-position metrics and short paired-opening matches show whether learning is progressing.
+Larger matches at several search budgets test the final model; Table 1 in Chapter 2 reports their results. Each
+opening is played with both colors against a fixed Stockfish node limit. Appendix B explains the rating calculation
+and gives supporting evaluation details.
 
-The training ladder brackets the candidate against nearby Stockfish node limits instead of extrapolating from one
-opponent. Paired openings reverse colors, and reports retain W/D/L and search identity. Batch shape can alter
-serving behavior, so it is part of the evaluation protocol. Frequent ladders show progress; the larger terminal
-paired matches in Appendix B establish the final strength estimate.
-
-Completed trajectories, replay state, checkpoints, and evaluation evidence are committed before they are credited
-or reported. Appendix D lists the public and archived artifacts.
+The run preserves the configurations, engine and data identities, checkpoints, and evaluation records needed to
+interpret and reproduce those measurements. Appendix D lists the public and archived artifacts.

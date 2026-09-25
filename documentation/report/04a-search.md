@@ -1,15 +1,15 @@
 # 4.1. Spending search where it matters
 
-Search made a fixed network substantially stronger: in one frozen-model comparison, increasing the budget from
-200 to 1,600 visits raised its score against the same opponent from 0.318 to 0.748. The harder question was whether
-those visits could be spent more usefully during training. A cheaper move might complete a game sooner, but it may
-also create a weaker policy target or leave the accelerator underfilled. None of the tested adaptive allocators
-improved the end-to-end learning loop, and exact graph or cache reuse did not repay its overhead. The retained
-answer is a staged, fixed visit cap for every recorded move.
+More search makes an individual move stronger. With the same frozen network and opponent, raising the budget from
+200 to 1,600 visits raised its match score from 0.318 to 0.748. Training poses a different question: could some
+moves use fewer visits so that self-play finishes more games without teaching the next model worse policies? Cheap
+moves might save computation, but the saved work matters only if it increases useful training data or shortens the
+learning cycle.
 
-The experiments probe different outcomes: the strength of moves chosen by a frozen network, the agreement of
-shallow and deep search targets, the strength of the next trained network, and throughput. Gains on one measure did
-not always transfer to the others.
+We tried fast/full searches, several ways to allocate or stop search according to position, and reuse through a
+graph or inference cache. The retained approach increases a fixed visit cap in stages and applies that cap to every
+recorded move. The experiments below distinguish four tests that can give different answers: immediate move
+strength, agreement with a deeper policy, strength of the next trained model, and throughput.
 
 ![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
 
