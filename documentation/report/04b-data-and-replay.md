@@ -6,9 +6,8 @@ revisit positions where search corrected the network's move preference. These ch
 creates new experience, while replay sampling reuses experience already collected. A game stopped at the ply cap
 also needs a trustworthy value target because its actual outcome is unknown.
 
-Figure 3 follows a position from game generation to training. The sections below examine the decisions at each
-boundary and the evidence behind the retained choices. In particular, drawing a row more often is not the same as
-increasing its loss weight, and admitting a row is not the same as funding an optimizer step.
+Figure 3 follows the route from a starting position to a training batch. We then examine how the system creates
+games, stores their searched positions, and decides which positions to revisit.
 
 ![Generation, admission, selection, weighting, and presentation credit as distinct replay decisions](figures/replay-decision-path.svg)
 
@@ -23,23 +22,18 @@ random legal plies. These prefixes diversify the opening cheaply; they are recon
 but not searched or trained directly. Drawing zero plies also keeps some games at the ordinary initial position.
 
 The other half begin from archived self-play states, falling back to random openings when a worker's restart
-archive is empty. An archived position is eligible only if at least 15 plies remained in its source game, its
-absolute root value was at most 0.8, and two or three leading actions covered 85% of visit mass. The branch actually
-played is marked used. A restarted game reserves an untried plausible alternative and forces that action after
-reconstructing the prefix, so new search explores a branch the source game did not.
+archive is empty. The archive favors positions with a meaningful unresolved alternative: they are not near the end
+of the source game or already decided, and search found a small set of plausible moves. A restarted game chooses an
+untried branch, reconstructs the prefix, then explores the alternative the source game did not play. Appendix D
+gives the eligibility thresholds.
 
-The archive gives 30% probability to uniform selection. Otherwise it favors the square root of *value correction*:
-half the absolute difference between the searched root value and the raw network value. The square root prevents
-one extreme correction from dominating. Age and capacity bounds remove old states, reservations prevent duplicate
-claims within a worker, and exhausted positions leave the archive. Here, “difficult” means that search corrected
-the network substantially; difficulty was not independently labeled. Archives are local to workers rather than
-globally deduplicated.
+The archive gives 30% probability to uniform selection. Otherwise it favors positions where search substantially
+corrected the network's value estimate, while softening the priority so one extreme position cannot dominate. Age
+and capacity bounds remove old states, and exhausted positions leave the archive. Archives are local to workers.
 
-This differs from the learned targeted search control [5] explored in prior work: the archive uses observed search
-disagreement and untried branches, not a trained restart policy. Restart priority creates new trajectories; replay
-surprise, discussed below, revisits stored positions. Neither restart priority nor the start mixture and filters
-has an isolated Elo estimate. Together they broaden branch coverage and return the learner to positions where
-search changed its prior.
+Unlike a learned targeted-search controller [5], the archive uses observed search disagreement and untried
+branches. It creates new trajectories from those branches; the replay sampler below decides which existing
+positions recur during training.
 
 ## What becomes a training position
 
@@ -57,26 +51,20 @@ window preserves breadth while keeping older targets alive. The system therefore
 window and expands it as new games fill the store; merely reserving twenty million slots would not create twenty
 million distinct positions.
 
-The physical memory map is preallocated once, while its logical capacity grows through
-0.6, 1.2, 2.0, 2.8, 4, 6, 8, 12, 16, and 20 million rows. Growth avoids pretending that an empty early window offers
-diversity and later allows a broader policy history to remain available. A mature earlier campaign showed why
-freshness must be measured rather than inferred: strength continued to improve after fixed-dataset policy accuracy
-largely saturated, while larger models and deeper search reduced the rate of new positions. That observation
-motivates the wider window but does not isolate this exact schedule as a strength improvement.
+The physical memory map is preallocated once, while its logical capacity grows from 600,000 to 20 million rows.
+The early window stays small when little data exists; later growth preserves more openings, endgames, and policy
+history. In an earlier campaign, playing strength continued to improve after fixed-dataset policy accuracy largely
+saturated, reinforcing the value of fresh and varied positions. Appendix D gives the full capacity schedule.
 
 Replay reuse introduces a second tradeoff. The configured ratio is the number of optimizer presentations funded by
 each newly admitted row. In the retained setting, four presentations are credited per row; a 500-step quantum at a
 global batch of 2,048 therefore requires 256,000 newly appended rows. Credits are issued only after append and flush,
 and a persistent ledger prevents a restart from spending them twice.
 
-Changing reuse also changes the pace of training, evaluation, publication, visit schedules, and replay growth,
-because all advance at quantum boundaries. Higher reuse funds more updates from each game; lower reuse gives each
-update fresher positions if the actors can supply them. Short controls at ratios four, 6.25, and eight remained
-matched at their shared evaluation boundaries despite different update rates. They lasted only about 90 minutes,
-however, and the archive no longer has their full raw curves. The completed campaign also changed replay capacity,
-optimizer, objective weighting, and inference alongside reuse. Ratio four favors freshness, but the record does not
-give it an isolated final-strength effect. The actual number of presentations per distinct admitted position can
-also differ from the configured ratio.
+Higher reuse funds more updates from each game; lower reuse gives each update fresher positions if the actors can
+supply them. Short controls at ratios four, 6.25, and eight showed similar strength despite different update rates.
+The selected ratio of four favors freshness. Because the comparison was short and other parts of the campaign also
+changed, it does not establish a separate final-strength gain. Appendix C gives the comparison's scope.
 
 ## Choosing which positions recur
 
@@ -86,9 +74,8 @@ distribution and the network prior. Seventy percent of draws follow this signal,
 cannot dominate; the remaining 30% are uniform to preserve coverage. A row can recur across optimizer steps but is
 drawn only once within a global batch. This is related to prioritized replay [4], though it uses a different signal.
 
-The optimizer learns from this prioritized distribution without inverse-probability correction. Surprise can
-reflect search noise, target age, game phase, or legal-move count as well as genuine difficulty; the 70/30 mix and
-cap do not have an isolated online strength estimate.
+The optimizer learns from this prioritized distribution without inverse-probability correction. Policy surprise
+can also reflect search noise or target age, so the uniform component keeps broader coverage.
 
 Loss weighting is separate. Each row has a positive sample weight which, after batch-mean normalization, multiplies
 the primary and eligible auxiliary losses. Rows in the selected recipe use weight 1.0. Earlier replay could
@@ -120,16 +107,15 @@ search achieved Brier score 0.444 and cross-entropy 0.756, compared with 0.491 a
 At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Search-root sign
 accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
 therefore performs one full search at the actual cut position and uses its root value as the bootstrap.
-The scalar root value `v` becomes a soft WDL target: with `r = 1 - |v|`, the win, draw, and loss components are
-`max(v, 0) + r/3`, `r/3`, and `max(-v, 0) + r/3`. Materialization then applies the configured per-ply blur.
+The root value becomes a soft win/draw/loss target, then materialization applies the configured per-ply blur.
+Appendix D gives the conversion.
 
 The cut policy addresses the most damaging data failure found in the project. A cheap-search tail excluded late
 positions from primary replay while a shallow cutoff estimate supplied the value target for earlier rows in the
 same capped game. This plausibly reinforced weak conversion: fewer searched endgame examples, more capped games,
 and more weakly grounded targets. Replay eviction could remove the offending rows without undoing their effect on
-the network. The measured incidence and multi-change repair are examined in Chapter 6; neither this reconstruction
-nor the recovery isolates one cause. The general data rule is to audit cut-value provenance and policy-row
-eligibility together.
+the network. Chapter 6 examines the measured incidence and repair. The general data rule is to consider cut-value
+provenance and policy-row eligibility together.
 
 ## Knowing what each target means
 

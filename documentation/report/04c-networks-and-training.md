@@ -32,11 +32,8 @@ recovered. The plane approach is technically viable, but its relative playing st
 
 The two implementations differed: one gathered 1,880 canonical logits from 76 planes (56 sliding directions,
 eight knight moves, and 12 promotions); the other exposed all 4,864 plane-square cells and normalized only legal
-moves. Native mapping checks covered 83,651 moves without a discrepancy, and inference controls did not attribute
-the slowdown to the larger action interface. The supervised comparison stopped before convergence, and no clean
-online strength comparison was preserved. Figure 4 omits a plane-head parameter count because the implementations
-and output interfaces differed; its counts for the other heads come from one controlled convolutional-trunk
-comparison.
+moves. Native mapping checks covered 83,651 moves without a discrepancy. Neither the supervised comparison nor
+the surviving online record establishes the plane head's eventual strength.
 
 The retained **from-to head** preserves square structure without predicting a mostly empty plane tensor. It projects the
 64 trunk squares into query and key vectors, scores all origin-destination pairs, and gathers the canonical actions
@@ -68,7 +65,7 @@ auxiliary, making head choice especially important when comparing trunks.
 The attention alternative treated the 64 squares as tokens, with learned row and column embeddings,
 pre-normalized self-attention, and GELU feed-forward blocks. No-bias, relative-offset, and input-dependent
 Smolgen-style attention biases were implemented; only no-bias and Smolgen have a preserved efficacy comparison. A
-CNN-attention hybrid was proposed but not built. Separate policy and value trunks were not tested.
+CNN-attention hybrid was proposed but not built.
 
 With bootstrap policy shape, head, runtime, and precision controlled, the convolutional trunk beat bare attention
 by 0.0060 nats on held-out teacher data. Smolgen gave the best attention cell, but changing the attention model's
@@ -89,15 +86,15 @@ The outcome head predicts win, draw, and loss rather than a single scalar. Searc
 expected value when necessary, while training and diagnostics retain the draw probability. A compact
 two-channel spatial reduction and 48-unit hidden layer was retained. A matched 32-channel probe added 97,020
 parameters and reduced measured training throughput by 1.31%, while improving total loss by only 0.00309 in one
-short seed and slightly worsening WDL loss. This justified keeping the smaller head, not a claim that its capacity is
-universally optimal. Likewise, the earlier scalar-to-WDL transition has no preserved isolated strength comparison.
+short seed and slightly worsening WDL loss. This justified keeping the smaller head. The earlier scalar-to-WDL
+transition has no preserved isolated strength comparison.
 
 Training also predicts the next move's searched policy and normalized remaining game length, with loss weights
 0.15 and 0.1. The next-policy target uses the following state's own side-to-move action space,
 legality mask, and symmetry transformation. Both heads are removed from the serving artifact. Their target wiring,
 masking, gradients, and checkpoint behavior were tested, but neither objective has a long matched self-play
-ablation. Other auxiliaries were set aside while debugging potential interference, not shown harmful. Their
-inclusion in the final recipe should not be read as an isolated Elo gain.
+ablation. Other auxiliaries were set aside while debugging potential interference, not because they were shown
+harmful.
 
 ## Bootstrap and optimization controls
 
@@ -106,9 +103,7 @@ architecture comparison, the attention policy put only about 0.11 probability ma
 the convolutional control was effectively one-hot. Neither extreme represented chess knowledge, but each induced
 different data. The retained bootstrap uses architecture-appropriate initialization, deterministic construction,
 a small final policy projection, and calibration on 516 encoded positions toward a common policy concentration.
-Those positions set numerical scale, not supervised chess targets. A seed-propagation defect also made nominally
-matched arms start from different tensors; corrected comparisons treat seed and policy shape as controls, not
-strength improvements.
+Those positions set numerical scale without supplying supervised chess targets.
 
 The retained quantization-aware optimizer is Nesterov SGD. Frozen-replay screens showed stable fitting and informed
 warm-up, learning-rate, and folding choices; they did not measure online Elo. The selected run ended at 408,500

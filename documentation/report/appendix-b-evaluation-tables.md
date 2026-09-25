@@ -35,11 +35,15 @@ For orientation only, the preceding four-day baseline is plotted through 3.0 day
 ending at 2,265.4 Elo before its noisy terminal interval; subtracting this from the final endpoint gives 106.8 Elo.
 The final endpoint also sits 348.2 Elo above the early baseline's terminal observation. Neither visual subtraction
 measures cross-campaign strength because the original estimators differ.
+The smoothed report plot uses bias-corrected 0.95 exponential moving averages. Its final curve retains 180
+observations through 2.5 days; the preceding baseline retains 143 through 3.0 days. Later points are excluded
+because they belong to subsequent experiments or an unreliable terminal interval.
 
 ## Distilled student controls
 
-Both students had 470,295 parameters and trained on the same frozen 20-million-row replay snapshot without QAT.
-They were evaluated with TorchScript and four parallel searches. The 36,621-step student scored 31/33/36 against
+Both students had 470,295 parameters and trained on the same frozen 20-million-row replay snapshot without QAT,
+separate from the teacher checkpoint's 16-million-row live window. They were evaluated with TorchScript and four
+parallel searches, whereas the searched teacher used INT8 TensorRT. The 36,621-step student scored 31/33/36 against
 20,000 Stockfish nodes at 10,000 searches: 2,683 [2,637, 2,731] benchmark Elo. The 110,000-step student scored
 35/29/36 under the same protocol: 2,697 [2,640, 2,753]. At 100,000 searches, the longer student scored 59/28/13
 against 20,000 nodes for 2,873 [2,819, 2,935]. That deep point is unbracketed because the planned 50,000-node

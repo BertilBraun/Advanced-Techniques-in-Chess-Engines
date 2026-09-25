@@ -19,6 +19,16 @@ With no actors active, trainer throughput was 25,275 samples/s, but no new self-
 Half-active operation was retained near the measured tradeoff.
 The optimal fraction can change with visit budget, model size, and hardware contention.
 
+## Replay-reuse controls
+
+Short controls at reuse ratios four, 6.25, and eight remained matched at their shared evaluation boundaries
+despite different update rates. They lasted about 90 minutes, and their full raw curves are no longer preserved.
+The completed campaign also changed replay capacity, optimizer, objective weighting, and inference. The selected
+ratio of four is therefore a freshness choice, not an isolated final-strength estimate. Configured presentation
+credit need not equal the observed number of presentations per distinct replay position. Because evaluation,
+publication, visit schedules, and replay growth advance at quantum boundaries, changing reuse also changes their
+wall-clock pace.
+
 ## Parallel-search operating point
 
 At 1,000 searches per move against the same 20,000-node Stockfish opponent, parallel leaves substantially shortened
@@ -48,3 +58,11 @@ Exact graph search avoided only 0.0249% and 0.1769% of neural evaluations at 1,0
 disabling it made game updates about 0.88% faster and lowered peak worker memory about 7.12%. A wider unbounded
 repeat tracker observed at most about 4% reuse in the tested production-like workloads and itself cost throughput.
 These are workload-specific negative findings, not general limits on graph search or caching.
+
+## Throughput comparison boundaries
+
+The 1.86x TensorRT INT8 versus TorchScript search comparison used a production-shaped 400-visit actor workload,
+but different checkpoint weights; it is a backend-and-checkpoint result, not an isolated precision effect. The
+23.3% replay-admission gain compared separate live 400- and 600-visit stages that also differed in checkpoint
+and actor scheduling. Absolute systems rates vary with CPU quota, GPU power, PCIe and NUMA layout, runtime versions,
+model shape, batching, and concurrent training.

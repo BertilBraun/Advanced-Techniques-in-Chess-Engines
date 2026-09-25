@@ -6,6 +6,9 @@ the larger model. A quantum comprises 500 optimizer steps at a configured global
 checkpoint follows 817 contiguous quanta and records 408,500 optimizer steps and 836,608,000 presentations.
 The published checkpoint number, 1026, is an artifact identifier, not the number of quanta included in this
 selected-lineage plot.
+It was selected from checkpoints near the strongest 64-search ladder region and was the last there with complete
+model, optimizer, QAT, ONNX, and TensorRT artifacts retained. The plotted lineage excludes reverted INT8 and
+capacity-promotion branches.
 
 ![Training losses and learning rate through the selected checkpoint](figures/final-training-loss-and-rate-paper.svg)
 

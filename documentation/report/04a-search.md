@@ -21,8 +21,8 @@ reuse failed to repay overhead in this workload.
 
 The native engine performs policy-guided Monte Carlo tree search. The network supplies legal-move priors and a
 win/draw/loss value; PUCT selects leaves; neural evaluations are batched across active games; and values are backed
-up from the alternating player's perspective. A visit cap is deliberately unambiguous. It does not depend on a
-difficulty estimate, a calibrated controller, or a learned model that may become stale as training advances.
+up from the alternating player's perspective. A fixed visit cap gives each recorded move the same search budget
+within a training stage.
 
 Against the same opponent, score rose from 0.318 at 200 visits to 0.537, 0.580, 0.662, and 0.748 at 400, 600,
 1,000, and 1,600 visits. Across the better-resolved middle and deep part of the sweep, the fitted trend was about
@@ -140,12 +140,10 @@ final all-full workload.
 ## When a tree became a graph
 
 Chess appears rich in transpositions: different move orders often reach the same board. The project tested whether
-Monte Carlo graph search, as in Czech, Korus, and Kersting [6], could turn those transpositions into shared neural evaluations, descendants, and search
-statistics. This was a complete implementation, not a cache mislabeled as graph search. Canonical nodes held shared
-state-level information; parent/action edges retained local PUCT statistics; correction backups exposed better
-shared values to incoming edges; and the system handled trajectory reservations, cycles, rerooting, pruning, and
-capacity reclamation. An audit against both the paper and its reference implementation found and corrected a
-missing first-link backup behavior.
+Monte Carlo graph search, as in Czech, Korus, and Kersting [6], could share neural evaluations, descendants, and
+search statistics across those paths. Canonical nodes held shared state information while parent/action edges kept
+local PUCT statistics. The implementation handled backup corrections, cycles, rerooting, and pruning; an audit
+against the reference implementation corrected a missing first-link backup behavior before the final measurements.
 
 The limiting fact was chess-state identity. Pieces and side to move are not enough: castling rights, en-passant
 state, the halfmove clock, and repetition-relevant history can change the legal result. Merging positions that differ
@@ -190,9 +188,8 @@ tree retention with 60% of visits carried across a played move. Every recorded m
 visit cap. The current settings are summarized in Chapter 7 and defined by the public configuration [10].
 
 Search depth has direct strength and target-fidelity evidence, while parallel leaves have a measured
-quality/latency tradeoff. Root retention, forced playouts, noise, discount, and the PUCT constants form the retained
-AlphaZero-style recipe, though most lack isolated final-workload strength estimates. Evaluation and self-play use
-consistent first-play-urgency semantics.
+quality/latency tradeoff. Root retention, forced playouts, noise, discount, and the PUCT constants complete the
+retained AlphaZero-style search recipe.
 
 Fixed visits kept target provenance and search expenditure clear, while the tested alternatives failed to improve
 learning under this chess workload. Repetitive analysis or a non-overlapped learner could change the economics.

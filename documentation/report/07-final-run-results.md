@@ -9,25 +9,22 @@ much smaller distilled model achieve.
 ## Training progress
 
 The 64-search training ladder rose from 798 to 2,372.2 over 2.5 effective days, with a peak of 2,407.6 in that
-window. Figure 8 places this trajectory beside four earlier chess campaigns. The final curve retains 180
-observations and ends before subsequent experiments that did not improve the selected model; the preceding
-baseline stops at three days, before its noisy terminal interval.
+window. Figure 8 places this trajectory beside four earlier chess campaigns. The plot ends with the selected
+training run at 2.5 days; Appendix B explains the comparison windows.
 
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
-Figure 8: Bias-corrected 0.95 exponential moving averages show the project's successive 64-search training
-ladders. The final curve ends at 2.5 days and the preceding baseline at 3.0 days. The curves show training
-progress; the matched comparison below uses a common estimator rather than subtracting plotted endpoints.
+Figure 8: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
+the preceding baseline at 3.0 days; the matched comparison below uses a common rating calculation.
 
 The plotted curves make the progression visible, but the previous baseline and final run originally used
 different ladder estimators. Recomputing their plateaus on the same three-rung estimator gives 2,283.9 and
 2,358.0 benchmark Elo: **about +74 Elo** for the final recipe. This compares complete training recipes, not an
 isolated contribution from any one change. Appendix B gives the transfer calculation and its uncertainty.
 
-Checkpoint 1026 was selected from several checkpoints near the strongest 64-search ladder region. It was the
-last one there with complete model, optimizer, QAT, ONNX, and TensorRT artifacts retained. The plotted lineage
-excludes reverted INT8 and capacity-promotion branches. A later function-preserving 19×176 continuation recovered
-its parent's strength but did not establish a higher plateau.
+Checkpoint 1026 came from the strongest region of the 64-search ladder. A later function-preserving 19×176
+continuation recovered its parent's strength but did not establish a higher plateau. Appendix A describes the
+selected training trajectory and checkpoint identity.
 
 The selected checkpoint followed **408,500 optimizer steps** in 817 training quanta. At a global batch of 2,048,
 that is **836,608,000 training presentations**. Self-play completed **3,249,647 games**, materializing
@@ -38,10 +35,9 @@ trajectories and counting boundaries.
 At a conservative 100 searched plies and roughly 600 simulations per game move, 3.25 million completed games
 correspond to approximately 195 billion search simulations. Most require a neural-network evaluation.
 
-Across 480 small-model quanta, median measured trainer throughput was 16,977 samples/s; across 337 medium-model
-quanta it was 11,194. These stages also differed in schedule and concurrent workload. The selected training path
-occupied the node for 60 hours at $0.72/h, or **$43.20** in rental cost. Discarded experiments, later growth,
-distillation, evaluation, and idle rental time are outside that figure.
+Across 480 small-model quanta, median trainer throughput was 16,977 samples/s; across 337 medium-model quanta it
+was 11,194. The 2.5-day final training cost **$43.20** in node rental at $0.72/h. Appendix A shows the throughput
+traces; the cost excludes the separate experiments and evaluations.
 
 ## Playing strength across search budgets
 
@@ -66,10 +62,9 @@ five seconds of thinking time on an RTX 4070 SUPER with the current setup.
 The measured strength curve uses one parallel search at 100 and 1,000 searches per move, four at 10,000, and
 sixteen at 100,000. A controlled 1,000-search sweep against the same 20,000-node opponent shows why: one parallel
 search measured 2,823 Elo, four measured 2,804, and sixteen measured 2,778. Their central differences of 19 and
-45 Elo are smaller than the overlapping match intervals, while the recorded match time fell from
-**18.1–18.5 minutes** to **3.4–3.8** and **1.3–1.8**, respectively. These are two observed timing ranges,
-not confidence intervals. The paired speedup ratios span approximately **4.8–5.3×** for four-way and **10.1–13.9×**
-for sixteen-way parallelism.
+45 Elo are smaller than the overlapping match intervals, while match time fell from about **18.3 minutes** to
+**3.6** and **1.6 minutes**, respectively. Four-way and sixteen-way parallelism made those matches roughly five
+and eleven times faster.
 
 At only 100 searches, sixteen-way parallelism reduced the central strength estimate by 235 Elo. The available
 points suggest that a fixed parallel count becomes less costly as the total budget grows, but they are too sparse
@@ -83,7 +78,5 @@ under the same opponent and search setting. The 14-Elo central difference lies w
 held-out policy loss had nearly flattened. At 100,000 searches, the longer student reached
 **2,873 [2,819, 2,935]**, although only one opponent rung was run there.
 
-Both students trained on the same separate, frozen 20-million-row replay snapshot; they did not use the teacher
-checkpoint's 16-million-row live training window. Student evaluations used TorchScript, whereas the searched
-teacher used INT8 TensorRT, so these results describe a compact playable system rather than an architecture-only
-teacher/student comparison. Appendix B gives the W/D/L counts and the skipped-rung boundary.
+Both students trained on the same frozen 20-million-row replay snapshot. Appendix B gives the match counts and
+evaluation details.

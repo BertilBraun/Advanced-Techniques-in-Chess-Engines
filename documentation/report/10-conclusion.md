@@ -2,8 +2,7 @@
 
 In 2.5 days on one eight-GPU node, an AlphaZero-style chess system trained from random initialization produced a
 6.3-million-parameter model measuring **3,251 benchmark Elo at 100,000 searches per move** against a fixed-node
-Stockfish 13 ladder. Without search, the same selected model measured **1,658 benchmark Elo** under the policy-only
-protocol. Those values describe the project's benchmark, not FIDE ratings or matches against unrestricted engines.
+Stockfish 13 ladder. Without search, the same model measured **1,658 benchmark Elo**.
 
 The result belongs to the assembled learning loop: compact structured policy prediction, a shared convolutional
 network, progressive small-to-medium sizing, searched self-play with restart-state and replay selection, and an

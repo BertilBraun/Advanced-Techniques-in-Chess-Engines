@@ -17,6 +17,8 @@ two-channel WDL head with a 48-unit hidden layer. The training-only next-searche
 heads have loss weights 0.15 and 0.1. Primary policy and value losses each have weight 1.0. Terminal outcome
 targets are discounted by 0.998 per ply; the search-root-value blend rises from zero to 0.1 over its configured
 schedule, while search backup uses a separate 0.99 per-ply discount.
+At a capped game's final position, a searched scalar value `v` is converted to a soft WDL target with
+`r = 1 - |v|`: win, draw, and loss receive `max(v, 0) + r/3`, `r/3`, and `max(-v, 0) + r/3`, respectively.
 
 Each 500-step training quantum uses eight ranks processing 256 positions each, for a global batch of 2,048.
 Nesterov SGD uses momentum 0.9, weight decay 0.0001, and gradient clipping at norm 1.0. The learning rate warms
@@ -29,6 +31,13 @@ The 32 self-play actors run four per GPU, with 512 interleaved games per actor. 
 reduction 0.2, forced playout coefficient 1.5, and Dirichlet epsilon 0.25 with alpha 0.3. Restart-state
 selection retains a 30% uniform component. Eight materializers convert completed games into the fixed-layout
 memory-mapped replay store; training credit is committed only against durable admitted rows.
+Restart positions require at least 15 plies remaining in the source game, absolute root value at most 0.8, and
+two or three leading actions covering 85% of visit mass. The played branch is marked used, and reservations keep
+workers from claiming the same alternative concurrently. Replay's logical capacity grows through 0.6, 1.2, 2.0,
+2.8, 4, 6, 8, 12, 16, and 20 million rows.
+Restart selection is 30% uniform and otherwise weighted by the square root of value correction, defined as half
+the absolute difference between searched root value and raw network value. Age and capacity bounds remove old
+states, and the archive is local to each worker.
 
 The successor network trains on a captured replay snapshot for an average of 1.5 optimizer quanta per
 active-model quantum, with its own catch-up learning-rate clock. The configured match gate requires the successor
@@ -39,17 +48,12 @@ stage-specific ladder-plateau thresholds and window.
 
 The frozen local result record identifies these layers of provenance:
 
-- Git source revision and clean/dirty state;
-- resolved YAML and SHA-256;
-- dependency lock and hash;
-- operating image, Python, PyTorch, CUDA, cuDNN, driver, GPU, CPU, RAM, and disk facts;
-- Stockfish and KataGo versions and archive hashes where applicable;
-- evaluation dataset and opening-suite identities and hashes;
-- run manifest, approval record, coordinator logs, TensorBoard events, and resource telemetry;
-- replay schema, final capacity/occupancy, and reconciled volume counters;
-- selected training checkpoint and trimmed inference artifact hashes;
-- ONNX, TensorRT template/engine provenance, calibration positions, and fidelity reports;
-- raw terminal match records, aggregate reports, commands, and confidence-interval method;
+- Git revision and clean/dirty state, resolved YAML and SHA-256, and dependency-lock hash;
+- operating image, software and driver versions, GPU, CPU, RAM, disk, and engine versions and archive hashes;
+- evaluation dataset and opening-suite identities, hashes, raw matches, aggregates, commands, and interval method;
+- run manifest, approval, coordinator logs, TensorBoard events, and resource telemetry;
+- replay schema, capacity, occupancy, and reconciled volume counters;
+- checkpoint and inference hashes, ONNX and TensorRT provenance, calibration positions, and fidelity reports;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
 The published INT8 ONNX has SHA-256 `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` at

@@ -31,8 +31,8 @@ In a controlled 32-process self-play workload, the optimized path increased sear
 617,782 searches/s, a 20.5% gain, while reducing aggregate actor CPU consumption from 52.6 to 19.8 cores. Average
 inference batch size rose from 141 to 222 and the number of model calls fell by 24%. On the same node restricted to
 24 CPU cores, throughput increased from 215,265 to 496,036 searches/s because reducing submission overhead allowed
-the previously starved GPUs to remain busy. These figures are specific to the tested network and host, but they show
-why CPU efficiency can be decisive even in a nominally GPU-bound workload.
+the previously starved GPUs to remain busy. The host-side gain was largest when CPU capacity was limited, showing
+that GPU search can be starved by CPU work.
 
 Batch fill alone did not guarantee device saturation. With the TensorRT actor, reducing four processes per GPU to
 two lowered simulations/s by 39% even though both filled individual batches: concurrency overlapped CPU and GPU
@@ -110,16 +110,11 @@ stages.
 
 ## Where throughput becomes useful
 
-Faster simulations did not translate mechanically into training throughput. In a production-shaped 400-visit
-benchmark, a TensorRT INT8 actor executed 1.86 times as many simulations as a floating TorchScript control with
-the same architecture and configuration. Their weights differed, so this is a backend-and-checkpoint comparison,
-not an isolated precision effect. A separate live 400-visit stage admitted 23.3% more replay positions per second
-than a 600-visit stage. Visit budget, checkpoint, and actor scheduling differed between those stages; the 23.3%
-is not a measured downstream effect of the 1.86x benchmark. Faster actors may finish shorter games, checkpoint
-publication interrupts work, and replay credit appears only after complete-game materialization. In the live
-stage, admitted-position rate predicted optimizer cadence exactly.
+Faster simulations did not translate mechanically into training throughput. A production-shaped TensorRT INT8
+benchmark ran search 1.86 times faster than its floating TorchScript control. In a separate live stage, admitted
+replay positions arrived 23.3% faster at 400 visits than at 600. The two comparisons changed different things, so
+their speedups cannot be multiplied. Game length, publication pauses, and complete-game replay admission all stand
+between simulation rate and optimizer cadence. In the live stage, admitted-position rate predicted that cadence.
 
-This is why the systems measurements must ultimately be read through completed games, admitted replay, optimizer
-cadence, and learning curves. Their absolute rates depend on CPU quota, GPU power limits, PCIe and NUMA layout,
-runtime versions, model shape, batch fill, and concurrent training; the comparisons above describe their stated
-hardware and workloads.
+The relevant systems measure is therefore how quickly the loop produces completed games, admitted replay, and
+optimizer progress—not simulation rate alone. Appendix C records the local comparison boundaries.
