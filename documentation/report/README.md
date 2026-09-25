@@ -35,7 +35,7 @@ be interpreted as a result.
 | --- | --- | --- |
 | Problem, system, methods, and experiment history | Drafted from committed evidence | Chapters 1–6 and linked records |
 | Final recipe | Current, living recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) |
-| Exact run identity and terminal result | Pending archive and evaluation | [Chapter 7](07-final-run-results.md) |
+| Exact run identity and terminal result | Recorded; figures outstanding | [Chapter 7](07-final-run-results.md) |
 | External bibliography | Working list | [Bibliography](bibliography.md); entries marked “verify” need publication-pass checks |
 | Research-question and artifact coverage | Audited | [Coverage matrix](coverage-matrix.md) |
 | Final publication workflow | Planned | [Publication plan](publication-plan.md) |

@@ -3,7 +3,14 @@
 # Every other production configuration reaches its values through a chain of `extends`, which makes the
 # recipe that actually ran hard to read. This one inherits nothing: what is written here is what runs.
 #
-# It is V89 with its run identity renamed. The recipe is SGD at 0.1 with nesterov momentum, pre-fold INT8
+# It is V89 with its run identity renamed, plus the changes the post-mortem left standing: the AlphaZero
+# exploration schedule in self-play as well as evaluation, a 32/128 value head at every stage, and three
+# further auxiliary targets. The three-stage ladder is kept deliberately: V101 tested a fixed 19x176 from
+# scratch and lost, closing to thirteen Elo by hour seventeen then holding +1.0 Elo/h over hours 16-24
+# against V89's +5.5, finishing forty-one Elo behind. INT8 is kept: the one A/B that isolated it ran
+# almost entirely at 12x128, where it has least to offer, so its cost at 14x160 and above is unmeasured.
+#
+# The recipe is SGD at 0.2 with nesterov momentum, pre-fold INT8
 # quantization, replay reuse 4, and the three-stage model ladder gated on an Elo plateau. Evaluation
 # brackets three rungs so the ladder fit is constrained rather than extrapolated from one score, and
 # fidelity deviation warns instead of ending the run, which INT8 requires.
@@ -58,7 +65,7 @@ training:
       kind: linear
       start_generation: 0
       end_generation: 1000
-      start_value: 0.1
+      start_value: 0.2
       end_value: 0.01
       rounding: none
     warmup_optimizer_steps: 1000
@@ -210,7 +217,7 @@ training:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
-    minimum_free_disk_gib: 5.0
+    minimum_free_disk_gib: 1.0
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
   progressive_model_sizing:
@@ -221,8 +228,8 @@ training:
         policy_head:
           kind: chess_from_to_attention_v1
           key_size: 128
-        num_value_channels: 2
-        value_fc_size: 48
+        num_value_channels: 32
+        value_fc_size: 128
         kind: convolutional
         num_layers: 12
         hidden_size: 128
@@ -238,8 +245,8 @@ training:
         policy_head:
           kind: chess_from_to_attention_v1
           key_size: 128
-        num_value_channels: 2
-        value_fc_size: 48
+        num_value_channels: 32
+        value_fc_size: 128
         kind: convolutional
         num_layers: 14
         hidden_size: 160
@@ -255,8 +262,8 @@ training:
         policy_head:
           kind: chess_from_to_attention_v1
           key_size: 128
-        num_value_channels: 2
-        value_fc_size: 48
+        num_value_channels: 32
+        value_fc_size: 128
         kind: convolutional
         num_layers: 19
         hidden_size: 176
@@ -428,7 +435,7 @@ chess:
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
-      exploration_constant: 1.5
+      exploration_constant: auto
       first_play_urgency:
         kind: reduced_parent_value
         reduction: 0.2
@@ -534,3 +541,26 @@ chess:
     - kind: remaining_game_length
       loss_weight: 0.1
       normalization_scale: 400.0
+    # Three horizons rather than one: at two plies the search value has barely moved from the value
+    # target these are meant to complement. Together they weigh less than next_policy alone.
+    - kind: future_search_value
+      ply_offset: 2
+      smooth_l1_beta: 0.1
+      loss_weight: 0.03
+    - kind: future_search_value
+      ply_offset: 4
+      smooth_l1_beta: 0.1
+      loss_weight: 0.03
+    - kind: future_search_value
+      ply_offset: 8
+      smooth_l1_beta: 0.1
+      loss_weight: 0.03
+    - kind: irreversible_progress
+      horizon_plies: 20
+      loss_weight: 0.02
+    # How far the value head sat from its own tree, which the search already computes and discards.
+    # Measured over forty thousand replay positions the residual is structured rather than noise:
+    # 0.038 in decided positions, peaking at 0.169 where the search value sits mid-range.
+    - kind: value_residual
+      smooth_l1_beta: 0.05
+      loss_weight: 0.05

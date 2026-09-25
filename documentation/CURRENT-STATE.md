@@ -1,10 +1,14 @@
 # Current state
 
-As of **2026-09-21**. This file distinguishes verified artifacts from live or provisional claims.
+As of **2026-09-25**. This file distinguishes verified artifacts from live or provisional claims.
 
 ## Project status
 
-The final chess training lineage is active. Its effective recipe is written out in full in
+The final chess training lineage is finished. Its result is recorded in
+[`documentation/results/final-chess-run.md`](results/final-chess-run.md): checkpoint 1026, a 14x160 network of
+6,315,378 parameters, 3251 benchmark Elo at 100,000 searches, trained for $43.20. The programme closed after two
+follow-up runs returned negative results, V100 on the learning-rate floor and self-play label quality and V101 on
+model capacity. The living recipe is written out in full in
 [`py/configs/production/chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml), which is the
 living reproduction entry point. Operational continuations from V89 through V93 preserve the same run directory and
 checkpoint lineage while repairing deployment fidelity and progressive-promotion control. The completed publication
