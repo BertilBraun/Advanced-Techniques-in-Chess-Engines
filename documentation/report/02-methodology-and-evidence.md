@@ -39,9 +39,11 @@ between campaigns. The sensitivity is distinct from match-sampling uncertainty (
 Throughput has several distinct units: model evaluations, search simulations, completed games, materialized replay
 positions, optimizer steps, and strength gained per wall-clock hour. A gain at one stage may vanish at the next.
 Rate claims therefore specify the relevant batch size, concurrent games, GPU contention, search parallelism, and
-training overlap. For scale, an earlier 80,000-search evaluation on RTX 4070 SUPER averaged 5.31 seconds per
-position with 50 positions searched concurrently on each GPU. That is amortized batched throughput, not the clock
-time for one isolated move; the final 100,000-search evaluation did not record a comparable per-move timing.
+training overlap. For scale, an earlier TorchScript evaluation on RTX 4070 SUPER averaged 5.31 seconds per
+80,000-search position with 50 positions concurrent on each GPU. Later TensorRT INT8 tests improved saturated
+search throughput by 1.39--1.86 times, depending on model and workload. That makes roughly five seconds or less
+per 100,000-search position a plausible *batched-service* scale, not a measured single-move latency for the final
+model.
 
 Serving artifacts must be checked as chess models, not merely as files that load. The TensorRT refit investigation
 showed that successful export and refit calls could still yield incorrect legal-move probabilities. Fidelity checks
