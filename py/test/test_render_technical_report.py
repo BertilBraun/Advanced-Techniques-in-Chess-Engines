@@ -63,3 +63,16 @@ def test_appendix_table_has_caption_without_upscaling_type() -> None:
     assert r'\centering\normalsize' in output
     assert r'\setlength{\tabcolsep}{9pt}' in output
     assert r'\resizebox' not in output
+
+
+def test_main_result_table_has_caption() -> None:
+    output = table_tex(
+        [['Searches', 'Elo'], ['100,000', '3,251']],
+        source=Path('02-methodology-and-evidence.md'),
+        table_number=1,
+        appendix=False,
+    )
+    assert r'\begin{table*}[!t]' in output
+    assert r'\caption{Final checkpoint against fixed-node Stockfish 13}' in output
+    assert r'\label{tab:02-methodology-and-evidence-1}' in output
+    assert output.endswith('\\FloatBarrier\n')

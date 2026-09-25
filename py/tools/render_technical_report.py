@@ -109,7 +109,7 @@ SPECIAL_CHARACTERS = {
 CITATION = re.compile(r'(?<!\[)\[(1[0-2]|[1-9])\](?!\])')
 PLAIN_CAPTION = re.compile(r'^Figure\s+[0-9A-D.]+\s*(?:[.:—-])?\s*')
 TABLE_CAPTIONS = {
-    ('appendix-b-evaluation-tables.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
+    ('02-methodology-and-evidence.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
     ('appendix-c-supporting-comparisons.md', 1): 'Actor overlap and training supply',
     ('appendix-c-supporting-comparisons.md', 2): 'Parallel-search strength and wall time',
 }
@@ -240,9 +240,9 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
     environment = 'table' if appendix else 'table*'
     lines = [r'\begin{' + environment + '}[H]' if appendix else r'\begin{table*}[!t]']
     lines.append(r'\centering\normalsize' if appendix else r'\centering\small')
+    caption = TABLE_CAPTIONS[(source.name, table_number)]
+    lines.append(r'\caption{' + escape_tex(caption) + r'}\label{tab:' + source.stem + '-' + str(table_number) + '}')
     if appendix:
-        caption = TABLE_CAPTIONS[(source.name, table_number)]
-        lines.append(r'\caption{' + escape_tex(caption) + r'}\label{tab:' + source.stem + '-' + str(table_number) + '}')
         lines.append(r'\setlength{\tabcolsep}{9pt}')
         lines.append(r'\renewcommand{\arraystretch}{1.1}')
     lines.extend([r'\begin{tabular}{' + specification + '}', r'\toprule'])
@@ -252,6 +252,8 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
             lines.append(r'\midrule')
     lines.extend([r'\bottomrule', r'\end{tabular}'])
     lines.append(r'\end{' + environment + '}')
+    if not appendix:
+        lines.append(r'\FloatBarrier')
     return '\n'.join(lines) + '\n'
 
 

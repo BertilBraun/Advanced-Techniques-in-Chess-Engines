@@ -3,7 +3,7 @@
 After 2.5 days of final training, the selected 6.32-million-parameter chess model reached 3,251 benchmark Elo at
 100,000 searches per move in paired games against a fixed-node Stockfish 13 ladder. The results below trace its
 training progress, measure its strength across search budgets, and examine the parallel-search and distilled-student
-controls. Appendix B gives every terminal match row.
+controls. Table 1 gives every final-model match row.
 
 ## What was selected
 
@@ -80,6 +80,11 @@ axis keeps policy-only play visible alongside the searched conditions; it does n
 Policy-only uses the float export, while searched points use INT8 TensorRT. The parallel-search count also changes
 with budget, so this is a measured operating curve rather than an isolated node-budget experiment.
 
+For a time scale, an earlier TorchScript run averaged 5.31 seconds per 80,000-search position while batching 50
+positions on each RTX 4070 SUPER. Later TensorRT INT8 benchmarks improved saturated search throughput by
+1.39--1.86 times, depending on model and workload. Roughly five seconds or less per 100,000-search position is
+therefore a plausible batched-service estimate, not a measured latency for one isolated move by the final model.
+
 The observed policy-only-to-deepest operating-point difference is 1,593 benchmark Elo, with smaller increments at
 each later search budget. This is not an isolated search effect: the policy-only and searched artifacts differ, and
 parallelism changes across searched conditions. The bootstrap intervals quantify match sampling conditional on the
@@ -88,7 +93,7 @@ estimate is unusually well anchored: an independent 100,000-node opponent
 gives 3,247 Elo, only four points below the 200,000-node result. That local agreement supports the top headline, but
 does not validate extrapolation beyond the measured anchors.
 
-Appendix B reports the complete ten-row W/D/L matrix and match-bootstrap intervals.
+The ten final-model match rows appear in Table 1; Appendix B details their calibration and intervals.
 
 ## Two protocol effects that matter
 

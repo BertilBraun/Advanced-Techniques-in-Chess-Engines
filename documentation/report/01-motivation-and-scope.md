@@ -9,7 +9,7 @@ This study asks how strong that loop can become on a single eight-GPU node when 
 efficiency. Over **2.5 days** of training from random weights, using searched self-play rather than human-game
 training targets, the run produced a 6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
 and **3,251 benchmark Elo at 100,000 searches per move** against the project's fixed-node Stockfish 13 ladder.
-Chapter 8 and Appendix B give the match results and uncertainty intervals.
+Table 1 gives the match results; Chapter 8 follows the model's improvement across search budgets.
 
 The result depends on the whole learning loop. The network's representation affects both what it can learn and how
 quickly it can supply search. Native search, batched inference, and TensorRT make enough searched games available
@@ -33,6 +33,6 @@ A live chess demonstration is also available [12].
 
 ## Roadmap
 
-Chapter 2 explains how we judge evidence, and Chapter 3 introduces the system. The following chapters examine
+Chapter 2 presents the chess evaluation, and Chapter 3 introduces the system. The following chapters examine
 search, replay, network design, and the throughput needed to train them. Three failure studies lead into the final
 recipe and evaluation.

@@ -1,62 +1,41 @@
-# 2. How claims are measured
+# 2. Evaluating the chess system
 
-Faster inference does not necessarily produce faster learning: concurrent training can absorb saved search time.
-Likewise, lower policy loss on stored positions need not produce stronger play or better self-play data. We measure
-playing strength, learning progress, throughput, and numerical fidelity separately.
+The most direct test of the system is whether its final model wins games. We played it against Stockfish 13 at fixed
+search limits, starting from 50 openings and playing each once with each colour. The model played without search and
+at four progressively larger search budgets. For each budget, we tested two Stockfish limits rather than trusting a
+single opponent.
 
-## Playing strength
+## Final playing strength
 
-The terminal chess evaluation plays the selected checkpoint against Stockfish 13 at fixed node limits. Openings are
-paired: each starting position is played once from each colour. The protocol fixes the opening suite, opponent
-version and resources, candidate artifact, search budget, and parallelism; Appendix B reports the node limit,
-W/D/L count, score, and interval for each terminal match row.
+Table 1 gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
+The bold rating for each model budget comes from the opponent against which it scored closest to 50%, where the
+rating estimate needs the least extrapolation.
 
-The opponent nodes are assigned historical ratings from Marco Meloni's fixed-node Stockfish calibration [9]. At
-each model search budget, we use the tested opponent whose score is nearest 0.5, limiting extrapolation, and show
-both tested limits. The resulting **benchmark Elo** measures this fixed-node protocol, not FIDE or online strength.
-The two opponents' implied ratings disagree most at shallow model budgets; the matches do not isolate why.
-Bootstrap intervals cover match sampling, but not uncertainty in the calibration anchors.
+| Model searches | Parallel | Stockfish nodes | W/D/L | Score | Benchmark Elo (95% CI) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| Policy only | -- | 1,000 | 32/24/44 | 0.440 | **1,658 [1,608, 1,710]** |
+| Policy only | -- | 2,000 | 16/22/62 | 0.270 | 1,717 [1,638, 1,790] |
+| 100 | 1 | 5,000 | 51/28/21 | 0.650 | 2,328 [2,276, 2,384] |
+| 100 | 1 | 10,000 | 39/18/43 | 0.480 | **2,456 [2,400, 2,512]** |
+| 1,000 | 1 | 20,000 | 47/40/13 | 0.670 | 2,823 [2,774, 2,873] |
+| 1,000 | 1 | 50,000 | 21/48/31 | 0.450 | **2,925 [2,875, 2,977]** |
+| 10,000 | 4 | 50,000 | 45/40/15 | 0.650 | 3,068 [3,023, 3,120] |
+| 10,000 | 4 | 100,000 | 30/44/26 | 0.520 | **3,114 [3,065, 3,163]** |
+| 100,000 | 16 | 100,000 | 51/38/11 | 0.700 | 3,247 [3,192, 3,305] |
+| 100,000 | 16 | 200,000 | 25/56/19 | 0.530 | **3,251 [3,206, 3,297]** |
 
-The policy-only row selects legal moves from a float TorchScript export; searched rows use the INT8 TensorRT
-deployment artifact. Search parallelism also changes along the deep-search curve. Its points describe the achieved
-settings rather than a fixed-parallelism scaling law.
+At the deepest budget, the model scored 3,251 benchmark Elo against the harder opponent and 3,247 against the other:
+the two measurements agree closely. The ratings use a published calibration of Stockfish's fixed node limits [9].
+They describe strength on this chess benchmark, not a rating from human tournaments. Chapter 8 examines how
+strength changes with search; Appendix B gives the rating calculation and interval method.
 
-## Learning and comparison
+## Reading the component experiments
 
-To compare online learning interventions, we measure playing strength over time while matching initial weights,
-replay contents, evaluation, and hardware workload as closely as the experiment permits. Independent from-scratch
-trajectories can vary more than a small proposed effect; the decisive adaptive-search comparisons therefore started
-from the same model and replay state. Frozen-replay fits screen optimizers, policy heads, and quantization schemes,
-but cannot establish online self-play strength by themselves.
+The rest of the paper asks why the system reached that result. A faster inference engine can supply more search,
+but that only helps training if the system finishes more games and admits useful positions to replay. A lower loss
+on stored positions can indicate a better fit, but the real test is whether the next model plays better. We follow
+each proposed improvement as far through this chain as the experiment measured.
 
-The cross-campaign 64-search plot shows how the campaigns progressed, but its endpoints use different ladder
-estimators. For a numerical comparison, we instead use three shared rungs. That retrospective comparison gives an
-approximately 74-Elo plateau difference, with an approximately ±15-Elo sensitivity to transferring the estimator
-between campaigns. The sensitivity is distinct from match-sampling uncertainty (Appendix B).
-
-## Throughput and target fidelity
-
-Throughput has several distinct units: model evaluations, search simulations, completed games, materialized replay
-positions, optimizer steps, and strength gained per wall-clock hour. A gain at one stage may vanish at the next.
-Rate claims therefore specify the relevant batch size, concurrent games, GPU contention, search parallelism, and
-training overlap. For scale, an earlier TorchScript evaluation on RTX 4070 SUPER averaged 5.31 seconds per
-80,000-search position with 50 positions concurrent on each GPU. Later TensorRT INT8 tests improved saturated
-search throughput by 1.39--1.86 times, depending on model and workload. That makes roughly five seconds or less
-per 100,000-search position a plausible *batched-service* scale, not a measured single-move latency for the final
-model.
-
-Serving artifacts must be checked as chess models, not merely as files that load. The TensorRT refit investigation
-showed that successful export and refit calls could still yield incorrect legal-move probabilities. Fidelity checks
-therefore compare outputs on real encoded positions, including legal-action masking, policy agreement and
-Kullback–Leibler divergence, and value error. A float checkpoint's match cannot substitute for a match by the INT8
-artifact intended for deployment.
-
-## Provenance and limits
-
-Reproducing the reported run requires its source revision, resolved configuration, selected checkpoint and
-deployment artifacts, evaluation assets, and archived results. The living final configuration [10] describes the
-recipe but may change; Appendix D identifies the public artifacts and locally archived evidence.
-
-Many recipe choices changed together. We attribute an isolated effect only where a comparison supports one;
-otherwise the result belongs to the assembled system. Historical policy-head comparisons without preserved results
-and qualitative recollections are identified as such where they arise.
+For online comparisons, we matched starting weights, replay, evaluation, and hardware where possible. Smaller
+frozen-data tests helped screen ideas before expensive self-play runs. Because the final recipe combines many
+changes, we attribute a separate strength gain to a component only when a comparison actually measured one.
