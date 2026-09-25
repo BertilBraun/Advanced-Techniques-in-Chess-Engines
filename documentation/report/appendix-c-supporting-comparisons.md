@@ -1,7 +1,7 @@
 # Appendix C. Supporting search and systems comparisons
 
-The compact controls below preserve denominators that are easy to lose when comparing local speedups. They are
-measured operating points, not an additive attribution of the final model's Elo.
+These controls make the denominators behind the local speedups explicit. They describe measured operating points,
+not additive contributions to the final model's Elo.
 
 ## Actor overlap and training supply
 
@@ -15,8 +15,8 @@ wait; it is not the trainer-only duration.
 | 16 | 17,139 | 606,000 | 112.9 |
 | 32 | 9,210 | 742,000 | 111.2 |
 
-With no actors active, trainer throughput was 25,275 samples/s, but that excludes a concurrent self-play supply and
-is therefore not a complete-quantum comparison. Half-active operation was retained near the measured tradeoff.
+With no actors active, trainer throughput was 25,275 samples/s, but no new self-play games arrived during training.
+Half-active operation was retained near the measured tradeoff.
 The optimal fraction can change with visit budget, model size, and hardware contention.
 
 ## Parallel-search operating point

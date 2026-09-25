@@ -2,10 +2,9 @@
 
 ## Runtime boundary
 
-The implementation matters to the research question because the learner needs enough searched games and fresh
-positions within the reported 2.5-day run. Figure 1 follows that loop from model publication through self-play,
-replay, training, and evaluation. This chapter describes the interfaces that determine its throughput and targets;
-Chapter 5 examines their measured costs.
+Within 2.5 days, the learner needs a steady supply of searched games and fresh positions. Figure 1 follows that
+flow from model publication through self-play, replay, training, and evaluation. Chapter 5 measures the cost of its
+main interfaces.
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
@@ -15,8 +14,8 @@ diagram shows ownership and data flow, not the number or scheduling of every wor
 
 Native C++ owns game state, legal actions, encodings, tree search, self-play, and batched inference. Python
 coordinates validated configuration, workers, replay, distributed training, model publication, and evaluation.
-There is no second production rules or search implementation in Python. Tests enforce the cross-language action
-mapping, tensor shapes, feature planes, symmetry, and output order.
+Tests enforce the action mapping, tensor shapes, feature planes, symmetry, and output order across the native and
+Python boundary.
 
 ## Chess representation and outputs
 
@@ -39,8 +38,8 @@ move. Chapter 4 explains why the tested adaptive alternatives were not retained.
 
 Thousands of games are interleaved to fill GPU batches. Native workers retain their trees; one inference worker
 per process submits batches to TensorRT. Parallel simulations improve batch fill but can select leaves using stale
-search information. Concurrent games can raise aggregate throughput while lengthening an individual game. The
-chosen search and topology therefore form one operating point, not independent speed knobs.
+search information. Concurrent games can raise aggregate throughput while lengthening an individual game. Search
+parallelism and worker topology must therefore be tuned together.
 
 Starting positions mix shallow random legal openings with archived restart states. Restart candidates favor
 uncertain, consequential positions rather than uniformly sampling history. The random-opening share preserves games
@@ -68,8 +67,8 @@ the measured effects of these data choices from the integrated recipe.
 Eight persistent NCCL trainer ranks, one per GPU, use a global batch of 2,048 in bfloat16. Training runs in
 500-step optimizer blocks while some self-play workers remain active. Each training-and-publication cycle is called
 a *generation*; a *checkpoint* is its durable model artifact. Because training and self-play overlap, fewer search
-simulations do not necessarily shorten wall-clock training. This distinction is central to the adaptive-stopping
-result in Chapter 4.
+simulations may leave wall-clock training unchanged. This becomes decisive in the adaptive-stopping experiment in
+Chapter 4.
 
 The primary objective combines policy cross-entropy with WDL/value loss. Outcome value is discounted by ply, and a
 small scheduled blend of search-root value is introduced later. Two training-only targets—the next position's
@@ -95,8 +94,8 @@ The run records the engine binaries, datasets, opening books, and their hashes a
 
 The training ladder brackets the candidate against nearby Stockfish node limits instead of extrapolating from one
 opponent. Paired openings reverse colors, and reports retain W/D/L and search identity. Batch shape can alter
-serving behavior, so it is part of the evaluation protocol. Frequent ladders provide a noisy progress signal; the
-terminal paired matches in Appendix B support the final strength estimate.
+serving behavior, so it is part of the evaluation protocol. Frequent ladders show progress; the larger terminal
+paired matches in Appendix B establish the final strength estimate.
 
 Completed trajectories, replay state, checkpoints, and evaluation evidence are committed before they are credited
-or reported. Appendix D states which artifacts are public and which remain in the local archive.
+or reported. Appendix D lists the public and archived artifacts.

@@ -1,16 +1,14 @@
 # 4.3. Choosing what the network predicts
 
-A network that fits self-play targets well but evaluates too slowly leaves the search without enough games to learn
-from. The retained design therefore joins two requirements: useful chess representations and inexpensive leaf
-evaluation. Policy geometry, global context, auxiliary targets, quantization, and model size each affected that
-balance. The evidence below distinguishes controlled component tests from the strength of the assembled system.
+A network that fits self-play targets but evaluates too slowly leaves search without enough games to learn from.
+Policy geometry, global context, auxiliary targets, quantization, and model size were therefore judged against both
+learning and inference cost.
 
 The model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks, repetition,
 the eight most recent moves, material counts, and the fifty-move counter. File reflection is the only augmentation;
 it also mirrors action targets and exchanges kingside and queenside castling planes. Rule-sensitive planes prevent
-positions with different legal or draw states from becoming indistinguishable. Their individual strength effects
-were not ablated. Some component comparisons used an older 29-plane input, so their absolute scores are not
-input-matched to the final model.
+positions with different legal or draw states from becoming indistinguishable. Some component comparisons used an
+older 29-plane input, so their absolute scores are not input-matched to the final model.
 
 ## Three policy representations
 
@@ -39,7 +37,7 @@ supervised comparison, the repaired plane head reached 2.1828 held-out policy cr
 steps versus 2.0824 for the dense control, while its curve was still improving faster. Neither convergence nor a
 clean online strength comparison was established. An online plane-head trial was also retired after slower learning
 and weaker play, but its result artifact and exact representation have not been recovered. The plane approach is
-technically viable; its relative playing strength remains unquantified.
+technically viable, but its relative playing strength remains unquantified.
 
 The retained **from-to head** preserves square structure without predicting a mostly empty plane tensor. It projects the
 64 trunk squares into query and key vectors, scores all origin-destination pairs, and gathers the canonical actions
@@ -50,16 +48,14 @@ canonical castling encoding remain ordinary square pairs. On the controlled conv
 Holding that trunk fixed, the from-to head improved the held-out policy gap by 0.0298 nats (paired 95% interval
 0.0285--0.0311). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
 the missing fourth cell prevents a full factorial conclusion. The head cost approximately 1.9% of batch-512
-forward throughput and 9% at batch 64. This is the strongest head-specific evidence in the project, though it is a
-short, single-seed teacher-data comparison, not an isolated self-play Elo ablation. We therefore report the policy
-fit improvement without converting it into a playing-strength estimate.
+forward throughput and 9% at batch 64. This short, single-seed teacher-data comparison establishes better policy
+fit, not an isolated self-play Elo gain.
 
 ## Convolution, attention, and global context
 
-The retained convolutional residual tower is shared by policy, value, and training-only heads. The project did not
-test separate policy and value trunks. On the smallest networks, an oversized dense policy head and a second
-policy-shaped auxiliary consumed a large fraction of the parameters; that was a head-capacity problem, not a
-trunk-sharing experiment.
+The convolutional residual tower is shared by policy, value, and training-only heads. On the smallest networks, an
+oversized dense policy head and a second policy-shaped auxiliary consumed a large fraction of the parameters. The
+project did not test separate trunks.
 
 Pure attention trunks used 64 square tokens, learned row and column embeddings, pre-normalized self-attention, and
 GELU feed-forward blocks. No-bias, relative-offset, and input-dependent Smolgen-style attention biases were
@@ -156,11 +152,10 @@ matches against the active model. The former loss-based gate promoted a candidat
 because extra catch-up updates made its training loss incomparable. The failure study in Chapter 6 explains that
 correction; Chapter 7 states the retained thresholds and promotion gate.
 
-The larger stage remains unresolved. An independently initialized candidate needed substantial catch-up. Explicit
-function-preserving growth avoided relearning the medium model's function, but may also bias optimization toward its
-existing representation; that possible capacity cost was not measured. The limited grown-model continuation reached
-parity without a clear strength gain, so the reported model remains medium-sized. A matched-compute comparison of
-independent catch-up and growth would be needed to choose between them.
+An independently initialized larger candidate needed substantial catch-up. Function-preserving growth avoided
+relearning the medium model's function, but might also bias optimization toward its existing representation. The
+limited grown-model continuation reached parity without a clear strength gain. The reported model therefore remains
+medium-sized; choosing between catch-up and growth needs a matched-compute comparison.
 
 ## Distillation and compact models
 
@@ -189,10 +184,9 @@ nearly flat. Tripling passes over this fixed buffer therefore produced no measur
 student reached 2,873 conditional Elo at 100,000 searches, but the point is unbracketed and is not a calibrated
 deep-search headline.
 
-Together, the studies show that a small student can preserve substantial behavior and make a practical published
-artifact, but not that model size can be exchanged mechanically for more search. Realized search multipliers were
-far below parameter or arithmetic ratios, and the teacher advantage often grew with search depth. Distillation is a
-compression result, not a stage of the primary self-play algorithm.
+These studies produced a practical compact artifact, but model size did not exchange mechanically for more search.
+Realized search multipliers were far below parameter or arithmetic ratios, and the teacher advantage often grew
+with search depth. Distillation was separate from the primary self-play training run.
 
 ## Decision
 
@@ -200,5 +194,5 @@ The retained network combines the rule-complete 52-plane input, a shared convolu
 context, the from-to policy head, a compact WDL head, and training-only next-policy and remaining-length objectives.
 Scaled post-activation blocks make the trunk compatible with quantization-aware deployment. Progressive sizing
 successfully exploited a small model before handing off to the medium model, while the value of the larger stage
-remains unresolved. This is one integrated design supported by component tests of different strength; the report
-does not assign isolated Elo gains where only proxy, throughput, or assembled-system evidence exists.
+remains unresolved. Component tests support parts of this design, while final playing strength belongs to the
+assembled system.

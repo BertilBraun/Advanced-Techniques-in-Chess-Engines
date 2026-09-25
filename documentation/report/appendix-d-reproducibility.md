@@ -2,13 +2,13 @@
 
 ## Two reproducibility targets
 
-The project maintains two distinct reproducibility targets:
+Reproducing the current system and reproducing the reported result require different starting points:
 
 1. **Recipe reproduction:** use the current fully expanded `chess-final-config.yaml` as the supported entry point.
 2. **Result reproduction:** use the frozen source revision, resolved config hash, manifest, checkpoints, engines,
    datasets, and archive recorded for the final result.
 
-The first may evolve; the second must not.
+The recipe may evolve; the reported result remains fixed.
 
 ## Result identity and provenance
 
@@ -27,8 +27,7 @@ The frozen local result record identifies these layers of provenance:
 - raw terminal match records, aggregate reports, commands, and confidence-interval method;
 - one digest covering the fetched archive or a checksummed artifact manifest.
 
-Chapter 8 and Appendix B summarize model identity and evaluation values, not the full provenance hash set. The
-published INT8 ONNX has SHA-256 `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` at
+The published INT8 ONNX has SHA-256 `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` at
 the immutable model-repository revision `dc8fccccb67ab5ec9e36267a165a9700b7dbf55f` [11]. The source release's
 evidence index [10] records additional artifact hashes. The frozen training-source revision, resolved configuration,
 large run archives, and some exact evaluation inputs remain in the local result archive. The public recipe and model
@@ -41,8 +40,6 @@ Local setup and validation begin in the public source-code release [10]. Product
 `deployment/setup_remote.sh`, which installs locked dependencies, builds the
 Release extension, installs pinned evaluation engines, and runs engine smokes. Run lifecycle operations go through
 `deployment/run_control.sh`.
-
-Operational commands are versioned with the source release; they are not part of the scientific match protocol.
 
 Original project code and documentation, including this report, are available under the MIT License in the
 source release [10]. The published final model artifacts carry the same license in the model repository [11]. External dependencies,

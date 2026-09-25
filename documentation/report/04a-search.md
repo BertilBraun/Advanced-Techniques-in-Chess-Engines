@@ -7,17 +7,15 @@ also create a weaker policy target or leave the accelerator underfilled. None of
 improved the end-to-end learning loop, and exact graph or cache reuse did not repay its overhead. The retained
 answer is a staged, fixed visit cap for every recorded move.
 
-That conclusion depends on what is measured. Fixed-network playing strength tests the moves chosen by search;
-target fidelity compares a shallow visit distribution with a deeper reference; online learning measures the next
-network; and throughput measures work completed per unit time. An improvement on one axis did not necessarily
-transfer to another. Chapter 2 defines the measurement conventions.
+The experiments probe different outcomes: the strength of moves chosen by a frozen network, the agreement of
+shallow and deep search targets, the strength of the next trained network, and throughput. Gains on one measure did
+not always transfer to the others.
 
 ![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
 
-Figure 2: Each rejected idea met a different constraint. Fast/full search damaged target coverage and endgame
-semantics; predicted allocation improved its fidelity proxy but lost online strength; in-search stopping saved mostly
-non-critical-path work; and exact graph or cache reuse failed to repay overhead. These are results under the measured
-chess workload, not universal impossibility claims.
+Figure 2: Fast/full search damaged target coverage and endgame semantics; predicted allocation improved target
+fidelity but lost online strength; in-search stopping saved mostly non-critical-path work; and exact graph or cache
+reuse failed to repay overhead in this workload.
 
 ## The fixed-budget baseline
 
@@ -33,10 +31,9 @@ single increment. Search was still changing its policy target too: at 600 visits
 the same best move as the network's own 10,000-visit reference. These frozen-network measurements establish the
 value of search depth, not an optimal training schedule.
 
-The retained schedule therefore increased the cap in auditable stages—300, 400, 500, 600, and finally 800
-visits—rather than presenting those boundaries as independently optimized discoveries. Even this count needs care:
-a retained root can begin a move with existing statistics, so a nominal visit cap is not always the amount of new
-work performed.
+The cap increased in stages—300, 400, 500, 600, and finally 800 visits. These boundaries were not each optimized
+independently. A retained root may start a move with existing statistics, so its nominal visit cap can exceed the
+new work performed.
 
 ## Why fast and full searches did not transfer
 
@@ -66,9 +63,8 @@ full search at the cut position replaced the heuristic bootstrap; later, removin
 endgame positions. Because multiple changes accompanied the observed recovery, the record does not isolate either
 repair as its sole cause (Chapter 6).
 
-The retained design keeps KataGo's useful distinction between search cost and target eligibility, but searches
-every recorded move to the scheduled cap. This is a systems-and-target-semantics decision, not a matched-compute
-Elo proof that all-full search always wins; no such long-run ablation was preserved.
+The retained design searches every recorded move to the scheduled cap. The decision follows from target coverage
+and throughput under this workload; a long-run matched-compute strength comparison was not preserved.
 
 ## Three attempts to allocate search adaptively
 
@@ -82,8 +78,7 @@ The apparent saving was therefore an oracle-like opportunity estimate, not an ob
 A wider offline study found a deeper problem. The marginal value of search was not monotone in visit concentration:
 very diffuse and already-decided positions gained little, while moderately concentrated but contested positions
 gained most. Simple concentration thresholds tended to stop in the very region where more search was useful. The
-rule-based approach was audited and declined before an online strength match; it should not be described as an
-implemented algorithm that lost Elo.
+rule-based approach was therefore declined before an online strength match.
 
 The next allocator replaced the rule with a learned prediction, related in aim but not identical to
 dynamic simulation stopping [3]. An auxiliary head estimated, for several candidate
@@ -112,10 +107,9 @@ The paired strength differences, calculated as baseline minus stopper, were +1.7
 gain was worth only about one Elo over three hours,
 below the experiment's resolution.
 
-The failures have different boundaries: the threshold rule lacked an identifiable safe signal; the predicted
-allocator improved policy fidelity but not learning; and the in-search stopper removed mostly off-critical-path
-work. A non-overlapped or inference-bound learner could change the last result. None establishes that adaptive
-search is universally ineffective.
+The three approaches failed for different reasons. The threshold rule lacked an identifiable safe signal; the
+predicted allocator improved policy fidelity but not learning; and the in-search stopper removed mostly
+off-critical-path work. In a non-overlapped or inference-bound learner, that last tradeoff may change.
 
 ## Parallel leaves: buying latency with search quality
 
@@ -138,7 +132,7 @@ eventually visit more of the temporarily suboptimal leaves selected from stale s
 parallelism combinations were measured, and the terminal strength curve itself uses different parallel counts at
 different depths. It is not a pure scaling curve from which a universal safe-parallelism law can be inferred.
 
-The retained design consequently uses bounded parallelism as a serving parameter, not a free algorithmic speedup.
+The retained design uses bounded parallelism as a serving parameter rather than a free algorithmic speedup.
 The right setting depends on available independent roots, batch capacity, total search depth, latency requirements,
 CPU load, and memory. Older results from the fast/full batching tail do not directly prescribe the topology of the
 final all-full workload.
@@ -162,9 +156,8 @@ At ordinary budgets, verified links were absent or negligible. After the first-l
 0.1769% of neural evaluations were avoided at 1,000 and 10,000 searches, while the graph was 8.63% and 8.28% slower.
 At 30,000 and 60,000 searches, table hits rose to 2.37% and 3.46%, but avoided evaluations remained approximately
 0.0001% and 0.0348%; throughput was still 7.06% and 5.76% lower. Structural counters confirmed that shared
-descendants and statistics were active. A final strength match was unnecessary to answer the deployment question:
-exact reuse was orders of magnitude too sparse to repay the bookkeeping cost. This is an implementation and
-throughput rejection, not evidence that graph search is universally ineffective.
+descendants and statistics were active. Exact reuse was orders of magnitude too sparse to repay the bookkeeping
+cost in this implementation, so it was not taken to a final strength match.
 
 ## Why inference caching found little to reuse
 
@@ -185,8 +178,8 @@ raised the rate only to roughly 4%. The tracker itself cost about 3.65% throughp
 cache would additionally pay for output storage, synchronization, eviction, and device transfers while retaining
 fewer entries.
 
-The wider design was declined before implementation; it was an opportunity audit, not a production cache benchmark.
-Together with the implemented per-process cache, it bounds the likely benefit under this workload.
+The wider design was declined before implementation. Together with the implemented per-process cache, its
+opportunity audit showed little reuse available under this workload.
 
 ## The retained search design
 
@@ -196,12 +189,10 @@ of visits that should not become policy supervision, batched native inference, a
 tree retention with 60% of visits carried across a played move. Every recorded move receives the current staged
 visit cap. The current settings are summarized in Chapter 7 and defined by the public configuration [10].
 
-Those ingredients do not form an additive ablation table. Search depth has direct strength and target-fidelity
-evidence. Evaluation and self-play clearly need consistent first-play-urgency semantics. Parallel leaves have a
-measured, workload-dependent quality/latency tradeoff. Root retention, forced playouts, noise, discount, and the
-exact PUCT constants are retained parts of a coherent AlphaZero-style recipe, but most lack isolated final-workload
-strength estimates.
+Search depth has direct strength and target-fidelity evidence, while parallel leaves have a measured
+quality/latency tradeoff. Root retention, forced playouts, noise, discount, and the PUCT constants form the retained
+AlphaZero-style recipe, though most lack isolated final-workload strength estimates. Evaluation and self-play use
+consistent first-play-urgency semantics.
 
-Under the measured chess workload, fixed visits made target provenance and search expenditure explicit while the
-tested alternatives failed to show a better learning return. A repetitive analysis service or a non-overlapped
-learner could change the economics, but that possibility does not substitute for a measured improvement here.
+Fixed visits kept target provenance and search expenditure clear, while the tested alternatives failed to improve
+learning under this chess workload. Repetitive analysis or a non-overlapped learner could change the economics.

@@ -1,8 +1,7 @@
 # 6. Three failures that changed the method
 
-Three plausible shortcuts failed at different boundaries: which positions entered replay, whether an inference
-engine represented its source model, and whether a larger candidate was ready to replace the active model. Their
-causal sequence matters because the apparent success signal in each case measured the wrong thing.
+Three plausible shortcuts failed at different boundaries: replay admission, inference-artifact fidelity, and model
+promotion. In each case, a convenient success signal measured something other than the behavior the system needed.
 
 ## Late-game target poisoning
 

@@ -1,17 +1,14 @@
 # 4.2. Getting more learning from each game
 
-More games help only if they add positions with interpretable targets. The retained chess curriculum diversifies
-starts, stores searched positions in a growing replay window, samples policy-surprising rows more often, and funds
-four training presentations per admitted row. It also distinguishes a resolved outcome from a game stopped at the
-ply cap. The clearest direct target comparison favored a search-root bootstrap over a material heuristic at that
-cap; most other curriculum choices were retained together and have no isolated Elo estimate. That distinction
-between measured target quality and an integrated recipe governs this chapter.
+More games help only if they add positions with interpretable targets. The chess curriculum diversifies starts,
+stores searched positions in a growing replay window, samples policy-surprising rows more often, and funds four
+training presentations per admitted row. It also treats a resolved outcome differently from a game stopped at the
+ply cap, where a searched value proved a better target than the tested material heuristic.
 
-The project separated four operations that are easy to confuse. *Generation* chooses the trajectories to
-search. *Admission* turns eligible observations into durable rows. *Selection* chooses rows for a batch. *Weighting*
-changes their contribution after selection. A fifth mechanism, presentation credit, governs when training may
-advance. This vocabulary matters because a technique that prioritizes future games is not the same as prioritized
-replay, and drawing a row more often is not the same as increasing its loss weight.
+The curriculum acts at several points in the data flow. *Generation* chooses trajectories to search; *admission*
+turns eligible observations into durable rows; *selection* chooses batch rows; and *weighting* changes their
+contribution to the loss. Presentation credit separately governs when training may advance. Restart priority acts
+on future games, while policy surprise acts on stored rows.
 
 ![Generation, admission, selection, weighting, and presentation credit as distinct replay decisions](figures/replay-decision-path.svg)
 
@@ -44,9 +41,9 @@ funds more optimizer work from the same generated data; lower reuse exposes each
 the actors can supply them. Short controls at ratios four, 6.25, and eight remained matched at their shared
 evaluation boundaries despite different update rates, but all ended within roughly 90 minutes and their full raw
 curves are not preserved in the benchmark archive. The completed campaign also changed replay capacity, optimizer,
-objective weighting, and inference alongside reuse. Ratio four is consequently a deliberate freshness bias, not a
-measured standalone explanation for final strength. Both configured reuse and effective presentations per distinct
-admitted row are needed to describe what the learner actually saw.
+objective weighting, and inference alongside reuse. Ratio four thus favors freshness, although its isolated effect
+on final strength is unknown. Effective presentations per distinct admitted row describe exposure more fully than
+the configured ratio alone.
 
 ## Choosing information without inventing it
 
@@ -57,11 +54,9 @@ signal, capped at 2.0, while 30% remain uniform. The cap limits domination by ex
 component preserves broad coverage. The same row may reappear across optimizer steps, but sampling is without
 replacement within one global batch.
 
-This is prioritization, not an unbiased estimate of the uniform-replay objective. The implementation deliberately
-does not apply inverse-probability correction, so the optimizer learns from the prioritized distribution. Surprise
-can also reflect search noise, target age, phase of play, or the number of legal moves—not only genuine difficulty.
-The sampler is part of the successful retained bundle, but there is no isolated online ablation for its 70/30 mix or
-cap.
+There is no inverse-probability correction: the optimizer learns from the prioritized distribution. Surprise may
+reflect search noise, target age, phase of play, or the number of legal moves as well as genuine difficulty. The
+70/30 mix and cap have no isolated online strength estimate.
 
 Loss weighting is separate. Each row has a positive sample weight which, after batch-mean normalization, multiplies
 the primary and eligible auxiliary losses. Rows in the selected recipe use weight 1.0. Earlier replay could
@@ -95,15 +90,13 @@ the archive here uses observed search disagreement and untried branches, not a t
 Selection from this archive gives 30% probability to uniform choice. The remaining reservations favor the square
 root of *value correction*: half the absolute difference between the searched root value and the raw network value.
 The square root softens the priority so one extreme correction cannot dominate. Age and capacity bounds remove old
-states, reservations prevent duplicate claims within a worker, and exhausted positions leave the archive. This is
-the project's practical difficult-state curriculum, but “difficult” is an interpretation of disagreement, not a
-ground-truth label. The mechanism does not train a regret network, and archives are local to workers rather than
-globally deduplicated.
+states, reservations prevent duplicate claims within a worker, and exhausted positions leave the archive. Here,
+“difficult” means that search substantially corrected the network, not that difficulty was independently labeled.
+Archives are local to workers rather than globally deduplicated.
 
-Restart priority and replay surprise are related only in motivation. One changes which future trajectories are
-generated; the other changes which already stored rows are selected for optimization. Their individual Elo effects,
-the 50% start mixture, and the exact filters were not isolated. They should be presented as a coherent curriculum
-design grounded in branch coverage rather than as independent measured gains.
+Restart priority generates new trajectories; replay surprise revisits stored positions. Neither individual Elo
+effect, nor that of the start mixture and filters, was isolated. Together they broaden branch coverage and return
+the learner to positions where search changed its prior.
 
 ## Ending games without corrupting their labels
 
@@ -151,15 +144,12 @@ Future-dependent auxiliary targets require equally explicit eligibility. The ret
 sparse visit distribution from the following searched observation; it is unavailable if that observation does not
 exist. Remaining game length is known only when the game reaches a natural result or valid resignation, so every row
 from a cut game marks that target ineligible. The objective masks and renormalizes auxiliary losses over eligible
-rows rather than treating missing labels as zeros. Overfit tests established that the supplied multi-head targets
-were learnable, while replay audits established that censoring and offsets were wired correctly. Neither establishes
-an independent playing-strength gain.
+rows rather than treating missing labels as zeros. Overfit tests showed that the multi-head targets were learnable,
+and replay audits checked censoring and offsets; their independent playing-strength contribution remains unmeasured.
 
-Broader auxiliary bundles were removed during a period with several simultaneous training problems. That was a
-precautionary simplification, not a controlled negative ablation. Retaining next-policy and remaining length later
-does not prove that either head helped, just as removing the others does not prove that they harmed. The firm result
-is semantic: labels derived from the future must be materialized from complete trajectories and masked when the
-future is unknown.
+Broader auxiliary bundles were set aside while diagnosing several simultaneous training problems, not because a
+controlled ablation found them harmful. Future-derived labels must come from complete trajectories and be masked
+whenever the future is unknown.
 
 ## Fresh targets versus fresh positions
 
@@ -195,9 +185,8 @@ unit row weights, shallow random openings, branch-reserved restart states, calib
 cut-position bootstraps, explicit target eligibility, coordinated publication, and partial actor/trainer overlap.
 Most of these choices coexist in one successful system and do not have one-variable online Elo estimates.
 
-The strongest direct comparison favors a searched value over the tested material heuristic at a cut position. The
-strongest incident evidence is the late-game poisoning chain. The clearest systems lesson is that more presentations
-are not necessarily more information: replay reuse, target freshness, state diversity, and schedule pace move
-together. The retained design spends compute on a broad, inspectable stream of searched positions and preserves the
-meaning of every admitted target. It should be understood as an integrated curriculum, not a collection of additive
-strength bonuses.
+The cut-position comparison favors a searched value over the tested material heuristic, while the late-game
+poisoning incident shows what happens when target eligibility and value provenance are mishandled together. More
+presentations do not necessarily mean more information: reuse, freshness, diversity, and schedule pace move
+together. The resulting curriculum preserves a broad stream of searched positions and the meaning of each admitted
+target.

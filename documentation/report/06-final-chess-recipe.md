@@ -2,17 +2,13 @@
 
 ## Living recipe and frozen result
 
-The readable entry point for reproducing or extending the system is the fully expanded
-`chess-final-config.yaml` [10]. It owns the current network ladder,
-trainer, replay, self-play, deployment, and online-evaluation settings without an inheritance chain. It is a living
-recipe: future project work may revise it.
+The fully expanded `chess-final-config.yaml` [10] is the entry point for reproducing or extending the chess system.
+It brings the network ladder, trainer, replay, self-play, deployment, and online-evaluation settings into one recipe.
+The file may evolve with the project; the experiment reported here is tied instead to the selected checkpoint and
+frozen result record described in Chapter 8 and Appendices B and D.
 
-The reported experiment is immutable. Chapter 8 and Appendices B and D identify the selected checkpoint, evaluation
-rows, and provenance boundary. These frozen facts—not a future state of the editable YAML—are the authority for
-published numbers.
-
-The reported node had eight NVIDIA GeForce RTX 4070 SUPER GPUs and 80 logical CPUs. Hardware-sensitive throughput
-comparisons in this paper refer to their stated workloads on this class of node, not a portable rate guarantee.
+Training used a node with eight NVIDIA GeForce RTX 4070 SUPER GPUs and 80 logical CPUs. The throughput results in
+Chapter 5 were measured on stated workloads on this class of node.
 
 ## Model, objective, and optimization
 
@@ -45,9 +41,9 @@ The fixed search budget grows from 300 to 800 visits per move. Search uses explo
 FPU with reduction 0.2, forced playout coefficient 1.5, Dirichlet epsilon 0.25, and alpha 0.3. Fixed visits were
 retained after adaptive allocation and learned stopping failed to improve wall-clock strength.
 
-The configured draw assigns half of games up to eight random legal plies and half to recent restart states filtered by value,
-remaining length, age, and branchable visit mass; missing restart candidates fall back to random openings, so this
-is a configured rather than guaranteed realized 50/50 mix. Restart selection retains a 30% uniform component. Game caps grow
+The opening draw aims to split games evenly between up to eight random legal plies and recent restart states. Restart
+candidates are filtered by value, remaining length, age, and branchable visit mass, with a 30% uniform component in
+selection. If no restart candidate qualifies, that game falls back to a random opening. Game caps grow
 from 150 to 250 plies, and greedy move selection begins later as training matures. Calibrated resignation begins only
 after sufficient evidence, constrains the false-nonloss upper bound to 2.5%, and designates 20% of games at creation
 as no-resignation continuations for ongoing safety measurement.
@@ -59,19 +55,18 @@ against durable admitted data.
 
 ## Progressive sizing
 
-Candidate start and promotion are separate decisions. The primary 64-search ladder is smoothed and used to detect
-stage-specific plateaus. The current configuration [10] specifies the thresholds and window. An eligible successor receives an average
-of 1.5 optimizer quanta per active-model quantum on the captured replay snapshot and uses its own catch-up
-learning-rate clock.
+The smoothed 64-search ladder triggers a successor when the active model reaches a stage-specific plateau. The
+configuration [10] gives the thresholds and window. The successor then trains on a captured replay snapshot for an
+average of 1.5 optimizer quanta per active-model quantum, with its own catch-up learning-rate clock.
 
 Promotion is decided by candidate-versus-active matches, not training loss. The configured gate requires a score of
 at least 0.48 in two consecutive paired evaluations. This distinction matters because extra candidate presentations
 made the earlier loss comparison systematically favorable to the candidate and admitted a much weaker model.
 
-The completed capacity study also grew the trained 14×160 network into 19×176 while preserving its function, then
-recovered deployment fidelity through QAT. The larger continuation reached parity but did not establish a stronger
-plateau. The reported checkpoint is therefore the 14×160 model. The limited continuation cannot distinguish
-insufficient training or post-growth optimization from a target, replay, or capacity limit.
+A separate capacity study grew the trained 14×160 network into 19×176 while preserving its function, then recovered
+deployment fidelity through QAT. The larger continuation reached parity but did not establish a stronger plateau,
+so the selected checkpoint remains the 14×160 model. The continuation was too short to determine why further growth
+did not help.
 
 ## Training-time and terminal evaluation
 
@@ -87,13 +82,10 @@ both rungs and confidence intervals appear in Appendix B. Searched play used the
 Policy-only play used the matching float TorchScript export because it bypasses the native search service.
 
 The measured curve spans policy only and 100, 1,000, 10,000, and 100,000 searches per move. Parallelism is one at
-100 and 1,000 searches, four at 10,000, and sixteen at 100,000. It is therefore an attainable operating curve, not a
-single-variable search-scaling experiment. Absolute values are protocol-specific benchmark Elo and must not be
-presented as FIDE ratings or unrestricted engine ratings.
+100 and 1,000 searches, four at 10,000, and sixteen at 100,000. Chapter 8 interprets the resulting operating curve
+and its protocol-specific benchmark Elo.
 
 ## Interpretation
 
-The terminal matches evaluate this assembled recipe; they do not divide its strength among replay growth, restart
-states, auxiliary targets, resignation, progressive sizing, and the other retained choices. Chapters 4--6 state
-which components have separate strength, fidelity, throughput, or correctness evidence. Chapter 8 reports the
-selected model's outcome and the narrowly scoped training cost.
+The terminal matches measure the assembled recipe. Component studies in Chapters 4--6 explain the retained choices;
+Chapter 8 reports the resulting playing strength and training volume.

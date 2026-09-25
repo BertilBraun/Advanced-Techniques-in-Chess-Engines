@@ -124,10 +124,7 @@ is not a measured downstream effect of the 1.86x benchmark. Faster actors may fi
 publication interrupts work, and replay credit appears only after complete-game materialization. In the live
 stage, admitted-position rate predicted optimizer cadence exactly.
 
-Inference and search benchmarks diagnose a mechanism. Completed games, accepted replay, optimizer cadence, and
-learning curves show whether that mechanism saved useful training time.
-
-Finally, absolute throughput is not portable across machines. CPU quota, GPU power limits, PCIe and NUMA layout,
-driver/runtime versions, model shape, batch fill, and concurrent training all affect the operating point. Node
-comparisons informed hardware selection, but quantitative claims in this chapter remain attached to the documented
-hardware and workload.
+This is why the systems measurements must ultimately be read through completed games, admitted replay, optimizer
+cadence, and learning curves. Their absolute rates depend on CPU quota, GPU power limits, PCIe and NUMA layout,
+runtime versions, model shape, batch fill, and concurrent training; the comparisons above describe their stated
+hardware and workloads.
