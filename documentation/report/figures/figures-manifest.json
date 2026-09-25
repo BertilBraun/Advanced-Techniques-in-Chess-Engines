@@ -1,0 +1,215 @@
+{
+  "source_bundle": ".codex-diagnostics/final-2026-09-23/evidence-tensorboard.tgz",
+  "lineage": [
+    "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+    "vast-chess-8gpu-v91-resume-recalibrated-int8",
+    "vast-chess-8gpu-v92-real-position-fidelity",
+    "vast-chess-8gpu-v93-latch-reset",
+    "vast-chess-8gpu-v94-windowed-plateau",
+    "vast-chess-8gpu-v95-longer-catchup",
+    "vast-chess-8gpu-v97-revert-promotion",
+    "vast-chess-8gpu-v99-grown-promotion"
+  ],
+  "excluded_from_lineage": [
+    "vast-chess-8gpu-v90-resume-catchup-schedule",
+    "vast-chess-8gpu-v96-candidate-multiplier"
+  ],
+  "figures": [
+    {
+      "name": "01-cross-lineage-ladder-elo",
+      "title": "64-search ladder Elo across chess lineages",
+      "runs": [
+        "vast-chess-4day-production-v9",
+        "vast-chess-4day-production-v29",
+        "vast-chess-8gpu-integrated-v34",
+        "vast-chess-8gpu-integrated-v46-v35-g16-restart",
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "evaluation/ladder_elo_64"
+      ],
+      "missing_tags": [],
+      "note": "Final lineage x-axis is the stitched evaluation index times the 1200 s cadence."
+    },
+    {
+      "name": "02-training-losses",
+      "title": "Training losses across the final lineage",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "training/total_loss",
+        "training/policy_loss",
+        "training/wdl_loss",
+        "training_auxiliary/0-next-policy-ply-1/loss",
+        "training_auxiliary/1-remaining-game-length/loss"
+      ],
+      "missing_tags": [],
+      "note": "x-axis is optimizer steps, which run continuously across resumes."
+    },
+    {
+      "name": "03-optimization",
+      "title": "Optimization schedule and gradient scale",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "training/learning_rate",
+        "training/gradient_norm"
+      ],
+      "missing_tags": [
+        "clipped step fraction"
+      ],
+      "note": "No clipped-step fraction was ever logged; the norm against the configured 1.0 cap is the proxy."
+    },
+    {
+      "name": "04-final-lineage-ladder",
+      "title": "Final lineage ladder Elo, both estimators",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "evaluation/ladder_elo_64",
+        "evaluation/ladder_elo_single_rung_64",
+        "evaluation/ladder_elo_1"
+      ],
+      "missing_tags": [],
+      "note": "The single-rung series is drawn beside the bracketed one so the estimator gap is visible."
+    },
+    {
+      "name": "05-training-volume",
+      "title": "Training volume across the final lineage",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "self_play/completed_games",
+        "credit/materialized_samples",
+        "credit/consumed_presentations",
+        "training/optimizer_steps"
+      ],
+      "missing_tags": [],
+      "note": "Counts are cumulative per run; resume boundaries restart some counters, so read within a segment."
+    },
+    {
+      "name": "06-throughput",
+      "title": "Throughput and the search budget that drives it",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "throughput/training_samples_per_second",
+        "settings/self_play/baseline_visits"
+      ],
+      "missing_tags": [],
+      "note": "Self-play throughput was not logged directly; the visit budget is the setting that governs it."
+    },
+    {
+      "name": "07-replay",
+      "title": "Replay occupancy and staleness",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "replay/live_rows",
+        "replay/logical_capacity",
+        "replay_diagnostics/generation_age_mean"
+      ],
+      "missing_tags": [],
+      "note": "The replay store itself was not retained; these are the scalars logged while it lived."
+    },
+    {
+      "name": "08-promotion",
+      "title": "Progressive stage and the plateau signal that drives promotion",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "progressive/active_model_index",
+        "progressive/candidate_start/instantaneous_ema_gain_per_hour"
+      ],
+      "missing_tags": [],
+      "note": "Replaces the INT8 fidelity figure the chapter requested: no fidelity series was ever logged."
+    },
+    {
+      "name": "09-resignation",
+      "title": "Resignation calibration, volume and saved search",
+      "runs": [
+        "vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau",
+        "vast-chess-8gpu-v91-resume-recalibrated-int8",
+        "vast-chess-8gpu-v92-real-position-fidelity",
+        "vast-chess-8gpu-v93-latch-reset",
+        "vast-chess-8gpu-v94-windowed-plateau",
+        "vast-chess-8gpu-v95-longer-catchup",
+        "vast-chess-8gpu-v97-revert-promotion",
+        "vast-chess-8gpu-v99-grown-promotion"
+      ],
+      "tags": [
+        "resignation/selected_threshold",
+        "resignation/false_nonloss_rate",
+        "resignation/false_nonloss_upper_bound",
+        "resignation/actual_resignations",
+        "resignation/continuation_games",
+        "resignation/average_saved_plies"
+      ],
+      "missing_tags": [],
+      "note": "Saved plies is the logged per-resignation mean; the search saved in node-seconds was never logged."
+    }
+  ]
+}

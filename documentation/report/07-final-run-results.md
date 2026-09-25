@@ -86,24 +86,42 @@ Every row requires balanced paired openings, exact Stockfish identity and fixed-
 inference batch/concurrency, artifact hashes, raw games, and confidence intervals. The comparison with v34 must use
 matched protocols or explicitly identify differences.
 
-## Figures to generate from the archive
+## Figures
 
-1. The headline 64-search ladder-Elo progression across v9, v29, v34, the audited v46/v48-era successor, and the
-   stitched V89–V93 final lineage. Follow the source, timing, resume-boundary, smoothing, and label requirements in
-   the [final-run result contract](../results/final-chess-run.md#headline-cross-lineage-figure).
-2. Total, policy, WDL, and auxiliary losses against wall-clock and optimizer step.
-3. Learning rate, gradient norm, and clipping fraction.
-4. Policy-only and searched final-run ladder Elo against wall-clock, with uncertainty and model-promotion annotations.
-5. Generations, games, fresh positions, and training presentations against wall-clock.
-6. Self-play and trainer throughput, including pause and visit-stage changes.
-7. Replay occupancy, age distribution, and sampling mixture over time.
-8. INT8 legal-policy fidelity over time, with engine-template rebuilds and model transitions.
-9. Cost/strength comparison with the v34 result under matched definitions.
-10. Backend usage over time: TensorRT INT8, FP16 fallback, and bootstrap TorchScript.
-11. Resignation threshold, trigger volume, continuation outcomes, and estimated search saved.
+Nine figures are rendered in [`figures/`](figures/) by
+[`py/tools/render_report_figures.py`](../../py/tools/render_report_figures.py) from the archived TensorBoard bundle
+`.codex-diagnostics/final-2026-09-23/evidence-tensorboard.tgz`. No curve is hand-entered. Every figure records the
+runs and tags it was built from in [`figures/figures-manifest.json`](figures/figures-manifest.json), so a reader can
+tie a line back to a logged series; series the figure asked for but the runs never logged are listed there as
+`missing_tags` rather than approximated.
 
-Figures must be generated from archived machine-readable evidence, record their source files, and avoid hand-entered
-curves.
+| Figure | Content |
+| --- | --- |
+| `01-cross-lineage-ladder-elo` | 64-search ladder Elo across v9, v29, v34, v46 and the stitched final lineage |
+| `02-training-losses` | total, policy and WDL losses beside the two auxiliary losses, against optimizer steps |
+| `03-optimization` | learning-rate schedule and gradient norm against the configured 1.0 clip |
+| `04-final-lineage-ladder` | final-lineage ladder Elo at 64 searches and policy-only, both estimators, resume boundaries marked |
+| `05-training-volume` | completed games, materialized positions, training presentations and optimizer steps |
+| `06-throughput` | trainer throughput and the self-play visit budget that governs it |
+| `07-replay` | replay occupancy against capacity, and mean generation age of sampled rows |
+| `08-promotion` | progressive stage against the plateau signal that triggers candidate starts |
+| `09-resignation` | resignation threshold, false non-loss rate against its bound, trigger volume and mean saved plies |
+
+The lineage figures stitch V89 → V91 → V92 → V93 → V94 → V95 → V97 → V99; V90 and V96 are excluded because both
+were reverted, so their boundaries describe discarded work.
+
+Three of the originally requested figures are not rendered, because the series behind them do not exist in the
+archive and estimating them would defeat the point:
+
+- **INT8 legal-policy fidelity over time.** No fidelity scalar was ever logged. `08-promotion` occupies its slot.
+- **Backend usage over time** (TensorRT INT8, FP16 fallback, bootstrap TorchScript). Backend selection was logged as
+  run-log text, not as a scalar series; recovering it would mean parsing logs rather than reading archived evidence.
+- **Cost/strength against v34 under matched definitions.** v34's node price was never recorded, so a dollar axis
+  cannot be drawn without inventing one. Both runs are 8-GPU and bill by wall-clock, so `01-cross-lineage-ladder-elo`
+  already carries the matched-estimator time comparison; the cost statement stays in the identity table above.
+
+One further gap is internal to a rendered figure: `03-optimization` shows the gradient norm against the 1.0 cap
+because the clipped-step fraction the chapter asked for was never logged. The manifest records it as missing.
 
 ## Result interpretation
 
@@ -135,7 +153,7 @@ and therefore understates rental.
 **Replay diversity was not a limitation**: 98.21% of the 20M live rows are distinct positions. Nor was label quality
 or the learning-rate floor — both were tested directly in V100 and returned negative.
 
-The remaining gap in this chapter is figures: none of the eleven listed above has been generated from the archives.
-That is the only outstanding item for publication. Until they exist, the abstract, root README, and conclusion may
-cite the numbers above but should not imply a plotted result placeholder
+The figures are rendered and recorded, so no publication item remains outstanding in this chapter. The three
+unrendered items above are unavailable in the archive rather than pending work, and are stated as such instead of
+being estimated.
 rather than a speculative live number.

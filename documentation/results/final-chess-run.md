@@ -18,7 +18,7 @@ archive manifest from the completed run so later edits to the living recipe cann
 | Terminal checkpoint and inference artifacts hashed | met, see Run identity |
 | Training-volume and wall-clock statistics derived | partly met, see Training volume |
 | Selected evaluations complete under a frozen protocol | met, see Terminal strength |
-| Plots generated from archived inputs | outstanding |
+| Plots generated from archived inputs | met, nine figures in [`documentation/report/figures/`](../report/figures/) with a source manifest |
 | Every number traceable to committed compact evidence | met for the tables below |
 
 ## Run identity
@@ -180,18 +180,27 @@ wall-clock comparison that demonstrates engineering progress.
 
 ## Required figures
 
-- the headline cross-lineage 64-search ladder-Elo figure specified above;
-- final-run benchmark Elo and match score versus effective training time;
-- policy, WDL, auxiliary, and total training losses;
-- learning rate, gradient norm, and clipped-step fraction;
-- optimizer steps, self-play games, and fresh positions versus effective time;
-- self-play, inference, replay-materialization, and trainer throughput;
-- replay age, capacity, and sampling distributions;
-- progressive-model candidate start and promotion events;
-- search-budget, backend, resume, and other material lineage transitions.
+Rendered into [`documentation/report/figures/`](../report/figures/) by
+[`py/tools/render_report_figures.py`](../../py/tools/render_report_figures.py) from the archived TensorBoard bundle,
+with a per-figure source manifest beside them. The chapter's
+[figure section](../report/07-final-run-results.md#figures) lists them and states which requirements the archive
+cannot satisfy.
 
-Every generated figure must name or link its source archive or committed compact table. Resume gaps and effective
-training time must be represented explicitly rather than silently joined on wall-clock timestamps.
+| Requirement | State |
+| --- | --- |
+| Headline cross-lineage 64-search ladder-Elo figure | `01-cross-lineage-ladder-elo` |
+| Final-run benchmark Elo and match score versus effective training time | `04-final-lineage-ladder` |
+| Policy, WDL, auxiliary and total training losses | `02-training-losses` |
+| Learning rate, gradient norm, clipped-step fraction | `03-optimization`; the clipped-step fraction was never logged |
+| Optimizer steps, self-play games, fresh positions versus effective time | `05-training-volume` |
+| Self-play, inference, replay-materialization and trainer throughput | `06-throughput`; only trainer throughput was logged as a scalar, with the visit budget as the governing setting |
+| Replay age, capacity and sampling distributions | `07-replay`; occupancy and mean generation age only |
+| Progressive-model candidate start and promotion events | `08-promotion` |
+| Search-budget, backend, resume and other lineage transitions | resume boundaries are marked on every lineage figure and the visit budget is in `06-throughput`; backend selection was logged as text, not scalars |
+
+Every generated figure names its source archive and the tags it was built from in the manifest. Resume gaps and
+effective training time are represented explicitly: the lineage figures use a stitched evaluation axis and mark each
+segment boundary rather than silently joining on wall-clock timestamps.
 
 ## Relation to v34
 
