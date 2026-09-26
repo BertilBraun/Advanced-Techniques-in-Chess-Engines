@@ -194,14 +194,16 @@ from merely making more passes over an unchanged pool of experience.
 
 ## Training
 
-Training distils search and game outcomes into network predictions. The loss is the cross-entropy between the
-searched and predicted policies, plus the cross-entropy between target and predicted win/draw/loss probabilities,
-plus auxiliary losses. For one position:
+Training distils search and game outcomes into network predictions. For one position, the objective is:
 
 ```math
-\mathcal{L} = -\sum_a \pi_a\log p_a
+\begin{aligned}
+\mathcal{L} &= \operatorname{CE}(\pi,p) + \operatorname{CE}(z,v)
++\mathcal{L}_{\mathrm{aux}}\\
+&= -\sum_a \pi_a\log p_a
 -\sum_{k\in\{W,D,L\}} z_k\log v_k
 +\mathcal{L}_{\mathrm{aux}}.
+\end{aligned}
 ```
 
 The searched policy *π* and outcome target *z* supervise the predicted move probabilities *p* and WDL probabilities

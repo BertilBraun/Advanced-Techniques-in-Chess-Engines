@@ -217,6 +217,8 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
                 height = '0.48'
     elif source.name == '07-final-run-results.md':
         environment, placement, width, height = 'figure*', 't', '0.87', '0.36'
+    elif source.name == '03-system-and-methods.md':
+        environment, placement, width, height = 'figure*', 't', '0.98', '0.43'
     else:
         environment, placement, width, height = 'figure*', '!t', '0.98', '0.43'
     return (

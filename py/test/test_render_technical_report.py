@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from markdown_it import MarkdownIt
 from tools.render_technical_report import (
+    REPORT_ROOT,
     bibliography_tex,
     caption_tex,
     escape_tex,
@@ -13,6 +14,14 @@ from tools.render_technical_report import (
     section_tex,
     table_tex,
 )
+
+
+def test_system_diagrams_respect_float_limit_and_loss_has_two_forms(tmp_path: Path) -> None:
+    output = markdown_tex(REPORT_ROOT / '03-system-and-methods.md', tmp_path)
+    assert output.count(r'\begin{figure*}[t]') == 2
+    assert r'\begin{figure*}[!t]' not in output
+    assert r'\operatorname{CE}(\pi,p) + \operatorname{CE}(z,v)' in output
+    assert r'&= -\sum_a \pi_a\log p_a' in output
 
 
 def test_display_math_preserves_latex_equation(tmp_path: Path) -> None:
