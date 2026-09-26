@@ -41,6 +41,11 @@ alternatives performed, and Chapter 5 measures the throughput needed to run it.
 
 ## One learning cycle
 
+![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
+
+Figure 1: Self-play turns a published network into searched games, replay supplies their positions to the trainer,
+and updated weights return to the actors. Separate matches measure the player's progress.
+
 The learning loop has three sources of work: actors play games, the replay pipeline stores their experience, and
 the trainer updates the network. An *actor* is a self-play process that advances many games concurrently rather
 than waiting for each game to finish before starting another. All those games use a published set of network
@@ -52,11 +57,6 @@ different games are grouped into batches and evaluated on the GPU by TensorRT, t
 While a batch is being evaluated, other ready games can advance. Returned predictions let the waiting searches
 update their trees and eventually choose their moves.
 
-![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
-
-Figure 1: Self-play turns a published network into searched games, replay supplies their positions to the trainer,
-and updated weights return to the actors. Separate matches measure the player's progress.
-
 A finished game supplies a sequence of positions, the search policy at each recorded move, and its final outcome.
 The replay pipeline converts that sequence into training examples. The trainer draws batches from the accumulated
 examples and adjusts the weights to better predict their policies and outcomes. After a block of optimizer steps,
@@ -66,6 +66,11 @@ absorbed.
 Some actors keep playing while training runs, so the system can produce the next games while learning from earlier
 ones. Evaluation runs alongside this loop using the native chess engine to play matches against Stockfish. These
 matches measure progress; they do not become self-play training data.
+
+![Shared residual chess backbone with policy, outcome, and training-only auxiliary branches](figures/chess-network-architecture.svg)
+
+Figure 2: The final chess network. A shared 14-block, 160-channel backbone processes 52 input planes. Policy and
+value heads provide the predictions used by search; the two auxiliary heads contribute only during training.
 
 ## Why the search loop stays in C++
 
@@ -97,11 +102,6 @@ blocks, each with 160 channels, refine board features by adding learned correcti
 Every second block also pools features across the board and feeds the resulting global context back into the spatial
 features. This lets a local feature respond to the wider position without relying solely on successive local
 convolutions to propagate that information.
-
-![Shared residual chess backbone with policy, outcome, and training-only auxiliary branches](figures/chess-network-architecture.svg)
-
-Figure 2: The final chess network. A shared 14-block, 160-channel backbone processes 52 input planes. Policy and
-value heads provide the predictions used by search; the two auxiliary heads contribute only during training.
 
 A *head* maps these shared features to a particular prediction. The policy head represents each square with learned
 origin and destination vectors; their dot products score moves, with additional offsets distinguishing promotion
