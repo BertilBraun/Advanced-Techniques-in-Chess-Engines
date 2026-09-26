@@ -60,26 +60,31 @@ def test_teacher_wdl_survives_the_callers_softmax() -> None:
     assert recovered[0].tolist() == pytest.approx(list(probabilities), abs=1e-6)
 
 
-def test_policy_permutation_places_each_lc0_logit_on_its_action() -> None:
-    permutation = torch.tensor([[3, 0, 1]], dtype=torch.int64)
+def wrapped_constant_model() -> Lc0TeacherModel:
+    # Action 0 is unmapped (index 3 is the sentinel past a 3-wide policy); actions 1 and 2 share index 1,
+    # as a knight promotion and a plain move to the same square do in Lc0's table.
+    permutation = torch.tensor([3, 1, 1, 0], dtype=torch.int64)
     backbone = ConstantBackbone(policy_size=3, wdl=(1.0, 0.0, 0.0))
-    model = Lc0TeacherModel(
+    return Lc0TeacherModel(
         backbone, permutation, wdl_is_already_probability=True, policy_output_index=0, wdl_output_index=1
     )
-    policy, _ = model(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+
+
+def test_each_action_reads_its_lc0_logit() -> None:
+    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
     assert policy[0, 3].item() == pytest.approx(0.0)
-    assert policy[0, 0].item() == pytest.approx(1.0)
-    assert policy[0, 1].item() == pytest.approx(2.0)
+    assert policy[0, 1].item() == pytest.approx(1.0)
 
 
-def test_unmapped_policy_entries_stay_finite() -> None:
-    permutation = torch.tensor([[3, 0, 1]], dtype=torch.int64)
-    backbone = ConstantBackbone(policy_size=3, wdl=(1.0, 0.0, 0.0))
-    model = Lc0TeacherModel(
-        backbone, permutation, wdl_is_already_probability=True, policy_output_index=0, wdl_output_index=1
-    )
-    policy, _ = model(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+def test_actions_sharing_an_lc0_index_read_the_same_logit() -> None:
+    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+    assert policy[0, 1].item() == policy[0, 2].item()
+
+
+def test_unmapped_actions_stay_finite_and_negligible() -> None:
+    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
     assert torch.isfinite(policy).all().item()
+    assert policy[0, 0].item() < -1.0e3
 
 
 def test_payload_bytes_track_the_packed_layout() -> None:

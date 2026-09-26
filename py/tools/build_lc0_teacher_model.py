@@ -52,13 +52,8 @@ class Lc0TeacherModel(nn.Module):
         lc0_policy = outputs[self.policy_output_index].to(torch.float32)
         lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
         batch = lc0_policy.shape[0]
-        policy = torch.full(
-            (batch, PROJECT_ACTION_SIZE),
-            UNMAPPED_LOGIT,
-            dtype=torch.float32,
-            device=lc0_policy.device,
-        )
-        policy.scatter_(1, self.permutation.expand(batch, -1), lc0_policy)
+        unmapped = torch.full((batch, 1), UNMAPPED_LOGIT, dtype=torch.float32, device=lc0_policy.device)
+        policy = torch.cat((lc0_policy, unmapped), dim=1).index_select(1, self.permutation)
         wdl = lc0_wdl if self.wdl_is_already_probability else torch.softmax(lc0_wdl, dim=1)
         return policy, wdl
 
@@ -89,16 +84,14 @@ def load_backbone(onnx_path: Path) -> nn.Module:
 
 
 def build_permutation(policy_map_path: Path) -> torch.Tensor:
+    """For each project action, the Lc0 index whose logit it takes; LC0_POLICY_SIZE marks unmapped."""
     payload = json.loads(policy_map_path.read_text(encoding='utf-8'))
-    entries = payload['lc0_index_to_action_id']
-    if len(entries) != LC0_POLICY_SIZE:
-        raise SystemExit(f'Policy map has {len(entries)} entries, expected {LC0_POLICY_SIZE}.')
-    uncovered = [index for index, action_id in enumerate(entries) if action_id < 0]
-    if uncovered:
-        raise SystemExit(
-            f'{len(uncovered)} Lc0 indices are unmapped; rerun build_lc0_policy_map.py with more positions.'
-        )
-    return torch.tensor(entries, dtype=torch.int64).unsqueeze(0)
+    entries = payload['action_id_to_lc0_index']
+    if len(entries) != PROJECT_ACTION_SIZE:
+        raise SystemExit(f'Policy map has {len(entries)} entries, expected {PROJECT_ACTION_SIZE}.')
+    unmapped = sum(1 for entry in entries if entry < 0)
+    print(f'{PROJECT_ACTION_SIZE - unmapped} actions mapped; {unmapped} never observed legal and left unmapped.')
+    return torch.tensor([entry if entry >= 0 else LC0_POLICY_SIZE for entry in entries], dtype=torch.int64)
 
 
 def wdl_is_probability(backbone: nn.Module, wdl_output_index: int) -> bool:

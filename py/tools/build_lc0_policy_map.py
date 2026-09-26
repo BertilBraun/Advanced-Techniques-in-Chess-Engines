@@ -26,8 +26,11 @@ UCI_PATTERN = re.compile(r'"([a-h][1-8][a-h][1-8][qrbn]?)"')
 
 @dataclass(frozen=True)
 class PolicyMap:
-    lc0_index_to_action_id: tuple[int, ...]
-    covered_action_ids: tuple[int, ...]
+    # Indexed by this project's action id. Several actions may share one Lc0 index: Lc0 spells a knight
+    # promotion as the bare move, so e7e8n and a piece moving e7e8 both read index e7e8. Only one of them
+    # can be legal in any position, so gathering the same logit into both is exact.
+    action_id_to_lc0_index: tuple[int, ...]
+    covered_lc0_indices: int
     positions_walked: int
 
 
@@ -66,46 +69,80 @@ def lc0_move_notation(fen: str, move_uci: str) -> str:
     return move_uci
 
 
+def promotion_positions() -> tuple[str, ...]:
+    """Positions where every straight and capturing promotion is legal; random games rarely reach them."""
+    import chess
+
+    fens: list[str] = []
+    for file in range(8):
+        for target_file in (file - 1, file, file + 1):
+            if not 0 <= target_file <= 7:
+                continue
+            for colour in (chess.WHITE, chess.BLACK):
+                board = chess.Board(None)
+                from_rank, to_rank = (6, 7) if colour == chess.WHITE else (1, 0)
+                board.set_piece_at(chess.square(file, from_rank), chess.Piece(chess.PAWN, colour))
+                if target_file != file:
+                    board.set_piece_at(chess.square(target_file, to_rank), chess.Piece(chess.ROOK, not colour))
+                board.turn = colour
+                for own_king, their_king in ((chess.E3, chess.E5), (chess.A4, chess.H4), (chess.H3, chess.A5)):
+                    trial = board.copy()
+                    if colour == chess.BLACK:
+                        own_king, their_king = chess.square_mirror(own_king), chess.square_mirror(their_king)
+                    if trial.piece_at(own_king) or trial.piece_at(their_king):
+                        continue
+                    trial.set_piece_at(own_king, chess.Piece(chess.KING, colour))
+                    trial.set_piece_at(their_king, chess.Piece(chess.KING, not colour))
+                    promotions = [move for move in trial.legal_moves if move.promotion]
+                    if trial.is_valid() and len(promotions) >= 4:
+                        fens.append(trial.fen())
+                        break
+    return tuple(fens)
+
+
 def build(move_table: tuple[str, ...], position_count: int, seed: int) -> PolicyMap:
     import AlphaZeroCpp
 
     lc0_index_of = {move: index for index, move in enumerate(move_table)}
     mapping: dict[int, int] = {}
-    generator = random.Random(seed)
     positions_walked = 0
 
+    def record(position: AlphaZeroCpp.ChessPosition) -> None:
+        fen = position.fen
+        for action_id in position.legal_actions():
+            move_uci = lc0_move_notation(fen, position.action_uci(action_id))
+            canonical = move_uci if position.current_player == 1 else flip_uci_ranks(move_uci)
+            lc0_index = lc0_index_of.get(canonical)
+            if lc0_index is None:
+                raise SystemExit(f'Legal move {move_uci} (canonical {canonical}) is absent from the Lc0 table.')
+            previous = mapping.get(action_id)
+            if previous is not None and previous != lc0_index:
+                raise SystemExit(
+                    f'Action {action_id} maps to Lc0 index {previous} and {lc0_index} ({canonical}); '
+                    'the project encoding is not canonical for this move.'
+                )
+            mapping[action_id] = lc0_index
+
+    generator = random.Random(seed)
     for _ in range(position_count):
         position = AlphaZeroCpp.ChessPosition()
         for _ in range(generator.randint(0, 160)):
             if position.is_terminal:
                 break
             positions_walked += 1
-            legal_action_ids = position.legal_actions()
-            fen = position.fen
-            for action_id in legal_action_ids:
-                move_uci = lc0_move_notation(fen, position.action_uci(action_id))
-                canonical = move_uci if position.current_player == 1 else flip_uci_ranks(move_uci)
-                lc0_index = lc0_index_of.get(canonical)
-                if lc0_index is None:
-                    raise SystemExit(f'Legal move {move_uci} (canonical {canonical}) is absent from the Lc0 table.')
-                previous = mapping.get(lc0_index)
-                if previous is not None and previous != action_id:
-                    raise SystemExit(
-                        f'Lc0 index {lc0_index} ({canonical}) maps to both action {previous} and {action_id}.'
-                    )
-                mapping[lc0_index] = action_id
-            position = position.child(generator.choice(legal_action_ids))
+            record(position)
+            position = position.child(generator.choice(position.legal_actions()))
+    for fen in promotion_positions():
+        positions_walked += 1
+        record(AlphaZeroCpp.ChessPosition(fen))
 
-    unmapped = LC0_POLICY_SIZE - len(mapping)
-    table = tuple(mapping.get(index, -1) for index in range(LC0_POLICY_SIZE))
-    print(f'Walked {positions_walked} positions; {len(mapping)} of {LC0_POLICY_SIZE} Lc0 indices covered.')
-    if unmapped:
-        print(f'{unmapped} Lc0 indices were never reached and are written as -1.')
-    return PolicyMap(
-        lc0_index_to_action_id=table,
-        covered_action_ids=tuple(sorted(set(mapping.values()))),
-        positions_walked=positions_walked,
+    table = tuple(mapping.get(action_id, -1) for action_id in range(CHESS_ACTION_SIZE))
+    covered = len(set(mapping.values()))
+    print(
+        f'Walked {positions_walked} positions; {len(mapping)} of {CHESS_ACTION_SIZE} actions mapped, '
+        f'covering {covered} of {LC0_POLICY_SIZE} Lc0 indices.'
     )
+    return PolicyMap(action_id_to_lc0_index=table, covered_lc0_indices=covered, positions_walked=positions_walked)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -125,9 +162,9 @@ def main() -> None:
         'lc0_policy_size': LC0_POLICY_SIZE,
         'project_action_size': CHESS_ACTION_SIZE,
         'positions_walked': policy_map.positions_walked,
-        'covered_lc0_indices': sum(1 for entry in policy_map.lc0_index_to_action_id if entry >= 0),
-        'covered_action_ids': len(policy_map.covered_action_ids),
-        'lc0_index_to_action_id': list(policy_map.lc0_index_to_action_id),
+        'covered_lc0_indices': policy_map.covered_lc0_indices,
+        'mapped_action_ids': sum(1 for entry in policy_map.action_id_to_lc0_index if entry >= 0),
+        'action_id_to_lc0_index': list(policy_map.action_id_to_lc0_index),
     }
     write_text_atomically(arguments.output, json.dumps(payload, indent=2) + '\n')
     print(f'Wrote {arguments.output}')
