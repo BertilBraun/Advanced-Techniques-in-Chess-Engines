@@ -267,7 +267,7 @@ def generate_records(
         )
         if isinstance(teacher, Lc0Teacher):
             # The teacher reads Lc0's planes; the record keeps the project's, which the student trains on.
-            decoded = decode_lc0_planes(tuple(slot.position.lc0_packed_encoding() for slot in slots))
+            decoded = decode_lc0_planes(tuple(slot.position.lc0_packed_encoding() for slot in slots)).astype(np.float32)
         else:
             decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, packed_states)
         with torch.inference_mode():

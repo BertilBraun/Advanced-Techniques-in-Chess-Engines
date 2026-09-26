@@ -64,25 +64,44 @@ def query_lc0(
         str(binary),
         f'--weights={network}',
         '--verbose-move-stats',
+        # Lc0's search reports priors after its own policy temperature; the raw network softmax is at 1.
+        '--policy-softmax-temp=1.0',
         '--threads=1',
         '--minibatch-size=1',
         *extra_arguments,
     ]
-    script = '\n'.join(
-        [
-            'uci',
-            'setoption name UCI_ShowWDL value true',
-            'isready',
-            f'position startpos moves {" ".join(moves_uci)}',
-            f'go nodes {nodes}',
-            'quit',
-            '',
-        ]
+    # `quit` goes only after `bestmove`: sent earlier, Lc0 exits before printing any search output.
+    process = subprocess.Popen(
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
-    completed = subprocess.run(command, input=script, capture_output=True, text=True, timeout=180, check=False)
+    assert process.stdin is not None and process.stdout is not None
+    output: list[str] = []
+
+    def send(line: str) -> None:
+        process.stdin.write(line + '\n')
+        process.stdin.flush()
+
+    def read_until(prefix: str) -> None:
+        for line in process.stdout:
+            output.append(line.rstrip('\n'))
+            if line.startswith(prefix):
+                return
+        raise SystemExit(f'Lc0 exited before printing {prefix!r}.\nLast output:\n' + '\n'.join(output[-40:]))
+
+    send('uci')
+    read_until('uciok')
+    send('setoption name UCI_ShowWDL value true')
+    send('isready')
+    read_until('readyok')
+    send(f'position startpos moves {" ".join(moves_uci)}')
+    send(f'go nodes {nodes}')
+    read_until('bestmove')
+    send('quit')
+    process.wait(timeout=30)
+
     priors: dict[str, float] = {}
     wdl: tuple[float, float, float] | None = None
-    for line in completed.stdout.splitlines():
+    for line in output:
         match = MOVE_PRIOR_PATTERN.match(line)
         if match is not None:
             priors[match.group('move')] = float(match.group('prior')) / 100.0
@@ -93,7 +112,7 @@ def query_lc0(
     if not priors:
         raise SystemExit(
             'Parsed no move priors from Lc0. Check the binary version and that --verbose-move-stats is '
-            f'supported.\nCommand: {" ".join(command)}\nLast output:\n{completed.stdout[-2000:]}'
+            f'supported.\nCommand: {" ".join(command)}\nLast output:\n' + '\n'.join(output[-40:])
         )
     return TeacherReference(priors=priors, wdl=wdl)
 
@@ -124,7 +143,7 @@ def query_wrapped_teacher(
     for move_uci in moves_uci:
         position = CHESS_STATE_CONTRACT.child_position(position, position.action_id_from_uci(move_uci))
     legal_action_ids = np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(position), dtype=np.int64)
-    decoded = decode_lc0_planes((position.lc0_packed_encoding(),))
+    decoded = decode_lc0_planes((position.lc0_packed_encoding(),)).astype(np.float32)
     with torch.inference_mode():
         policy_logits, wdl = model(torch.from_numpy(decoded).to(device))
     legal_logits = policy_logits[0].float().cpu().numpy()[legal_action_ids].astype(np.float64)
@@ -136,6 +155,46 @@ def query_wrapped_teacher(
     }
     wdl_row = wdl[0].float().cpu().numpy()
     return priors, (float(wdl_row[0]), float(wdl_row[1]), float(wdl_row[2]))
+
+
+def legal_priors_batch(
+    model: torch.jit.ScriptModule, device: torch.device, dtype: torch.dtype, positions: list[object]
+) -> list[np.ndarray]:
+    planes = decode_lc0_planes(tuple(position.lc0_packed_encoding() for position in positions)).astype(np.float32)
+    with torch.inference_mode():
+        policy_logits, _ = model(torch.from_numpy(planes).to(device=device, dtype=dtype))
+    logits = policy_logits.float().cpu().numpy()
+    priors: list[np.ndarray] = []
+    for row, position in enumerate(positions):
+        legal = np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(position), dtype=np.int64)
+        values = logits[row, legal].astype(np.float64)
+        shifted = np.exp(values - values.max())
+        priors.append(shifted / shifted.sum())
+    return priors
+
+
+def batch_and_precision_checks(
+    teacher_model: Path, device: torch.device, opening_lines: tuple[tuple[str, ...], ...]
+) -> tuple[float, float | None, float]:
+    positions: list[object] = []
+    for moves_uci in opening_lines:
+        position = CHESS_STATE_CONTRACT.initial_position()
+        for move_uci in moves_uci:
+            position = CHESS_STATE_CONTRACT.child_position(position, position.action_id_from_uci(move_uci))
+        positions.append(position)
+    model = torch.jit.load(str(teacher_model), map_location=device).eval()
+    batched = legal_priors_batch(model, device, torch.float32, positions)
+    single = [legal_priors_batch(model, device, torch.float32, [position])[0] for position in positions]
+    batch_difference = max(float(np.abs(a - b).max()) for a, b in zip(batched, single, strict=True))
+    try:
+        half = torch.jit.load(str(teacher_model), map_location=device).eval().to(torch.bfloat16)
+        reduced = legal_priors_batch(half, device, torch.bfloat16, positions)
+    except RuntimeError as error:
+        print(f'bfloat16 evaluation raised: {error}')
+        return batch_difference, None, 0.0
+    bfloat16_difference = max(float(np.abs(a - b).max()) for a, b in zip(batched, reduced, strict=True))
+    agreement = float(np.mean([int(np.argmax(a) == np.argmax(b)) for a, b in zip(batched, reduced, strict=True)]))
+    return batch_difference, bfloat16_difference, agreement
 
 
 def compare(
@@ -211,6 +270,22 @@ def main() -> None:
     failed = worst_policy > arguments.policy_tolerance or bool(disagreements)
     if worst_wdl is not None and worst_wdl > arguments.wdl_tolerance:
         failed = True
+
+    batch_difference, bfloat16_difference, bfloat16_top_agreement = batch_and_precision_checks(
+        arguments.teacher_model, device, opening_lines
+    )
+    # Tracing an ONNX conversion can bake the sample batch size into reshapes; the search batches up to 64.
+    print(f'Batched versus single-position policy difference: {batch_difference:.2e}')
+    if batch_difference > 1.0e-4:
+        failed = True
+        print('  The wrapped teacher depends on batch composition; its trace is not batch-size generic.')
+    if bfloat16_difference is None:
+        print('BF16_UNUSABLE: the wrapped teacher fails in bfloat16, so the pipeline must serve it in float32.')
+    else:
+        print(
+            f'bfloat16 versus float32: worst prior difference {bfloat16_difference:.4f}, '
+            f'top-move agreement {bfloat16_top_agreement:.3f}'
+        )
     for comparison in disagreements[:5]:
         print(f'  disagreed after: {" ".join(comparison.moves_uci)}')
     if failed:

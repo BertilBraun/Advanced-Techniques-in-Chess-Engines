@@ -47,8 +47,8 @@ class Lc0TeacherModel(nn.Module):
         self.wdl_output_index = wdl_output_index
 
     def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        planes = encoded_boards[:, :LC0_INPUT_PLANES].to(torch.float32)
-        outputs = self.backbone(planes)
+        # The pipeline hands the network its own dtype (bfloat16 in evaluation), so no cast here.
+        outputs = self.backbone(encoded_boards[:, :LC0_INPUT_PLANES])
         lc0_policy = outputs[self.policy_output_index].to(torch.float32)
         lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
         batch = lc0_policy.shape[0]
@@ -129,8 +129,8 @@ def main() -> None:
     ).eval()
 
     with torch.inference_mode():
-        sample = torch.zeros((4, LC0_INPUT_PLANES, 8, 8), dtype=torch.int8)
-        sample[:, LC0_INPUT_PLANES - 1] = 1
+        sample = torch.zeros((4, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
+        sample[:, LC0_INPUT_PLANES - 1] = 1.0
         policy, wdl = model(sample)
     if policy.shape != (4, PROJECT_ACTION_SIZE) or wdl.shape != (4, 3):
         raise SystemExit(f'Wrapped model produced {policy.shape} and {wdl.shape}.')
