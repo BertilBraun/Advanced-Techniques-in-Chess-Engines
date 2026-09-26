@@ -1,9 +1,13 @@
 # Appendix D. Reproducibility and release boundary
 
+This appendix specifies the network representation, numerical recipe, and artifacts required to reproduce the
+software and evaluation. The released configuration supports new training runs; the published checkpoint fixes
+the model used for the reported results.
+
 ## Network input and output contract
 
-The network input has shape 52×8×8. Table D1 specifies every channel; channel ranges list features in tensor
-order. "Own" means the player to move. For Black to move, ranks are reflected and piece colours are exchanged;
+The network input is a 52×8×8 tensor with channels listed in Table D1. "Own" denotes the player to move.
+For Black to move, ranks are reflected and piece colours are exchanged;
 files retain their order. Tensor row zero is the player's home rank, and column zero is file a. There is no separate
 absolute-colour plane. Spatial masks contain zeros and ones; flags and scalar values fill all 64 squares.
 
@@ -35,9 +39,9 @@ absolute-colour plane. Spatial masks contain zeros and ones; flags and scalar va
 | 46 | Halfmove clock | Integer count, capped at 100 |
 | 47, 48, 49, 50, 51 | Own pawn, knight, bishop, rook, queen counts | Integer counts |
 
-The first 40 planes are binary; the remaining 12 are scalar planes. Counts are not divided by their maxima.
-Missing history entries are zero-filled. History records the last eight moves, not eight full board states;
-castling records the king's actual destination. The checkerboard is fixed in canonical tensor coordinates.
+Channels 0–39 are binary; channels 40–51 contain unnormalized scalar values. Missing history entries are
+zero-filled. Move history stores origin and destination pairs for the last eight plies rather than complete
+board states; castling records the king's actual destination. The checkerboard is fixed in canonical coordinates.
 
 The shared backbone produces 160×8×8 features. The policy head projects each square to a 128-dimensional token
 and forms query and key vectors whose scaled dot products score origin-destination pairs. These scores are gathered
@@ -51,19 +55,16 @@ and three logits. Softmax produces win, draw, and loss probabilities for the pla
 produce a further 1,880 logits for the next searched policy and one scalar for remaining game length. They are used
 only in training; inference returns the primary policy logits and WDL probabilities.
 
-## Two reproducibility targets
+## Configuration and reported result
 
-Reproducing the current system and reproducing the reported result require different starting points:
-
-1. **Recipe reproduction:** use the current fully expanded `chess-final-config.yaml` as the supported entry point.
-2. **Result reproduction:** use the frozen source revision, resolved config hash, manifest, checkpoints, engines,
-   datasets, and archive recorded for the final result.
-
-The recipe may evolve; the reported result remains fixed.
+The fully expanded `chess-final-config.yaml` is the maintained entry point for training with the current recipe.
+Replication of the reported experiment instead uses its frozen source revision, resolved configuration,
+manifest, checkpoints, engines, and datasets. This separates future recipe updates from the fixed experimental
+record.
 
 ## Expanded chess recipe settings
 
-The architectural settings summarized in Chapter 7 include a key-size-128 chess from-to policy head and a
+The architecture in Chapter 7 uses a key-size-128 chess from-to policy head and a
 two-channel WDL head with a 48-unit hidden layer. The training-only next-searched-policy and remaining-game-length
 heads have loss weights 0.15 and 0.1. Primary policy and value losses each have weight 1.0. Terminal outcome
 targets are discounted by 0.998 per ply; the search-root-value blend rises from zero to 0.1 over its configured
@@ -79,8 +80,8 @@ real evaluation positions and is refreshed at every publication boundary.
 
 The 32 self-play actors run four per GPU, with 512 interleaved games per actor. Native inference uses batches of
 320 with two outstanding batches per worker. Search uses exploration constant 1.5, reduced-parent FPU with
-reduction 0.2, forced playout coefficient 1.5, and Dirichlet epsilon 0.25 with alpha 0.3. Restart-state
-selection retains a 30% uniform component. Eight materializers convert completed games into the fixed-layout
+reduction 0.2, forced playout coefficient 1.5, and Dirichlet epsilon 0.25 with alpha 0.3.
+Eight materializers convert completed games into the fixed-layout
 memory-mapped replay store; training credit is committed only against durable admitted rows.
 Restart positions require at least 15 plies remaining in the source game, absolute root value at most 0.8, and
 two or three leading actions covering 85% of visit mass. The played branch is marked used, and reservations keep
@@ -97,7 +98,7 @@ stage-specific ladder-plateau thresholds and window.
 
 ## Result identity and provenance
 
-The frozen local result record identifies these layers of provenance:
+The experiment archive records the following provenance:
 
 - Git revision and clean/dirty state, resolved YAML and SHA-256, and dependency-lock hash;
 - operating image, software and driver versions, GPU, CPU, RAM, disk, and engine versions and archive hashes;
@@ -116,10 +117,9 @@ reported experiment.
 
 ## Reproducing the software
 
-Local setup and validation begin in the public source-code release [10]. Production nodes are provisioned by
-`deployment/setup_remote.sh`, which installs locked dependencies, builds the
-Release extension, installs pinned evaluation engines, and runs engine smokes. Run lifecycle operations go through
-`deployment/run_control.sh`.
+The public source release [10] contains setup and validation instructions. On production nodes,
+`deployment/setup_remote.sh` installs locked dependencies, builds the Release extension, installs pinned
+evaluation engines, and verifies engine execution. `deployment/run_control.sh` manages the run lifecycle.
 
 Original project code and documentation, including this report, are available under the MIT License in the
 source release [10]. The published final model artifacts carry the same license in the model repository [11].
@@ -127,20 +127,16 @@ External dependencies, reference sources, and third-party data retain their own 
 
 ## Reproducing evaluation
 
-Use the preserved checkpoint and inference artifact rather than re-exporting it with a newer toolchain. Reuse the
-same paired opening suite, colors, opponent binary, node limit, threads, hash, candidate search budget, parallelism,
-batching, and adjudication rules. Report every game and recompute aggregates independently.
+Matched evaluation uses the published checkpoint and inference artifact, paired opening suite, opponent binary,
+node limits, thread and hash settings, candidate search budget, parallelism, batching, and adjudication rules.
+Re-exporting with a different toolchain can change predictions and constitutes a new deployment comparison.
+[Appendix B](appendix-b-evaluation-tables.md) specifies the final match protocol and rating calculation.
 
-For latency, separate:
-
-- isolated model-forward throughput;
-- saturated many-position search throughput;
-- single-game interactive latency.
-
-Only compare like with like. Appendix B states the terminal opponent, openings, game count, and inference artifact.
+Performance measurements distinguish isolated neural-network throughput, saturated multi-game search, and
+single-game latency. These measure different execution regimes and require separate benchmarks.
 
 ## Reproducing plots and tables
 
-The plots derive from archived JSON, CSV, TensorBoard, or manifest data. Figure inputs and extraction methods are
-retained beside the final evidence archive. Derived tables preserve the raw columns needed to recompute totals,
-rates, Elo transformations, and uncertainty intervals; live-dashboard values are not treated as publication data.
+Plots and tables are generated from archived JSON, CSV, TensorBoard, and manifest data, with extraction methods
+retained alongside the evidence. The underlying columns support recomputation of totals, rates, Elo estimates,
+and uncertainty intervals independently of the live dashboards.

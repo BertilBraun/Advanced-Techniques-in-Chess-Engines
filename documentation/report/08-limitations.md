@@ -1,44 +1,42 @@
 # 9. Limitations and open questions
 
-The results establish the strength of the integrated system, but leave open which changes contributed most and
-how far the recipe can scale. This chapter examines the limits of the experiments, the rating calibration, and
-the directions that remain unresolved.
+The study demonstrates an integrated training recipe under a limited compute budget. Its principal limitations
+concern attribution of the gains, calibration of playing strength, and transfer to larger models or different
+workloads.
 
-## Which changes caused the gains?
+## Attribution and scaling
 
-The final run shows what the assembled system achieved, but it does not separate the contribution of every
-ingredient. Component experiments often used one seed, short continuations, or frozen replay to make comparisons
-affordable. They can explain why a design was chosen without showing how much Elo it added to the final player.
-The historical policy-head and global-context comparisons are less complete still: some conclusions rely on
-qualitative observations because their original results were not preserved.
+Most component experiments used a single seed, a short continuation, or frozen replay. These controls supported
+design selection at affordable cost, but do not identify an independent final-strength contribution for each
+component. Policy-head and global-context comparisons also include qualitative observations rather than complete
+matched evaluations.
 
-This matters most for choices that change several parts of learning at once. Progressive sizing improves early
-self-play throughput but changes the network's capacity and training history. Replay growth, reuse, and fresh-game
-supply also interact. Longer matched-compute comparisons would be needed to separate their effects. Likewise, the
-larger model reached parity during its limited continuation, leaving open whether more training, different targets,
-or another initialization would let it use its additional capacity.
+The attribution problem is strongest for coupled choices. Progressive sizing changes capacity and training
+history as well as self-play cost; replay growth and reuse alter both data exposure and demand for fresh games.
+Longer matched-compute experiments are needed to separate those effects. The larger-model continuation established
+parity, but not a benefit from additional capacity, leaving training duration, target quality, and initialization
+as unresolved factors in further scaling.
 
-## How should the ratings be interpreted?
+## Rating calibration and evaluation scope
 
-The reported Elo values put the matches on a common benchmark scale using a published calibration of Stockfish 13
-node limits. They are not direct measurements against unrestricted engines. Each final match contains 100 games,
-and the intervals quantify uncertainty from those games; uncertainty in the historical calibration is additional.
-The two opponent rungs agree closely at the deepest model budget but disagree more at shallow budgets. More games
-and a wider opponent field would help establish how much of that discrepancy comes from sampling or calibration.
+The benchmark scale derives from a published calibration of fixed-node Stockfish 13, rather than direct matches
+against unrestricted engines. Each final match contains 100 games, and the reported intervals capture match
+sampling uncertainty with the calibration anchors held fixed. Agreement between opponent rungs is close at the
+deepest budget and weaker at shallow budgets. A larger match set and broader opponent field would help distinguish
+sampling variation from calibration and matchup effects.
 
-The strength curve also reflects the settings used to make each search budget practical. Deeper points use more
-parallel leaves, so the curve measures the resulting player rather than varying depth alone. Policy-only play and
-searched play use different inference backends, as do the compact student and teacher. Appendix B records these
-evaluation settings so comparisons can be repeated on the same basis.
+The search-budget curve combines deeper search with increased parallelism. It measures the deployed operating
+points, not the isolated effect of search depth. Backend differences likewise enter policy-only, searched, and
+student evaluations. [Appendix B](appendix-b-evaluation-tables.md) records these settings for matched replication.
 
-## Where might the conclusions change?
+## Workload dependence and development cost
 
-Several negative results depend on the workload. Diverse chess self-play offered few exact graph or cache hits;
-repeated analysis of the same positions could make reuse more valuable. Adaptive stopping saved search without
-greatly shortening a training cycle because search overlapped the optimizer. A learner that spends most of its time
-waiting for inference could benefit more from the same saving.
+The rejected optimizations remain plausible under other workloads. Diverse chess self-play produced too few
+exact graph or inference-cache hits to offset lookup and synchronization costs; repeated analysis may offer more
+reuse. Similarly, actor-trainer overlap limited the cadence gain from adaptive stopping. An inference-bound
+training regime could obtain a larger benefit from the same reduction in simulations.
 
-The $43.20 cost describes the final training run, not the experimentation needed to develop it. Reproducing the
-recipe is therefore different from repeating the entire project. Hardware contention, drivers, and TensorRT
-versions can also change throughput. The preserved configuration, model, and evaluation protocol provide the
-starting point for a repeatable comparison, rather than a promise of identical weights or timing on another node.
+The $43.20 rental cost covers the final training run, excluding development experiments and evaluation. It
+characterizes the cost of executing the recipe rather than discovering it. Reproduction also depends on hardware
+contention, drivers, and TensorRT versions; the configuration, published model, and evaluation protocol define
+the comparison, while exact weights and timing may vary across executions.

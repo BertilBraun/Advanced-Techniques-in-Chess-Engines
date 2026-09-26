@@ -4,21 +4,20 @@ In 2.5 days on one eight-GPU node, an AlphaZero-style chess system trained from 
 6.3-million-parameter model measuring **3,251 benchmark Elo at 100,000 searches per move** against a fixed-node
 Stockfish 13 ladder. Without search, the same model measured **1,658 benchmark Elo**.
 
-The result belongs to the assembled learning loop: compact structured policy prediction, a shared convolutional
-network, progressive small-to-medium sizing, searched self-play with restart-state and replay selection, and an
-INT8-capable architecture. Native tree ownership, batched inference, TensorRT, and distributed training made the
-necessary volume of searched data feasible. The component studies explain the design choices without claiming an
-independent Elo gain for each one.
+The system combines a compact structured policy head and shared convolutional backbone with progressive
+small-to-medium sizing, targeted restart states, and prioritized replay. An INT8-capable architecture, native
+search, batched TensorRT inference, and distributed training supplied the required volume of self-play data and
+optimizer updates. The result demonstrates the strength achievable by this integrated recipe within the available
+compute budget.
 
-The negative results sharpen that conclusion. A learned allocator produced better deep-policy fidelity but worse
-online learning. A stopper saved simulations but barely reduced wall-clock cycle time. Exact graph and neural-cache
-reuse were too sparse for their overhead in this chess workload. More parallel leaves sped service while spending
-some playing strength, especially at shallow budgets. Three failures exposed the coupling that those local metrics
-miss: omitting searched endgames poisoned value targets, a mechanically successful TensorRT refit changed model
-behavior, and incomparable training losses promoted a much weaker candidate.
+The component studies also identify limits to local optimization. Better deep-policy fidelity from learned search
+allocation did not produce better online learning, and fewer simulations from adaptive stopping yielded little
+reduction in cycle time. Exact graph and neural-cache reuse did not offset their overhead. More seriously, removing
+searched endgames corrupted value targets, successful TensorRT refits altered predictions, and loss-based promotion
+selected a weaker player. These findings connect efficiency to the quality of the data and model actually consumed
+by self-play.
 
-The strongest general lesson is to measure the whole loop. For every proposed saving, ask how many additional
-reliable positions it creates, how quickly the learner absorbs them, and whether the deployed artifact plays better.
-The larger model recovered its parent's strength without surpassing it in the available continuation, while the
-compact student preserved substantial strength without matching the teacher. Longer training, different targets,
-and more capacity remain open paths rather than demonstrated improvements.
+Further scaling remains open. The larger model recovered its parent's strength without surpassing it during the
+available continuation, while distillation retained substantial strength in a much smaller network without matching
+the teacher. Evaluating additional capacity or training duration requires the same combined accounting used here:
+reliable self-play data, optimizer progress, and measured strength per unit of compute.

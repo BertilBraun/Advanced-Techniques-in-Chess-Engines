@@ -1,13 +1,12 @@
 # Appendix C. Supporting search and systems comparisons
 
-These controls make the denominators behind the local speedups explicit. They describe measured operating points,
-not additive contributions to the final model's Elo.
+The following controls provide the numerical comparisons supporting the search and systems decisions in
+Chapters 4 and 5. Each comparison retains its own workload and measurement scale.
 
 ## Actor overlap and training supply
 
-On the eight-GPU production-shaped workload, keeping more actors alive during a training quantum traded trainer
-throughput for ongoing search. The complete-quantum estimate includes the training time and remaining self-play
-wait; it is not the trainer-only duration.
+The eight-GPU overlap sweep measures optimizer throughput and concurrent search as the number of active actors
+increases. Complete-quantum time includes both the training block and the remaining wait for self-play data.
 
 | Active actors | Trainer samples/s | Concurrent searches/s | Complete quantum (s) |
 | ---: | ---: | ---: | ---: |
@@ -15,19 +14,18 @@ wait; it is not the trainer-only duration.
 | 16 | 17,139 | 606,000 | 112.9 |
 | 32 | 9,210 | 742,000 | 111.2 |
 
-With no actors active, trainer throughput was 25,275 samples/s, but no new self-play games arrived during training.
-Half-active operation was retained near the measured tradeoff.
-The optimal fraction can change with visit budget, model size, and hardware contention.
+Pausing all actors yielded 25,275 training samples/s with no concurrent game production. Half-active operation
+retained most of the complete-cycle benefit while reducing contention during training. Its balance depends on
+visit budget, model size, and available hardware capacity.
 
 ## Replay-reuse controls
 
-Short controls at reuse ratios 4, 6.25, and 8 remained matched at their shared evaluation boundaries
-despite different update rates. They lasted about 90 minutes, and their full raw curves are no longer preserved.
-The completed campaign also changed replay capacity, optimizer, objective weighting, and inference. The selected
-ratio of four is therefore a freshness choice, not an isolated final-strength estimate. Configured presentation
-credit need not equal the observed number of presentations per distinct replay position. Because evaluation,
-publication, visit schedules, and replay growth advance at quantum boundaries, changing reuse also changes their
-wall-clock pace.
+Approximately 90-minute controls at reuse ratios 4, 6.25, and 8 showed comparable strength at their shared
+evaluation boundaries despite different update rates. The retained ratio of four favours fresh self-play data.
+Its long-run effect is coupled to replay capacity, optimization, and inference changes in the completed campaign.
+Reuse also changes the wall-clock pace of evaluation, publication, search-budget schedules, and replay growth,
+which advance at quantum boundaries. The configured credit per admitted row therefore describes the training
+schedule rather than the exact exposure of every distinct replay position.
 
 ## Parallel-search operating point
 
@@ -41,15 +39,16 @@ statistical intervals.
 | 4 | 2,804 | 3.4–3.8 | −19 |
 | 16 | 2,778 | 1.3–1.8 | −45 |
 
-The relative penalty was much larger at only 100 searches: sixteen parallel leaves cost about 235 Elo. These few
-budget-by-parallelism points do not define a universal safe concurrency curve. The terminal strength curve varies
-parallelism with budget and must be read as an operating curve.
+At 100 searches, sixteen parallel leaves reduced the central strength estimate by approximately 235 Elo,
+compared with 45 Elo at 1,000 searches. The tested points support budget-dependent parallelism but are insufficient
+to determine a general schedule. The final strength curve uses the operating settings reported in Chapter 8.
 
 ## Negative search and reuse controls
 
-The learned pre-search allocator captured about 23% of available deep-policy-divergence headroom at nearly matched
-spend but trailed non-adaptive online training by roughly 60–100 ladder Elo. A later in-search stopper skipped about
-14% of nominal simulations, yet improved generation cadence by only about 3% under actor/trainer overlap. Its
+The learned pre-search allocator captured approximately 23% of the available improvement in deep-policy
+divergence at nearly matched search cost, but trailed non-adaptive online training by roughly 60–100 ladder Elo.
+The in-search stopper skipped approximately 14% of nominal simulations while improving generation cadence by
+only about 3% under actor-trainer overlap. Its
 paired strength differences, calculated as baseline minus stopper (+1.7 ± 9.9 and −4.2 ± 10.1 Elo, standard
 errors), did not resolve an effect.
 
@@ -57,9 +56,9 @@ Exact graph search avoided only 0.0249% and 0.1769% of neural evaluations at 1,0
 8.63% and 8.28% slower. A bounded inference cache shared inside each self-play process had a 0.970% hit rate;
 disabling it made game updates about 0.88% faster and lowered peak worker memory about 7.12%. A wider unbounded
 repeat tracker observed at most about 4% reuse in the tested production-like workloads and itself cost throughput.
-These are workload-specific negative findings, not general limits on graph search or caching.
+In these workloads, the measured reuse was insufficient to offset the cost of detecting and exploiting it.
 
-## Throughput comparison boundaries
+## Throughput benchmarks
 
 **Host submission.** The controlled 32-process self-play benchmark increased aggregate search throughput from
 512,679 to 617,782 searches/s. On the same node restricted to 24 CPU cores, it increased from 215,265 to
@@ -77,7 +76,7 @@ processed 6,252 training samples/s. The actor-overlap sweep in Table C1 is a sep
 and concurrent-search rates should be compared within that sweep.
 
 The 1.86x TensorRT INT8 versus TorchScript search comparison used a production-shaped 400-visit actor workload,
-but different checkpoint weights; it is a backend-and-checkpoint result, not an isolated precision effect. The
+with different checkpoint weights, so the comparison includes both backend and model changes. The
 23.3% replay-admission gain compared separate live 400- and 600-visit stages that also differed in checkpoint
 and actor scheduling. Absolute systems rates vary with CPU quota, GPU power, PCIe and NUMA layout, runtime versions,
 model shape, batching, and concurrent training.

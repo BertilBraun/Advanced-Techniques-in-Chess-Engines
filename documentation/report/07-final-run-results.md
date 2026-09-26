@@ -1,52 +1,47 @@
 # 8. Final training and evaluation results
 
-The final chess model, with 14 residual blocks and 160 channels, has 6.32 million parameters and reaches
-**3,251 benchmark Elo at 100,000 searches per move** in the paired Stockfish 13 evaluation introduced in
-Chapter 2. This chapter follows its
-2.5-day training trajectory, compares it with the previous chess recipe, and shows what additional search and a
-much smaller distilled model achieve.
+The 6.32-million-parameter final model reached **3,251 benchmark Elo at 100,000 searches per move** after
+2.5 days of training. This chapter relates that result to the training trajectory, the gain from additional
+search, and the strength retained by a compact distilled student. All final ratings use the paired Stockfish 13
+evaluation introduced in Chapter 2.
 
 ## Training progress
 
-During training, the inexpensive 64-search ladder measured progress without repeatedly running deep-search matches.
-Its rating rose from 798 to 2,372.2 over 2.5 days, with a peak of 2,407.6 in that
-window. Figure 11 places this trajectory beside four earlier chess campaigns. The plot ends with the selected
-training run at 2.5 days; Appendix B explains the comparison windows.
+The 64-search training ladder rose from 798 to 2,372.2 over 2.5 days, reaching a peak of 2,407.6 within that
+window. Figure 11 compares the trajectory with four earlier chess campaigns. The final recipe reached a higher
+plateau within its shorter training window; [Appendix B](appendix-b-evaluation-tables.md) specifies the
+comparison windows and estimator adjustment.
 
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
 Figure 11: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
 the preceding baseline at 3.0 days; the matched comparison uses a common rating calculation.
 
-The plotted curves make the progression visible, but the previous baseline and final run originally used
-different ladder estimators. Recomputing their plateaus on the same three-rung estimator gives 2,283.9 and
-2,358.0 benchmark Elo: **about +74 Elo** for the final recipe. This compares complete training recipes, not an
-isolated contribution from any one change. Appendix B gives the transfer calculation and its uncertainty.
+Using a common three-rung estimator, the preceding baseline and final recipe have plateau ratings of 2,283.9
+and 2,358.0, respectively: an improvement of approximately 74 Elo. This comparison summarizes the change in the
+complete training recipe. The estimator transfer and its sensitivity are detailed in Appendix B.
 
-Checkpoint 1026 came from the strongest region of the 64-search ladder. A later function-preserving 19×176
-continuation recovered its parent's strength but did not establish a higher plateau. Appendix A describes the
-selected training trajectory and checkpoint identity.
+Checkpoint 1026 was selected near the strongest region of the 64-search ladder. The reported architecture has
+14 residual blocks and 160 channels; a function-preserving 19×176 continuation recovered parity without
+establishing a higher plateau. Appendix A identifies the training sequence underlying the reported checkpoint.
 
-The selected checkpoint followed **408,500 optimizer steps** in 817 training quanta. At a global batch of 2,048,
-that is **836,608,000 training presentations**. Self-play completed **3,249,647 games**, materializing
-approximately **209.15 million net positions** over the same lineage; replay held **16 million live rows** at
-selection. Thus the learner saw about four training presentations per admitted position. Appendix A shows the
-trajectories and counting boundaries.
+Training comprised **408,500 optimizer steps** in 817 quanta, or **836,608,000 presentations** at a global batch
+of 2,048. Self-play completed **3,249,647 games** and materialized approximately **209.15 million net positions**,
+corresponding to roughly four training presentations per admitted position. The replay window contained
+**16 million live rows** at selection. Appendix A provides the volume and throughput traces.
 
-At a conservative 100 searched plies and roughly 600 simulations per game move, 3.25 million completed games
-correspond to approximately 195 billion search simulations.
+Using a conservative mean of 100 searched plies per game and roughly 600 simulations per move gives an estimated
+195 billion search simulations across the 3.25 million completed games.
 
-Across 480 small-model quanta, median trainer throughput was 16,977 samples/s; across 337 medium-model quanta it
-was 11,194. The 2.5-day final training cost **$43.20** in node rental at $0.72/h. Appendix A shows the throughput
-traces; the cost excludes the separate experiments and evaluations.
+Median trainer throughput was 16,977 samples/s over 480 small-model quanta and 11,194 over 337 medium-model
+quanta. The 2.5-day run cost **$43.20** at the node rental rate of $0.72/h.
 
 ## Playing strength across search budgets
 
-Search transforms the same trained network from **1,658 benchmark Elo without search** to
-**3,251 at 100,000 searches per move**, a difference of 1,593 points on this benchmark. Table 1 in Chapter 2 gives all ten
-paired-match rows; Figure 12 shows the selected rating at each budget, with the alternate tested opponent rung
-visible beside it. Gains continue through the deepest measured point, though each later increase in search buys a
-smaller increment of Elo.
+Search increased playing strength from **1,658 benchmark Elo for policy-only play** to **3,251 at 100,000
+searches per move**, a difference of 1,593 points. Figure 12 summarizes the ten matches in Table 1, showing both
+opponent-based estimates at each budget. Strength continued to improve through the deepest measured point, with
+diminishing Elo gains for successive increases in search.
 
 ![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
 
@@ -55,13 +50,13 @@ and bars show 95% match-bootstrap intervals. The categorical horizontal axis sep
 100, 1,000, 10,000, and 100,000 searches per move; its spacing does not represent compute.
 
 At the deepest budget, the 100,000-node and 200,000-node Stockfish opponents imply 3,247 and 3,251 benchmark
-Elo, respectively. Their four-point agreement supports the headline result. A 100,000-search move takes roughly
+Elo, respectively, placing both estimates close to the reported 3,251. A 100,000-search move takes roughly
 five seconds of thinking time on an RTX 4070 SUPER with the current setup.
 
 ### Parallel search trades time for strength
 
-Parallel search reduces the wait for a move by evaluating several leaves before their results return. As discussed
-in Section 4.1, this trades some search quality for better GPU use. The strength curve uses one parallel search at
+The evaluation uses increased leaf parallelism at deeper budgets to reduce latency. As discussed in Section 4.1,
+concurrent leaf selection trades some search quality for better GPU utilization. The strength curve uses one parallel search at
 100 and 1,000 searches per move, four at 10,000, and sixteen at 100,000. A controlled 1,000-search sweep against
 the same 20,000-node opponent illustrates the tradeoff: one parallel
 search measured 2,823 Elo, four measured 2,804, and sixteen measured 2,778. Their central differences of 19 and
@@ -70,16 +65,17 @@ search measured 2,823 Elo, four measured 2,804, and sixteen measured 2,778. Thei
 and eleven times faster.
 
 At only 100 searches, sixteen-way parallelism reduced the central strength estimate by 235 Elo. The available
-points suggest that a fixed parallel count becomes less costly as the total budget grows, but they are too sparse
-to specify a safe budget-by-parallelism frontier. Appendix C gives the controlled operating points.
+points indicate a smaller penalty at larger budgets, but do not establish a general concurrency schedule.
+[Appendix C](appendix-c-supporting-comparisons.md) gives the controlled operating points.
 
 ## Distilling a smaller player
 
 A 470,295-parameter student—13.4 times smaller than the teacher—reached **2,697 [2,640, 2,753] benchmark Elo**
 at 10,000 searches after 110,000 training steps. The shorter 36,621-step student reached **2,683 [2,637, 2,731]**
-under the same opponent and search setting. The 14-Elo central difference lies within match uncertainty, and
-held-out policy loss had nearly flattened. At 100,000 searches, the longer student reached
-**2,873 [2,819, 2,935]**, although only one opponent rung was run there.
+under the same opponent and search setting. The 14-Elo difference is unresolved by the match intervals, consistent
+with the nearly flat held-out policy loss. At 100,000 searches, the longer student reached
+**2,873 [2,819, 2,935]** against the tested opponent.
 
-Both students trained on the same frozen 20-million-row replay snapshot. Appendix B gives the match counts and
-evaluation details.
+Both students trained on the same frozen 20-million-row replay snapshot. The longer schedule therefore increased
+exposure to fixed data rather than adding new self-play experience, with no resolved strength gain at the shared
+10,000-search budget. Appendix B gives the match counts, intervals, and evaluation settings.

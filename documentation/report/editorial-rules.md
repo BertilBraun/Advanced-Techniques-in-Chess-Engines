@@ -15,3 +15,6 @@ These rules guide editing; they are not part of the published paper.
 11. Review a whole chapter for prerequisites and flow, then its transitions to adjacent chapters. A polished opening does not pass a chapter whose later subsections remain unexplained.
 12. Validate the rendered report: readable figures, working internal references, ordinary top/bottom floats, and no forced half-empty pages.
 13. Begin each chapter with a short introduction establishing its question and scope before the first subsection. Preserve existing openings that already do this; do not add redundant roadmaps.
+14. Write analytical paragraphs, not a sequence of observations followed by a moral. Connect the mechanism, evidence, and interpretation; remove rhetorical questions, textbook definitions of familiar metrics, and repeated "lesson" endings.
+15. Prefer precise verbs and explicit subjects to conversational framing ("looked useful," "the payoff," "what the network gets to learn"). Technical register should improve the argument, not merely replace ordinary words with longer ones.
+16. A style pass covers every named chapter and appendix, including captions and transitions. State its actual scope at handoff; reviewing one chapter does not imply that adjacent chapters were revised.
