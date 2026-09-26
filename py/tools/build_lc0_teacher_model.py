@@ -51,8 +51,9 @@ class Lc0TeacherModel(nn.Module):
         outputs = self.backbone(encoded_boards[:, :LC0_INPUT_PLANES])
         lc0_policy = outputs[self.policy_output_index].to(torch.float32)
         lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
-        batch = lc0_policy.shape[0]
-        unmapped = torch.full((batch, 1), UNMAPPED_LOGIT, dtype=torch.float32, device=lc0_policy.device)
+        # Derived from the output rather than torch.full: tracing bakes an explicit device and batch size
+        # into a created tensor, and the first gate run failed on exactly that CPU/CUDA mismatch.
+        unmapped = lc0_policy[:, :1] * 0.0 + UNMAPPED_LOGIT
         policy = torch.cat((lc0_policy, unmapped), dim=1).index_select(1, self.permutation)
         wdl = lc0_wdl if self.wdl_is_already_probability else torch.softmax(lc0_wdl, dim=1)
         return policy, wdl
@@ -139,7 +140,11 @@ def main() -> None:
     if not bool(torch.all(torch.isfinite(policy))):
         raise SystemExit('Wrapped policy output contains non-finite logits.')
 
-    scripted = torch.jit.trace(model, sample)
+    # Traced on the serving device so any constant the ONNX conversion creates inline lands there; the
+    # search and the tools all serve on cuda:0.
+    trace_device = torch.device('cuda', 0) if torch.cuda.is_available() else torch.device('cpu')
+    model = model.to(trace_device)
+    scripted = torch.jit.trace(model, sample.to(trace_device))
     torch.jit.save(scripted, str(arguments.output))
     print(f'Wrote {arguments.output}')
 
