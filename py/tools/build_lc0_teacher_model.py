@@ -1,0 +1,120 @@
+"""Wraps an Lc0 ONNX network as a TorchScript model this project's inference pipeline can serve.
+
+The pipeline hands the model an int8 (batch, 112, 8, 8) tensor and requires back policy logits over
+1880 actions, finite for every legal move, and a WDL triple that is already a probability
+distribution. This tool bakes the policy permutation and those conversions into a scripted module so
+the C++ side needs no Lc0 awareness at all, and swapping to a larger Lc0 network is a re-export
+rather than a code change.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import torch
+from torch import nn
+
+LC0_POLICY_SIZE = 1858
+PROJECT_ACTION_SIZE = 1880
+RULE50_PLANE_INDEX = 109
+# Finite, because the pipeline rejects a non-finite logit on any action it considers legal.
+UNMAPPED_LOGIT = -1.0e4
+
+
+class Lc0TeacherModel(nn.Module):
+    """Adapts Lc0's input scaling, policy indexing and value head to this project's contract."""
+
+    def __init__(self, backbone: nn.Module, permutation: torch.Tensor, wdl_is_already_probability: bool) -> None:
+        super().__init__()
+        self.backbone = backbone
+        self.register_buffer('permutation', permutation)
+        self.wdl_is_already_probability = wdl_is_already_probability
+
+    def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        planes = encoded_boards.to(torch.float32)
+        rule50 = planes[:, RULE50_PLANE_INDEX : RULE50_PLANE_INDEX + 1] / 99.0
+        planes = torch.cat(
+            (planes[:, :RULE50_PLANE_INDEX], rule50, planes[:, RULE50_PLANE_INDEX + 1 :]),
+            dim=1,
+        )
+        lc0_policy, lc0_wdl = self.backbone(planes)
+        batch = lc0_policy.shape[0]
+        policy = torch.full(
+            (batch, PROJECT_ACTION_SIZE),
+            UNMAPPED_LOGIT,
+            dtype=lc0_policy.dtype,
+            device=lc0_policy.device,
+        )
+        policy.scatter_(1, self.permutation.expand(batch, -1), lc0_policy)
+        wdl = lc0_wdl if self.wdl_is_already_probability else torch.softmax(lc0_wdl, dim=1)
+        return policy, wdl
+
+
+def load_backbone(onnx_path: Path) -> nn.Module:
+    try:
+        from onnx2torch import convert
+    except ImportError as error:
+        raise SystemExit('onnx2torch is required to convert an Lc0 ONNX export.') from error
+    return convert(str(onnx_path)).eval()
+
+
+def build_permutation(policy_map_path: Path) -> torch.Tensor:
+    payload = json.loads(policy_map_path.read_text(encoding='utf-8'))
+    entries = payload['lc0_index_to_action_id']
+    if len(entries) != LC0_POLICY_SIZE:
+        raise SystemExit(f'Policy map has {len(entries)} entries, expected {LC0_POLICY_SIZE}.')
+    uncovered = [index for index, action_id in enumerate(entries) if action_id < 0]
+    if uncovered:
+        raise SystemExit(
+            f'{len(uncovered)} Lc0 indices are unmapped; rerun build_lc0_policy_map.py with more positions.'
+        )
+    return torch.tensor(entries, dtype=torch.int64).unsqueeze(0)
+
+
+def wdl_is_probability(backbone: nn.Module) -> bool:
+    """Lc0 exports differ in whether the value head is softmaxed; decide it by measurement."""
+    with torch.inference_mode():
+        probe = torch.zeros((2, 112, 8, 8), dtype=torch.float32)
+        probe[:, 111] = 1.0
+        _, wdl = backbone(probe)
+    sums = wdl.sum(dim=1)
+    within_unit_range = bool(torch.all(wdl >= 0.0) and torch.all(wdl <= 1.0))
+    sums_to_one = bool(torch.all((sums - 1.0).abs() < 1.0e-3))
+    print(f'Value head probe: range ok {within_unit_range}, sums {sums.tolist()}')
+    return within_unit_range and sums_to_one
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--onnx', type=Path, required=True, help='Lc0 network exported with `lc0 leela2onnx`.')
+    parser.add_argument('--policy-map', type=Path, required=True, help='Output of build_lc0_policy_map.py.')
+    parser.add_argument('--output', type=Path, required=True, help='TorchScript module to write.')
+    return parser.parse_args()
+
+
+def main() -> None:
+    arguments = parse_arguments()
+    backbone = load_backbone(arguments.onnx)
+    permutation = build_permutation(arguments.policy_map)
+    model = Lc0TeacherModel(backbone, permutation, wdl_is_probability(backbone)).eval()
+
+    with torch.inference_mode():
+        sample = torch.zeros((4, 112, 8, 8), dtype=torch.int8)
+        sample[:, 111] = 1
+        policy, wdl = model(sample)
+    if policy.shape != (4, PROJECT_ACTION_SIZE) or wdl.shape != (4, 3):
+        raise SystemExit(f'Wrapped model produced {policy.shape} and {wdl.shape}.')
+    if not bool(torch.all((wdl.sum(dim=1) - 1.0).abs() < 1.0e-2)):
+        raise SystemExit('Wrapped WDL output is not a probability distribution.')
+    if not bool(torch.all(torch.isfinite(policy))):
+        raise SystemExit('Wrapped policy output contains non-finite logits.')
+
+    scripted = torch.jit.trace(model, sample)
+    torch.jit.save(scripted, str(arguments.output))
+    print(f'Wrote {arguments.output}')
+
+
+if __name__ == '__main__':
+    main()

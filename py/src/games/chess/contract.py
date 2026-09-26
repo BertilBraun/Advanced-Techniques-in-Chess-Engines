@@ -20,8 +20,10 @@ OWN_QUEEN_SIDE_CASTLING_PLANE = 13
 OPPONENT_KING_SIDE_CASTLING_PLANE = 14
 OPPONENT_QUEEN_SIDE_CASTLING_PLANE = 15
 CHECKERBOARD_PLANE = 38
-CHESS_CHANNEL_COUNT = 52
-CHESS_BINARY_CHANNEL_COUNT = 40
+# Lc0 teacher branch: Lc0's INPUT_CLASSICAL_112_PLANE layout replaces this project's 52 planes.
+# Must stay in step with ChessRepresentationDimensions in cpp/src/games/chess/encoding.
+CHESS_CHANNEL_COUNT = 112
+CHESS_BINARY_CHANNEL_COUNT = 109
 
 
 class ChessPosition(Protocol):

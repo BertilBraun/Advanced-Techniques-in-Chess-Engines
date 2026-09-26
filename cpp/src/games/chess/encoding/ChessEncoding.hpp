@@ -17,11 +17,18 @@ enum class ChessActionEncoding {
 
 inline constexpr ChessActionEncoding chessActionEncoding = ChessActionEncoding::Reduced;
 
+// The Lc0 teacher branch encodes Lc0's own 112-plane input instead of this project's 52 planes:
+// 8 history positions x 13 planes, then castling, side to move, rule 50 and the two constant planes.
+// The project's own networks cannot run against this layout; that is deliberate and this branch is
+// not merged.
 struct ChessRepresentationDimensions {
     static constexpr int boardLength = 8;
-    static constexpr int channelCount = 52;
-    static constexpr int binaryChannelCount = 40;
-    static constexpr int scalarChannelCount = 12;
+    static constexpr int historyPositionCount = 8;
+    static constexpr int planesPerHistoryPosition = 13;
+    static constexpr int channelCount = 112;
+    static constexpr int binaryChannelCount =
+        historyPositionCount * planesPerHistoryPosition + 5;
+    static constexpr int scalarChannelCount = 3;
     static constexpr int policyPlaneCount = 76;
     static constexpr int policyPlaneActionCount = policyPlaneCount * boardLength * boardLength;
     static constexpr int reducedActionCount = 1880;
