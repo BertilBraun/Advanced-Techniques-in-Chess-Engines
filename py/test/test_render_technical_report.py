@@ -6,14 +6,43 @@ import pytest
 from markdown_it import MarkdownIt
 from tools.render_technical_report import (
     REPORT_ROOT,
+    advance_main_figures,
     bibliography_tex,
     caption_tex,
     escape_tex,
+    figure_width_points,
     inline_tex,
     markdown_tex,
     section_tex,
     table_tex,
 )
+
+
+@pytest.mark.parametrize(
+    'body',
+    [
+        '<style>.label {font-size: 12px;}</style><text class="label">Label</text>',
+        '<text font-size="12">Label</text>',
+        '<g id="text_1"><g transform="translate(1 2) scale(0.12 -0.12)"><path/></g></g>',
+    ],
+)
+def test_figure_width_caps_largest_label_at_ten_points(tmp_path: Path, body: str) -> None:
+    source = tmp_path / 'figure.svg'
+    source.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180">' + body + '</svg>', encoding='utf-8'
+    )
+    assert figure_width_points(source) == pytest.approx(300)
+
+
+def test_main_figures_are_queued_early_without_changing_their_order() -> None:
+    first = '\\begin{figure*}[t]\nFIRST\n\\end{figure*}\n'
+    second = '\\begin{figure*}[t]\nSECOND\n\\end{figure*}\n'
+    paragraph = ' '.join(['prose'] * 300) + '\n\n'
+    latex = paragraph * 3 + first + paragraph * 3 + second
+    adjusted = advance_main_figures(latex)
+    assert adjusted.index(first) < latex.index(first)
+    assert adjusted.index(first) < adjusted.index(second)
+    assert adjusted.replace(first, '').replace(second, '') == latex.replace(first, '').replace(second, '')
 
 
 def test_system_diagrams_respect_float_limit_and_loss_has_two_forms(tmp_path: Path) -> None:

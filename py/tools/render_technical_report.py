@@ -6,6 +6,8 @@ import argparse
 import re
 import shutil
 import subprocess
+import xml.etree.ElementTree as element_tree
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -69,7 +71,7 @@ PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
 \clubpenalty=10000
 \raggedbottom
 \setlength{\columnsep}{7mm}
-\setcounter{dbltopnumber}{1}
+\setcounter{dbltopnumber}{2}
 \setlist[itemize]{leftmargin=1.25em,itemsep=0.08em,topsep=0.25em}
 \setlist[enumerate]{leftmargin=1.35em,itemsep=0.12em,topsep=0.25em}
 \captionsetup{font=small,labelfont=bf}
@@ -207,31 +209,41 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
     address = image.attrGet('src')
     if address is None:
         raise ValueError('Figure has no source path.')
-    figure_path = convert_figure(source.parent / address, build_directory)
+    figure_source = source.parent / address
+    figure_path = convert_figure(figure_source, build_directory)
+    width_points = figure_width_points(figure_source)
     caption_text = caption.content.replace('\n', ' ').strip()
     if appendix:
-        environment, placement, width, height = 'figure', 'H', '0.70', '0.34'
-        if Path(address).stem.startswith('appendix-'):
-            width = '0.78'
-            if Path(address).stem in {'appendix-training-stages', 'appendix-resignation'}:
-                height = '0.48'
-    elif source.name == '07-final-run-results.md':
-        environment, placement, width, height = 'figure*', 't', '0.87', '0.36'
-    elif source.name == '03-system-and-methods.md':
-        environment, placement, width, height = 'figure*', 't', '0.98', '0.43'
-    elif Path(address).stem in {'appendix-replay-age', 'appendix-resignation'}:
-        environment, placement, width, height = 'figure*', 't', '0.86', '0.58'
+        environment, placement = 'figure', 'H'
     else:
-        environment, placement, width, height = 'figure*', '!t', '0.98', '0.43'
+        environment, placement = 'figure*', 't'
     return (
         f'\\begin{{{environment}}}[{placement}]\n'
         '\\centering\n'
-        rf'\includegraphics[width={width}\textwidth,height={height}\textheight,keepaspectratio]{{'
+        rf'\includegraphics[width={width_points:.3f}bp,height=0.70\textheight,keepaspectratio]{{'
         + figure_path
         + '}\n'
         + caption_tex(caption_text, Path(address).stem)
         + f'\n\\end{{{environment}}}\n'
     )
+
+
+def figure_width_points(source: Path) -> float:
+    svg = source.read_text(encoding='utf-8')
+    root = element_tree.fromstring(svg)
+    view_width = float(root.attrib['viewBox'].split()[2])
+    font_sizes = [float(size) for size in re.findall(r'font-size:\s*([\d.]+)', svg)]
+    font_sizes.extend(float(element.attrib['font-size']) for element in root.iter() if 'font-size' in element.attrib)
+    for group in root.iter('{http://www.w3.org/2000/svg}g'):
+        if group.attrib.get('id', '').startswith('text_'):
+            for child in group:
+                scale = re.search(r'scale\(([\d.]+)', child.attrib.get('transform', ''))
+                if scale:
+                    font_sizes.append(100 * float(scale.group(1)))
+    if not font_sizes:
+        raise ValueError(f'Cannot measure figure typography: {source}')
+    text_width_points = (210 - 2 * 16) * 72 / 25.4
+    return min(0.98 * text_width_points, 10 * view_width / max(font_sizes))
 
 
 def parse_table(tokens: list[Token], start: int) -> tuple[list[list[str]], int]:
@@ -405,12 +417,50 @@ def find_tectonic() -> Path:
     raise ValueError('Tectonic is required to build the report PDF. Install it and retry.')
 
 
+@dataclass(frozen=True)
+class FigurePlacementEdit:
+    start: int
+    end: int
+    replacement: str
+
+
+def advance_main_figures(latex: str) -> str:
+    edits: list[FigurePlacementEdit] = []
+    previous_insertion = 0
+    for figure in re.finditer(r'\\begin\{figure\*\}\[t\].*?\\end\{figure\*\}\n', latex, re.DOTALL):
+        if any(name in figure.group() for name in ('fig:learning-loop}', 'fig:chess-network-architecture}')):
+            previous_insertion = figure.end()
+            continue
+        # Two-column top floats must enter the queue before their reference page is composed.
+        lookahead_words = 500
+        if 'fig:replay-decision-path}' in figure.group():
+            lookahead_words = 800
+        elif 'fig:throughput-to-learning}' in figure.group():
+            lookahead_words = 800
+        boundaries = [match.end() for match in re.finditer(r'\n\n', latex[previous_insertion : figure.start()])]
+        insertion = previous_insertion
+        for boundary in reversed(boundaries):
+            candidate = previous_insertion + boundary
+            if len(latex[candidate : figure.start()].split()) >= lookahead_words:
+                insertion = candidate
+                break
+        edits.append(FigurePlacementEdit(figure.start(), figure.end(), ''))
+        edits.append(FigurePlacementEdit(insertion, insertion, figure.group()))
+        previous_insertion = insertion
+    for edit in sorted(edits, key=lambda item: (item.start, item.end), reverse=True):
+        latex = latex[: edit.start] + edit.replacement + latex[edit.end :]
+    return latex
+
+
 def build_report(output: Path) -> None:
     build_directory = REPOSITORY_ROOT / 'tmp' / 'pdfs' / 'latex-build'
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
+        if filename == '07-final-run-results.md':
+            parts.append(r'\setcounter{dbltopnumber}{1}' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
+    parts = [advance_main_figures(''.join(parts))]
     parts.extend(
         [
             r'\FloatBarrier' + '\n',

@@ -215,25 +215,22 @@ def render_stages(trajectory: tuple[TrainingObservation, ...], diagnostics: Diag
 
 
 def render_replay(trajectory: tuple[TrainingObservation, ...], diagnostics: Diagnostics) -> None:
-    figure, axes = training_figure(2)
+    figure, axes = horizontal_training_figure(('Replay positions (M)', 'Mean sampled age (h)'))
     x = [p.optimizer_steps / 1000 for p in trajectory]
-    training_axis(axes[0], 'Replay positions (M)')
     axes[0].plot(x, [p.replay_live_rows / 1e6 for p in trajectory], color=BLUE, label='Occupied')
     axes[0].step(
         x, [p.replay_capacity / 1e6 for p in trajectory], where='post', color=ORANGE, linestyle=':', label='Capacity'
     )
-    axes[0].legend(frameon=False, fontsize=10, loc='upper left')
-    training_axis(axes[1], 'Mean sampled age (h)')
+    axes[0].legend(frameon=False, fontsize=8, loc='upper left')
     line(axes[1], diagnostics.samples(Metric.REPLAY_AGE), TEAL, scale=3600)
     save_figure(figure, FIGURES / 'appendix-replay-age.svg')
 
 
 def render_resignation(diagnostics: Diagnostics) -> None:
-    figure, axes = training_figure(3)
-    training_axis(axes[0], 'Resignation threshold')
+    figure, axes = horizontal_training_figure(('Resignation threshold', 'False non-loss (%)', 'Mean saved plies'))
+    figure.subplots_adjust(bottom=0.36)
     threshold = diagnostics.samples(Metric.THRESHOLD)
     axes[0].plot([p.optimizer_steps / 1000 for p in threshold], [p.value for p in threshold], color=BLUE, linewidth=1)
-    training_axis(axes[1], 'False non-loss (%)')
     safe_steps = {p.optimizer_steps for p in diagnostics.samples(Metric.SAFE) if p.value == 1}
     for metric, color, label in ((Metric.FALSE_RATE, TEAL, 'Observed'), (Metric.UPPER_BOUND, BLUE, '95% upper bound')):
         samples = diagnostics.samples(metric)
@@ -243,10 +240,22 @@ def render_resignation(diagnostics: Diagnostics) -> None:
         axes[1].plot(x, smooth(values), color=color, label=label, linewidth=1.3)
     axes[1].axhline(2.5, color=ORANGE, linestyle=':', linewidth=1.2, label='Safety limit')
     axes[1].set_ylim(0, 3.8)
-    axes[1].legend(frameon=False, fontsize=9, loc='upper center', ncol=3)
-    training_axis(axes[2], 'Mean saved plies')
+    handles, labels = axes[1].get_legend_handles_labels()
+    figure.legend(handles, labels, frameon=False, fontsize=8, loc='lower center', ncol=3)
     line(axes[2], diagnostics.samples(Metric.SAVED_PLIES), TEAL)
     save_figure(figure, FIGURES / 'appendix-resignation.svg')
+
+
+def horizontal_training_figure(labels: tuple[str, ...]) -> tuple[Figure, list[Axes]]:
+    figure, array = plt.subplots(1, len(labels), figsize=(7, 2.6), squeeze=False)
+    axes = list(array[0])
+    figure.subplots_adjust(left=0.07, right=0.99, top=0.96, bottom=0.28, wspace=0.38)
+    for axis, label in zip(axes, labels, strict=True):
+        training_axis(axis, '')
+        axis.set_xticks([0, 200, 400])
+        axis.tick_params(labelsize=8.5)
+        axis.set_xlabel(label, fontsize=10)
+    return figure, axes
 
 
 def render_ladder(path: Path) -> None:

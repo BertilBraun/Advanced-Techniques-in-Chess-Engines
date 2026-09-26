@@ -40,8 +40,8 @@ on ply: searched endgame positions remain eligible throughout the game. Sparse p
 ![Replay occupancy versus capacity and elapsed age of sampled positions](figures/appendix-replay-age.svg)
 
 Figure 5: Replay occupancy follows the expanding capacity during final training. The mean age of sampled positions
-grows to roughly two hours; age is measured from position creation. The dashed line marks the small-to-medium
-model transition.
+grows to roughly two hours; age is measured from position creation. Both horizontal axes show completed optimizer
+steps in thousands. The dashed line marks the small-to-medium model transition.
 
 ## Replay capacity and reuse
 
@@ -83,8 +83,8 @@ An earlier replay design instead weighted merged duplicate positions by their mu
 Figure 6: Resignation threshold, observed false-resignation rate and its one-sided 95% upper bound, and estimated
 saved plies during final training. The error panel shows periods when the resignation gate is enabled; the dotted
 line marks the 2.5% calibration target, including observed excursions. Saved plies are estimated from continuation
-games. Faint traces show raw values, with eleven-quantum averages overlaid. The dashed vertical line marks the
-small-to-medium model transition.
+games. Faint traces show raw values, with eleven-quantum averages overlaid. All horizontal axes show completed
+optimizer steps in thousands; the dashed vertical line marks the small-to-medium model transition.
 
 ## Resignation calibration
 
