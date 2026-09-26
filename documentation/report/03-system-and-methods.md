@@ -83,60 +83,57 @@ every operation native: it is to keep the expensive repeated work fast enough to
 
 ## Chess representation and outputs
 
-The network receives a chess position as an image-like stack of 8×8 arrays, called *planes*. A piece plane records
-where a particular kind of piece is present; other planes encode recent moves and rule-relevant information such
-as castling rights, en passant, repetition, and the fifty-move counter. Two identical-looking boards can have
-different legal outcomes because of this information. The selected input contains 52 planes, expressed from the
-side-to-move perspective so the network can reuse its representation for either player.
+Figure 2 shows the network from its 52×8×8 chess input through a shared residual backbone to its output heads.
+The input planes encode pieces, recent moves, and game-state features from the side-to-move perspective. Castling
+rights, repetition, and the halfmove clock distinguish positions whose boards look identical but whose legal
+continuations or draw conditions differ. Appendix D, Table D1 gives the complete channel-by-channel specification.
 
-A convolutional neural network transforms these inputs into learned board features. Convolutions apply the same
-small spatial filters across the board, initially combining nearby information. Successive layers build richer
-relationships. The main feature extractor is a residual *backbone*, also called the trunk: each block learns a
-correction to its input and adds that correction back to it. This gives a deep network a direct path for retaining
-useful features while refining them. The final model has 14 residual blocks and 160 feature channels at each square.
-
-Local filters are supplemented with global context. Every second residual block summarizes selected features
-across the board and feeds that summary back into the spatial representation. A feature at one square can therefore
-respond to the broader position, rather than depending only on information that has propagated through neighbouring
-squares. Figure 2 shows how this common board representation feeds the output branches.
+The backbone learns a common spatial representation for move selection and position evaluation. Its 14 residual
+blocks, each with 160 channels, refine board features by adding learned corrections to the preceding representation.
+Every second block also pools features across the board and feeds the resulting global context back into the spatial
+features. This lets a local feature respond to the wider position without relying solely on successive local
+convolutions to propagate that information.
 
 ![Shared residual chess backbone with policy, outcome, and training-only auxiliary branches](figures/chess-network-architecture.svg)
 
 Figure 2: The final chess network. A shared 14-block, 160-channel backbone processes 52 input planes. Policy and
 value heads provide the predictions used by search; the two auxiliary heads contribute only during training.
 
-A *head* is a small output branch attached to the shared backbone. The policy and value heads see the same features,
-but ask different questions about them. Their training losses both update the backbone, allowing the common
-representation to support move selection and position evaluation without computing two separate networks.
+A *head* maps these shared features to a particular prediction. The policy head represents each square with learned
+origin and destination vectors; their dot products score moves, with additional offsets distinguishing promotion
+pieces. Mapping these scores to 1,880 actions, masking illegal moves, and normalizing produces the move probabilities
+that guide search. The value head instead predicts win, draw, and loss (WDL). Search uses the win probability minus
+the loss probability as its scalar estimate; training retains the full distribution, distinguishing a likely draw
+from equally likely winning and losing outcomes.
 
-The policy head asks which legal moves are promising. The retained from-to design forms a learned representation
-of each square as an origin and as a destination, then scores origin-destination pairs. Promotion scores distinguish
-moves that share those squares but promote to different pieces. A fixed mapping collects these scores into the
-1,880-action chess interface. Illegal actions are masked out and the remaining scores are normalized into move
-probabilities. The result is the prior that tells search where to begin looking; it is not yet the searched policy.
-
-The value head asks how the position is likely to end. It predicts three probabilities: win, draw, and loss (WDL).
-For search, the expected value is the win probability minus the loss probability, ranging from -1 to +1 for the
-player to move. Retaining the full distribution during training also lets the model distinguish a likely draw from
-a mixture of winning and losing possibilities with the same expected score.
-
-Two additional heads predict the next searched policy and the remaining game length. These are *auxiliary tasks*:
-the completed game provides their labels, and their errors help train the shared features. Search needs neither
-output to select a move, so the inference copy includes only the backbone and the primary policy and value heads.
-This saves the work of computing auxiliary outputs in every simulation while retaining what their training taught
-the shared representation.
+Both objectives train the same backbone, sharing the cost of extracting board features. Two auxiliary heads add
+supervision for the next searched policy and remaining game length. Their predictions are not needed to choose
+moves, so they are omitted from the inference copy while the backbone retains the features learned from those tasks.
+Appendix D specifies the output shapes and action encoding.
 
 ## Search and self-play
 
-At each move, search builds a tree whose root is the current position. A traversal starts at that root and selects
-moves until it reaches a position that needs evaluation. Selection combines the value found for a move with an
-exploration bonus based on the network's prior and the move's visit count. This PUCT rule favours moves that look
-good, but also gives promising, less-explored moves a chance to improve their estimate.
+At each move, search builds a tree rooted at the current position. Each traversal follows the PUCT selection rule,
+balancing the value found for a continuation against the benefit of investigating it further:
 
-The network supplies a policy and value for a new leaf. If the position is already terminal, the game rules supply
-its result instead. Backup then updates the visits and accumulated values along the selected path. Because players
-alternate, a favourable result for one side is unfavourable for the other. Repeating this process gradually shifts
-attention towards continuations that survive examination of the opponent's replies.
+```math
+\begin{aligned}
+a^* &= \arg\max_a \left[ Q(s,a) + U(s,a) \right],\\
+U(s,a) &= c_{\mathrm{puct}} P(s,a)
+\frac{\sqrt{\max(1,N(s))}}{1+N(s,a)}.
+\end{aligned}
+```
+
+Here, *P(s,a)* is the policy prior for move *a* in position *s*, *Q(s,a)* its estimated value for the player to move,
+and *N(s,a)* its visit count; *N(s)* counts visits to the parent position. The exploration constant is 1.5. The first
+term rewards continuations that search already considers strong. The second favours moves with a promising prior
+but relatively few visits, decaying as they receive attention. Unvisited moves start from a reduced parent-value
+estimate until a traversal supplies their own evidence.
+
+Reaching a new leaf triggers a network evaluation, unless the game has ended and its result is already known.
+Backing up that value updates the visits and accumulated estimates along the selected path, reversing perspective
+at each ply. Successive traversals therefore test the network's preferences against increasingly explored replies,
+rather than merely resampling its initial move probabilities.
 
 For example, the network may initially prefer a move that wins a pawn. Search can discover that the opponent then
 has a dangerous reply, lower its estimate of that continuation, and spend more visits on a safer alternative.
@@ -165,10 +162,10 @@ final full search estimates the unfinished position's value instead of assigning
 
 ## Replay and materialization
 
-Training only on the latest game would expose the network to a narrow, highly correlated sequence of positions.
-A *replay buffer* keeps examples from many completed games so each optimizer batch can mix different openings,
-middlegames, and endings. Reusing this experience also allows several training presentations per newly searched
-position rather than requiring another expensive game for every update.
+A *replay buffer* separates the order in which experience is generated from the order in which it is learned.
+Adjacent positions in a game are highly correlated; mixing examples from many games gives each optimizer batch
+a broader range of openings, middlegames, and endings. Reuse also amortizes the cost of search: a useful position
+can contribute to several updates without requiring another game to generate it again.
 
 Each example stores the encoded position, its legal actions, the searched policy, and an outcome target. For a
 finished game, the outcome is expressed from the side to move at each stored position. For a capped game, the final
@@ -193,10 +190,20 @@ from merely making more passes over an unchanged pool of experience.
 
 ## Training
 
-A training batch asks the network to reproduce what was learned through play. The policy loss compares its move
-probabilities with the search visit distribution, rewarding probability placed on moves that search favoured.
-The value loss compares its WDL prediction with the stored outcome target. Both losses send gradients through their
-heads into the common backbone, updating the features used by the next round of searches.
+Training distils the results of search and play into predictions that the next search can obtain in a single
+network evaluation. For one position, the objective combines policy and outcome cross-entropies with auxiliary
+supervision:
+
+```math
+\mathcal{L} = -\sum_a \pi_a\log p_a
+-\sum_{k\in\{W,D,L\}} z_k\log v_k
++\mathcal{L}_{\mathrm{aux}}.
+```
+
+The searched policy *π* and outcome target *z* supervise the predicted move probabilities *p* and WDL probabilities
+*v*. Both primary losses have unit weight; the auxiliary term combines next-policy and remaining-length losses
+with weights 0.15 and 0.1. Their gradients meet in the shared backbone, so a feature useful for predicting outcomes
+can also improve the representation from which move preferences are learned.
 
 The outcome target is softened for positions far from the end of a game, where later mistakes can separate the
 position's promise from its eventual result. A small contribution from the position's searched value is also blended
@@ -205,10 +212,10 @@ information. The auxiliary losses add next-policy and remaining-length supervisi
 An unfinished game cannot reveal its true remaining length, so that auxiliary loss is omitted rather than trained
 towards a fabricated zero.
 
-Eight GPU processes train with distributed data parallelism (DDP). Each computes losses and gradients on its portion
-of a global batch of 2,048; their gradients are combined so the model receives one shared update. The optimizer
-uses those gradients to adjust the weights, and gradient clipping limits unusually large updates. A learning-rate
-schedule controls how large the updates are as training progresses.
+Distributed data parallelism (DDP) spreads a global batch of 2,048 across eight GPUs, then combines their gradients
+into one shared optimizer update. A learning-rate schedule controls the update scale as training progresses,
+while gradient clipping limits unusually large gradients. This parallelism accelerates learning from a batch
+without creating eight independently trained players.
 
 Updates are grouped into blocks of 500 optimizer steps. A block followed by publication is a *generation*, and a
 saved set of model weights is a *checkpoint*. Half the self-play actors continue working while a block runs.

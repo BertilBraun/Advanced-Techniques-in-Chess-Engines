@@ -1,5 +1,56 @@
 # Appendix D. Reproducibility and release boundary
 
+## Network input and output contract
+
+The network input has shape 52×8×8. Table D1 specifies every channel; channel ranges list features in tensor
+order. "Own" means the player to move. For Black to move, ranks are reflected and piece colours are exchanged;
+files retain their order. Tensor row zero is the player's home rank, and column zero is file a. There is no separate
+absolute-colour plane. Spatial masks contain zeros and ones; flags and scalar values fill all 64 squares.
+
+| Plane indices | Feature, in channel order | Encoding |
+| --- | --- | --- |
+| 0, 1, 2, 3, 4, 5 | Own pawn, knight, bishop, rook, queen, king | Piece-location masks |
+| 6, 7, 8, 9, 10, 11 | Opponent pawn, knight, bishop, rook, queen, king | Piece-location masks |
+| 12 | Own kingside castling right | Constant 0 or 1 |
+| 13 | Own queenside castling right | Constant 0 or 1 |
+| 14 | Opponent kingside castling right | Constant 0 or 1 |
+| 15 | Opponent queenside castling right | Constant 0 or 1 |
+| 16 | All own pieces | Occupancy mask |
+| 17 | All opponent pieces | Occupancy mask |
+| 18 | Pieces checking the player to move | Checker-location mask |
+| 19 | En-passant target | One square, or all zeros |
+| 20 | At least one earlier occurrence of this position | Constant 0 or 1 |
+| 21 | At least two earlier occurrences of this position | Constant 0 or 1 |
+| 22, 23 | Most recent move: origin, destination | Two single-square masks |
+| 24, 25 | Second-most-recent move: origin, destination | Two single-square masks |
+| 26, 27 | Third-most-recent move: origin, destination | Two single-square masks |
+| 28, 29 | Fourth-most-recent move: origin, destination | Two single-square masks |
+| 30, 31 | Fifth-most-recent move: origin, destination | Two single-square masks |
+| 32, 33 | Sixth-most-recent move: origin, destination | Two single-square masks |
+| 34, 35 | Seventh-most-recent move: origin, destination | Two single-square masks |
+| 36, 37 | Eighth-most-recent move: origin, destination | Two single-square masks |
+| 38 | Fixed checkerboard, with a1 set to one | Alternating 0/1 mask |
+| 39 | Exactly one bishop per side, on opposite colours | Constant 0 or 1 |
+| 40, 41, 42, 43, 44, 45 | Pawn, knight, bishop, rook, queen, king balance | Own count minus opponent count |
+| 46 | Halfmove clock | Integer count, capped at 100 |
+| 47, 48, 49, 50, 51 | Own pawn, knight, bishop, rook, queen counts | Integer counts |
+
+The first 40 planes are binary; the remaining 12 are scalar planes. Counts are not divided by their maxima.
+Missing history entries are zero-filled. History records the last eight moves, not eight full board states;
+castling records the king's actual destination. The checkerboard is fixed in canonical tensor coordinates.
+
+The shared backbone produces 160×8×8 features. The policy head projects each square to a 128-dimensional token
+and forms query and key vectors whose scaled dot products score origin-destination pairs. These scores are gathered
+into 1,880 action logits: 1,792 ray or knight pairs and 88 explicit promotion actions. Promotion offsets distinguish
+queen, rook, bishop, and knight choices. Castling uses the king-to-own-rook pair in the action encoding, while
+en passant uses the pawn's ordinary origin-destination pair. Illegal actions are masked before softmax over the
+legal moves.
+
+The value branch uses a two-channel 1×1 convolution, batch normalization, ReLU, flattening, a 48-unit hidden layer,
+and three logits. Softmax produces win, draw, and loss probabilities for the player to move. The auxiliary branches
+produce a further 1,880 logits for the next searched policy and one scalar for remaining game length. They are used
+only in training; inference returns the primary policy logits and WDL probabilities.
+
 ## Two reproducibility targets
 
 Reproducing the current system and reproducing the reported result require different starting points:

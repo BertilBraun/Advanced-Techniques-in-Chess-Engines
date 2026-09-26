@@ -4,7 +4,33 @@ from pathlib import Path
 
 import pytest
 from markdown_it import MarkdownIt
-from tools.render_technical_report import bibliography_tex, caption_tex, escape_tex, inline_tex, section_tex, table_tex
+from tools.render_technical_report import (
+    bibliography_tex,
+    caption_tex,
+    escape_tex,
+    inline_tex,
+    markdown_tex,
+    section_tex,
+    table_tex,
+)
+
+
+def test_display_math_preserves_latex_equation(tmp_path: Path) -> None:
+    source = tmp_path / 'equations.md'
+    source.write_text('```math\na = \\frac{b}{c}\n```\n', encoding='utf-8')
+    assert markdown_tex(source, tmp_path) == '\\begin{equation}\na = \\frac{b}{c}\n\\end{equation}\n'
+
+
+def test_input_plane_table_wraps_descriptions_at_page_width() -> None:
+    output = table_tex(
+        [['Planes', 'Feature', 'Encoding'], ['0', 'Own pawns', 'Binary mask']],
+        source=Path('appendix-d-reproducibility.md'),
+        table_number=1,
+        appendix=True,
+    )
+    assert r'\begin{tabularx}{\textwidth}{@{}l X l@{}}' in output
+    assert r'\end{tabularx}' in output
+    assert r'\label{tab:appendix-d-reproducibility-1}' in output
 
 
 @pytest.mark.parametrize(

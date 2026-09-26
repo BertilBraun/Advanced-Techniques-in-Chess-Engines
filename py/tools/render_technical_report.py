@@ -38,6 +38,7 @@ APPENDIX_FILES = (
 )
 PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
 \usepackage[a4paper,top=18mm,bottom=20mm,left=16mm,right=16mm,columnsep=7mm]{geometry}
+\usepackage{amsmath}
 \usepackage{newtxtext,newtxmath}
 \usepackage{microtype}
 \usepackage{xcolor}
@@ -103,6 +104,7 @@ SPECIAL_CHARACTERS = {
     '~': r'\textasciitilde{}',
     '±': r'\ensuremath{\pm}',
     '×': r'\ensuremath{\times}',
+    'π': r'\ensuremath{\pi}',
     '−': r'\ensuremath{-}',
     '→': r'\ensuremath{\rightarrow}',
     '–': '--',
@@ -116,6 +118,7 @@ TABLE_CAPTIONS = {
     ('02-methodology-and-evidence.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
     ('appendix-c-supporting-comparisons.md', 1): 'Actor overlap and training supply',
     ('appendix-c-supporting-comparisons.md', 2): 'Parallel-search strength and wall time',
+    ('appendix-d-reproducibility.md', 1): 'Chess input planes in tensor order (zero-based indices)',
 }
 MARKDOWN = MarkdownIt('commonmark').enable('table')
 
@@ -258,12 +261,19 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
     if appendix:
         lines.append(r'\setlength{\tabcolsep}{9pt}')
         lines.append(r'\renewcommand{\arraystretch}{1.1}')
-    lines.extend([r'\begin{tabular}{' + specification + '}', r'\toprule'])
+    wrapped_input_table = source.name == 'appendix-d-reproducibility.md' and table_number == 1
+    tabular_environment = 'tabularx' if wrapped_input_table else 'tabular'
+    table_opening = (
+        r'\begin{tabularx}{\textwidth}{@{}l X l@{}}'
+        if wrapped_input_table
+        else r'\begin{tabular}{' + specification + '}'
+    )
+    lines.extend([table_opening, r'\toprule'])
     for row_index, row in enumerate(rows):
         lines.append(' & '.join(row) + r' \\')
         if row_index == 0:
             lines.append(r'\midrule')
-    lines.extend([r'\bottomrule', r'\end{tabular}'])
+    lines.extend([r'\bottomrule', r'\end{' + tabular_environment + '}'])
     lines.append(r'\end{' + environment + '}')
     return '\n'.join(lines) + '\n'
 
@@ -359,6 +369,9 @@ def markdown_tex(source: Path, build_directory: Path, *, appendix: bool = False)
                 table_number += 1
                 lines.append(table_tex(rows, source=source, table_number=table_number, appendix=appendix))
             case 'paragraph_close':
+                index += 1
+            case 'fence' if token.info.strip() == 'math':
+                lines.append('\\begin{equation}\n' + token.content.strip() + '\n\\end{equation}\n')
                 index += 1
             case _:
                 raise ValueError(f'Unsupported Markdown block token: {token.type} in {source}')
