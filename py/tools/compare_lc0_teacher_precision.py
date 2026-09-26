@@ -15,18 +15,19 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from src.distillation.lc0_teacher import teacher_input_dtype
+from src.distillation.lc0_teacher import teacher_fixed_batch, teacher_input_dtype
 from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes
-from tools.measure_teacher_agreement import TEACHER_BATCH, legal_softmax, match_positions
+from tools.measure_teacher_agreement import legal_softmax, match_positions
 
 
 def evaluate(model: torch.jit.ScriptModule, planes: np.ndarray, device: torch.device) -> tuple[np.ndarray, np.ndarray]:
     dtype = teacher_input_dtype(model)
+    batch = teacher_fixed_batch(model)
     policies: list[np.ndarray] = []
     values: list[np.ndarray] = []
     with torch.inference_mode():
-        for start in range(0, len(planes), TEACHER_BATCH):
-            chunk = torch.from_numpy(planes[start : start + TEACHER_BATCH]).to(device=device, dtype=dtype)
+        for start in range(0, len(planes), batch):
+            chunk = torch.from_numpy(planes[start : start + batch]).to(device=device, dtype=dtype)
             policy, wdl = model(chunk)
             policies.append(policy.float().cpu().numpy())
             values.append(wdl.float().cpu().numpy())
@@ -34,7 +35,8 @@ def evaluate(model: torch.jit.ScriptModule, planes: np.ndarray, device: torch.de
 
 
 def throughput(model: torch.jit.ScriptModule, device: torch.device, seconds: float) -> float:
-    batch = torch.zeros((TEACHER_BATCH, 112, 8, 8), device=device, dtype=teacher_input_dtype(model))
+    rows = teacher_fixed_batch(model)
+    batch = torch.zeros((rows, 112, 8, 8), device=device, dtype=teacher_input_dtype(model))
     batch[:, 111] = 1
     with torch.inference_mode():
         for _ in range(5):
@@ -46,7 +48,7 @@ def throughput(model: torch.jit.ScriptModule, device: torch.device, seconds: flo
             model(batch)
             calls += 1
         torch.cuda.synchronize(device)
-    return calls * TEACHER_BATCH / (time.perf_counter() - started)
+    return calls * rows / (time.perf_counter() - started)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -93,7 +95,8 @@ def main() -> None:
     reference_rate = throughput(reference, device, arguments.timing_seconds)
     candidate_rate = throughput(candidate, device, arguments.timing_seconds)
     print(
-        f'Throughput at batch {TEACHER_BATCH}: reference {reference_rate:.0f}/s, candidate {candidate_rate:.0f}/s, '
+        f'Throughput: reference {reference_rate:.0f}/s at batch {teacher_fixed_batch(reference)}, '
+        f'candidate {candidate_rate:.0f}/s at batch {teacher_fixed_batch(candidate)}, '
         f'ratio {candidate_rate / reference_rate:.2f}'
     )
 

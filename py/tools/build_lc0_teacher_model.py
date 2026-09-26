@@ -40,11 +40,13 @@ class Lc0TeacherModel(nn.Module):
         wdl_is_already_probability: bool,
         policy_output_index: int,
         wdl_output_index: int,
+        fixed_batch: int = FIXED_BATCH,
     ) -> None:
         super().__init__()
+        self.fixed_batch = fixed_batch
         self.backbone = backbone
         self.register_buffer('permutation', permutation)
-        self.register_buffer('padding', torch.zeros((FIXED_BATCH, LC0_INPUT_PLANES, 8, 8)))
+        self.register_buffer('padding', torch.zeros((fixed_batch, LC0_INPUT_PLANES, 8, 8)))
         self.wdl_is_already_probability = wdl_is_already_probability
         self.policy_output_index = policy_output_index
         self.wdl_output_index = wdl_output_index
@@ -55,7 +57,7 @@ class Lc0TeacherModel(nn.Module):
         # always sees exactly FIXED_BATCH rows: pad up, run, and keep the real rows.
         planes = encoded_boards[:, :LC0_INPUT_PLANES]
         batch = planes.shape[0]
-        padded = torch.cat((planes, self.padding), dim=0)[:FIXED_BATCH]
+        padded = torch.cat((planes, self.padding), dim=0)[: self.fixed_batch]
         outputs = [output[:batch] for output in self.backbone(padded)]
         lc0_policy = outputs[self.policy_output_index].to(torch.float32)
         lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
@@ -127,6 +129,13 @@ def parse_arguments() -> argparse.Namespace:
         default='float32',
         help='Dtype the teacher is traced and served in; the input must arrive in the same dtype.',
     )
+    parser.add_argument(
+        '--fixed-batch',
+        type=int,
+        default=FIXED_BATCH,
+        help='Rows every call runs. The search sends at most 64; the dataset builder can use far more, and at 64 '
+        'the converted graph spends its time launching kernels.',
+    )
     return parser.parse_args()
 
 
@@ -141,13 +150,14 @@ def main() -> None:
         wdl_is_probability(backbone, wdl_index),
         policy_index,
         wdl_index,
+        arguments.fixed_batch,
     ).eval()
 
     with torch.inference_mode():
-        sample = torch.zeros((FIXED_BATCH, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
+        sample = torch.zeros((arguments.fixed_batch, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
         sample[:, LC0_INPUT_PLANES - 1] = 1.0
         policy, wdl = model(sample)
-    if policy.shape != (FIXED_BATCH, PROJECT_ACTION_SIZE) or wdl.shape != (FIXED_BATCH, 3):
+    if policy.shape != (arguments.fixed_batch, PROJECT_ACTION_SIZE) or wdl.shape != (arguments.fixed_batch, 3):
         raise SystemExit(f'Wrapped model produced {policy.shape} and {wdl.shape}.')
     if not bool(torch.all((wdl.sum(dim=1) - 1.0).abs() < 1.0e-2)):
         raise SystemExit('Wrapped WDL output is not a probability distribution.')
