@@ -191,6 +191,42 @@ Four builders on disjoint 5M-position part ranges ran at about 9,300 positions a
 labelled by the float16@512 teacher and cannot be merged with the original 2M, which `distill_merge_datasets.py`
 correctly refuses because the teacher hash differs.
 
+## From-scratch student on 47M positions
+
+**Data.** 47,000,000 positions in 11 parts, all labelled by the float16@512 teacher: 25M from the teacher's own
+search-free games (parts 00, 01, 10, 20, 30) and 22M from games whose moves Stockfish 13 chose at 1,000 nodes,
+sampled from its MultiPV 4 by expected score at temperature 0.05 (parts 40, 50, 60 at 5M; 70, 80 at 2.5M; 90 at
+2M). Merged with the Stockfish-mode parts last, so the 470,000 held-out rows are Stockfish-mode positions, where
+the teacher's entropy is 2.139 nats; held-out gaps here are not comparable with the earlier runs' teacher-mode
+held-out sets. Merged file: 54.9 GB.
+
+**Training.** Checkpoint 1026's architecture with fresh weights, AdamW at 2e-3 (cosine to 0, 500 warm-up
+steps), batch 1,024, 30,000 steps (30.7M samples, two thirds of one pass). A first attempt ran at 16% GPU:
+random rows from a memory-mapped file larger than the node's memory triggered the kernel's readahead, reading
+about 100 times the data used; `MADV_RANDOM` on the map fixed it (85% GPU, about 4.4 steps a second).
+
+| Step | 64 searches vs SF13 10k | Held-out gap | Train / held-out policy |
+|---:|---|---:|---|
+| 5,000 | 0.08 (3/10/87) [0.04, 0.13] | 0.2465 | 2.3649 / 2.3860 |
+| 10,000 | 0.12 (6/12/82) [0.07, 0.17] | 0.2010 | 2.3115 / 2.3405 |
+| 15,000 | 0.20 (13/14/73) [0.14, 0.26] | 0.1837 | 2.2842 / 2.3232 |
+| 20,000 | 0.225 (15/15/70) [0.15, 0.305] | 0.1626 | 2.2700 / 2.3020 |
+| 25,000 | 0.295 (15/29/56) [0.225, 0.37] | — | — |
+| 30,000 | **0.275** (15/25/60) [0.215, 0.335] | 0.1527 | 2.2580 / 2.2922 |
+
+Policy only against SF13 at 2,000 nodes, final checkpoint: **0.16** (6/20/74) [0.105, 0.22].
+
+| vs Stockfish 13 | 47M student, 30k steps | 2M scratch student | Checkpoint 1026 |
+|---|---|---|---|
+| Policy only, 2,000 nodes | 0.16 | 0.045 | 0.395 |
+| 64 searches, 10,000 nodes | 0.275 | 0.065 | 0.485 |
+
+The larger, partly Stockfish-played dataset lifted the from-scratch student three to four times over at both
+budgets, with training and held-out loss still within 0.034 of each other: it is limited by training, not by
+data. It remains below checkpoint 1026. Steps 25,000 and 30,000 are statistically equal, as the learning rate
+approached zero. A continuation from the step-30,000 weights (AdamW, 1e-3 cosine to a 1e-4 floor, 115,000
+steps, about 2.5 further passes) is running; its results are recorded when they finish.
+
 ## What this cost
 
 One RTX 3070 node, roughly 3 hours including provisioning, the lc0 build, the gate, two distillation runs and
