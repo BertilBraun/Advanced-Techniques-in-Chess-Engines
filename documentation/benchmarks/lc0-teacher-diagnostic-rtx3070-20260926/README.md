@@ -123,10 +123,37 @@ anchored: 0.632, 0.635, 0.648).
 - **The students became less decisive, not more.** Probability on the teacher's top move fell from 0.345 to 0.327
   while agreement rose: the teacher's raw policy is broad (2.12 nats of entropy), and imitating it flattens the
   prior this search was tuned against.
-- **The null match results are consistent with a small real gain.** As a crude linear reading, 4.5 of 40.5
-  agreement points of a roughly 380 Elo policy gap is about 40 Elo, below what 100-game matches resolve
-  (their intervals span about ±60 Elo). The pilot matches do not show the student cannot learn the teacher; they
-  show it learned about a ninth of what separates them on the positions that matter.
+- **Agreement is a weak proxy for strength, so these small gains cannot be converted to Elo.** An earlier
+  version of this note read 4.5 agreement points as roughly 40 Elo on a straight line. The from-scratch student
+  below disproves that reading: 8 points below checkpoint 1026 at match positions, it plays about 450 Elo weaker.
+  What decides strength is how bad a move is when a network disagrees with the teacher, which top-move agreement
+  does not measure.
+
+### From-scratch student
+
+Checkpoint 1026's exact architecture (`--architecture-checkpoint`), fresh weights, the same 2M rows and
+held-out tail, policy and WDL from the teacher, AdamW at 2e-3 with 500 warm-up steps. Stopped at step 11,000 of
+a planned 20,000 with held-out improvement slowing and training loss 0.10 below held-out; the step-10,000
+checkpoint was evaluated.
+
+| Step | 0 | 2,500 | 5,000 | 7,500 | 10,000 |
+|---|---:|---:|---:|---:|---:|
+| Held-out policy gap above the teacher | 1.1900 | 0.3240 | 0.2697 | 0.2479 | **0.2347** |
+
+At step 10,000 the scratch student imitates the teacher on held-out rows **exactly as well as checkpoint 1026
+does** (0.2347 against 0.2364) and plays far worse:
+
+| | Scratch (step 10,000) | Checkpoint 1026 |
+|---|---|---|
+| Policy only vs SF13 2,000 nodes | **0.045** (1/7/92) [0.015, 0.08] | 0.395 |
+| 64 searches vs SF13 10,000 nodes | **0.065** (3/7/90) [0.025, 0.11] | 0.485 |
+| Top-move agreement, match positions | 0.514 | 0.595 |
+| Top-move agreement, dataset rows | 0.570 | 0.602 |
+
+Equal imitation of the teacher on its own search-free games, and hundreds of Elo apart in real games. The
+scratch student loses 5.6 agreement points between dataset rows and match positions; checkpoint 1026 loses 0.7.
+Checkpoint 1026 learned on the positions its own games reach; the scratch student saw only the teacher's
+search-free games, and those do not contain the positions that decide real games.
 
 ## Reading
 
@@ -135,20 +162,34 @@ anchored: 0.632, 0.635, 0.648).
   275 above it at 1,000.
 - **Ruled out: joint or policy-only fine-tuning of checkpoint 1026 on 2M search-free teacher positions, at up to
   10,000 steps, as a way to close that gap.** Held-out imitation improved steadily and play did not.
-- **Measured: the students agree with the teacher's top move on 64% of match positions, up from 59.5%.** About
-  half the gain seen on the training distribution is lost to distribution shift, and the rest is small enough that
-  100-game matches cannot resolve it.
+- **Measured: the teacher's search-free games are the wrong distribution to learn from on their own.** A
+  from-scratch student that matches checkpoint 1026's held-out imitation of the teacher plays about 450 Elo
+  weaker; fine-tuned students gain agreement on dataset rows but lose half of it at match positions.
+- **Consequence for a larger dataset:** more of the same search-free generation alone is unlikely to train a
+  model that beats checkpoint 1026. Teacher labels on positions from real searched games (this engine's, or the
+  teacher's own) are the likely missing ingredient.
 - **Open:**
-  1. *Representation or capacity.* On its own training distribution the student plateaued at 69% top-move
-     agreement and 0.118 nats of KL by step 8,000 while its training loss kept falling: it overfits before it
-     matches the teacher. A student trained from scratch on the same data separates "cannot represent" from
-     "cannot adapt from 1026".
-  2. *Data.* The overfitting says 2M positions are too few for this student; match-reached positions labelled by
-     the teacher would also remove the half of the gain lost to shift.
+  1. *Per-move regret.* Top-move agreement cannot tell a harmless alternative from a blunder. Scoring each
+     network by the teacher's evaluation of its chosen move against the teacher's best move measures the thing
+     that decides strength.
+  2. *Representation.* The teacher is a 20M-parameter attention network; the student is a 6.3M convolutional one
+     that encodes eight recent moves rather than eight board states. Not separable until the data distribution
+     is fixed.
   3. *Prior sharpness.* Imitating a broad teacher flattens the student's prior; the search's exploration
      constant and FPU were tuned for checkpoint 1026's sharper one and were not re-tuned for the students.
-  4. *Architecture.* The teacher is a 20M-parameter attention network; the student is a 6.3M convolutional one
-     that encodes eight recent moves rather than eight board states.
+
+## Data generation for a larger training set
+
+The first 2M rows were labelled by the float32 teacher at a fixed batch of 64, about 2,300 positions a second
+with the GPU to itself. A float16 trace (`--precision float16`, traced in half precision so the constants the ONNX
+conversion creates are half too) at a fixed batch of 512 (`--fixed-batch 512`) is 5.7 times as fast under the same
+load and chooses the float32 teacher's top move on 99.86% of 5,000 match positions (prior difference mean 0.0005,
+worst 0.004; WDL worst 0.006). The float32 trace at 512 is bit-identical to the gated one; the batch size, not
+the precision, carried most of the gain, since at 64 rows the converted graph spends its time launching kernels.
+
+Four builders on disjoint 5M-position part ranges ran at about 9,300 positions a second together. Parts are
+labelled by the float16@512 teacher and cannot be merged with the original 2M, which `distill_merge_datasets.py`
+correctly refuses because the teacher hash differs.
 
 ## What this cost
 
