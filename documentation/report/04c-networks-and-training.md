@@ -178,11 +178,8 @@ which counted neural arithmetic but omitted tree work and inference overhead. Th
 compute advantage was therefore much larger than the extra search it could actually perform in the same time.
 
 A final compression study trained a 470,295-parameter student on a separate frozen 20-million-row replay
-snapshot. At
-10,000 searches it reached 2,683 benchmark Elo after roughly 7.5 epochs and 2,697 after roughly 23
-epochs. The 14-Elo central difference lay well inside the match intervals, while held-out policy loss had become
-nearly flat. Tripling passes over this fixed buffer therefore produced no measurable playing gain. The longer
-student reached 2,873 benchmark Elo at 100,000 searches against the one opponent tested there. Chapter 8 presents
+snapshot for 110,000 optimizer steps, roughly 23 epochs. It reached approximately 2,700 benchmark Elo at
+10,000 searches and 2,870 at 100,000 searches against the one opponent tested there. Chapter 8 presents
 these final student results alongside the full model.
 
 The resulting compact models reduced inference cost, but their realized search advantage was substantially smaller

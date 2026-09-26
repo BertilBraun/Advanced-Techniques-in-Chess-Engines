@@ -86,7 +86,7 @@ def test_main_results_tables_and_architecture_sweeps_render(tmp_path: Path) -> N
         ('05-systems-optimization.md', 1),
         ('06-final-chess-recipe.md', 1),
         ('07-final-run-results.md', 1),
-        ('appendix-c-supporting-comparisons.md', 2),
+        ('appendix-c-supporting-comparisons.md', 3),
     ):
         output = markdown_tex(REPORT_ROOT / filename, tmp_path, appendix=filename.startswith('appendix-'))
         assert output.count(r'\begin{table') == count

@@ -1,7 +1,6 @@
 # Appendix B. Evaluation detail
 
-This appendix specifies the match protocol, rating calculation, cross-campaign adjustment, and student controls
-underlying the results in Chapters 2, 7, and 8.
+This appendix specifies the match protocol and rating calculation underlying the results in Chapters 2 and 8.
 
 ## Fixed-node match protocol
 
@@ -23,30 +22,3 @@ At 100, 1,000, 10,000, and 100,000 searches, the harder opponent implies a ratin
 than the easier opponent. The discrepancy narrows with search budget, reaching close agreement at the deepest
 point. Draw behaviour, calibration error, matchup effects, and sampling variation could contribute; the matches
 do not distinguish them. Selecting the score nearest 0.5 limits extrapolation from lopsided results.
-
-## Matched-estimator comparison
-
-The plateau comparison uses a common three-rung estimator, yielding 2,283.9 benchmark Elo for the previous
-baseline and 2,358.0 for the final recipe, a difference of +74.1. Restriction to the plotted 3.0- and 2.5-day
-windows gives +75.8. The baseline's original single-rung fit is adjusted by +2.7 Elo, based on a summary of
-35 paired observations. Approximately ±15 Elo represents sensitivity to that transfer, not a bootstrap interval.
-
-Figure 11 uses bias-corrected 0.95 exponential moving averages. The final curve retains 180 observations through
-2.5 days; the preceding baseline retains 143 through 3.0 days, ending at 2,265.4 Elo before its unreliable late
-interval. The raw endpoint differences are 106.8 Elo against that baseline and 348.2 against the early baseline.
-Because the original estimators differ, the adjusted plateau comparison above is used for quantitative reporting.
-Points beyond the plotted windows belong to subsequent experiments or the unreliable late interval.
-
-## Parallel-search and student controls
-
-The parallel-search comparison in Section 4.1 used 1,000 visits against 20,000-node Stockfish. Before rounding,
-the ratings for one, four, and sixteen parallel leaves were 2,823, 2,804, and 2,778 Elo, respectively.
-Reported rating differences use these unrounded values. Match-time ranges span the two recorded timing sources.
-
-Both students had 470,295 parameters and trained on the same frozen 20-million-row replay snapshot without QAT,
-separate from the teacher checkpoint's 16-million-row live window. They were evaluated with TorchScript and four
-parallel searches, whereas the searched teacher used INT8 TensorRT. The 36,621-step student scored 31/33/36 against
-20,000 Stockfish nodes at 10,000 searches: 2,683 [2,637, 2,731] benchmark Elo. The 110,000-step student scored
-35/29/36 under the same protocol: 2,697 [2,640, 2,753]. At 100,000 searches, the longer student scored 59/28/13
-against 20,000 nodes for 2,873 [2,819, 2,935]. Counts are wins/draws/losses and brackets denote 95% intervals.
-The 100,000-search result uses this single opponent, without a second-rung check.

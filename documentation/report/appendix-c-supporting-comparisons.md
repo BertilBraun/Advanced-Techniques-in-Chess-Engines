@@ -91,12 +91,18 @@ In these workloads, the measured reuse was insufficient to offset the cost of de
 8,790 positions/s against an arrival rate of 1,365 accepted positions/s.
 
 **Training.** An eight-GPU benchmark with global batch 2,048, bfloat16 autocast, and concurrent self-play
-processed 6,252 training samples/s. The actor-overlap sweep in Table 2 is a separate workload; its trainer
+processed 6,252 training samples/s. The actor-overlap sweep in Table 3 is a separate workload; its trainer
 and concurrent-search rates should be compared within that sweep.
 
-The unrounded overlap measurements for 8, 16, and 32 actors were 21,492, 17,139, and 9,210 training samples/s,
-with estimated complete-cycle times of 117.1, 112.9, and 111.2 seconds. With no active actors, training reached
-25,275 samples/s. Chapter 5 presents the comparison alongside the scheduling decision.
+Table C3 retains the unrounded trainer measurements. Chapter 5 presents the comparison alongside the scheduling
+decision. Complete-cycle time includes training and the remaining wait for self-play data.
+
+| Active actors | Training samples/s | Complete cycle (s) |
+| ---: | ---: | ---: |
+| 0 | 25,275 | -- |
+| 8 | 21,492 | 117.1 |
+| 16 | 17,139 | 112.9 |
+| 32 | 9,210 | 111.2 |
 
 The 1.86x TensorRT INT8 versus TorchScript search comparison used a production-shaped 400-visit actor workload,
 with different checkpoint weights, so the comparison includes both backend and model changes. The

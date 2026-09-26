@@ -21,7 +21,7 @@ from matplotlib.figure import Figure
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from tools.export_final_training_trajectory import TrainingObservation
-from tools.render_final_training_dynamics import configure_style, save_figure, smooth
+from tools.render_final_training_dynamics import configure_style, read_points, render_volume_paper, save_figure, smooth
 
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE = ROOT / 'documentation/evidence/final-chess-20260923'
@@ -292,6 +292,10 @@ def main() -> None:
         raise ValueError('Diagnostic export and training trajectory differ.')
     configure_style(paper=True)
     trajectory = read_trajectory(trajectory_path)
+    render_volume_paper(
+        read_points(trajectory_path),
+        tuple((sample.optimizer_steps, sample.value) for sample in diagnostics.samples(Metric.VISITS)),
+    )
     render_auxiliary(diagnostics)
     render_gradient(diagnostics)
     render_stages(trajectory, diagnostics)

@@ -208,8 +208,7 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
 
 def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> None:
     if paper:
-        render_volume_paper(points)
-        return
+        raise ValueError('Render the paper volume figure with diagnostics through render_report_figures.')
     x = [point.optimizer_steps / 1000 for point in points]
     figure: Figure
     axes: list[Axes]
@@ -257,25 +256,36 @@ def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> N
     save_figure(figure, FIGURE_DIRECTORY / f'final-training-volume-and-throughput{suffix}')
 
 
-def render_volume_paper(points: tuple[TrainingPoint, ...]) -> None:
+def render_volume_paper(points: tuple[TrainingPoint, ...], search_samples: tuple[tuple[int, float], ...]) -> None:
     x = [point.optimizer_steps / 1000 for point in points]
-    figure: Figure = plt.figure(figsize=(8.0, 5.4))
-    games_axes: Axes = figure.add_subplot(2, 2, 1)
-    positions_axes: Axes = figure.add_subplot(2, 2, 2, sharex=games_axes)
-    replay_axes: Axes = figure.add_subplot(2, 2, 3, sharex=games_axes)
-    trainer_axes: Axes = figure.add_subplot(2, 2, 4, sharex=games_axes)
+    figure: Figure = plt.figure(figsize=(8.0, 2.5))
+    games_axes: Axes = figure.add_subplot(1, 4, 1)
+    positions_axes: Axes = figure.add_subplot(1, 4, 2, sharex=games_axes)
+    replay_axes: Axes = figure.add_subplot(1, 4, 3, sharex=games_axes)
+    trainer_axes: Axes = figure.add_subplot(1, 4, 4, sharex=games_axes)
     for axis, label in (
-        (games_axes, 'Games / quantum'),
-        (positions_axes, 'Net positions (millions)'),
-        (replay_axes, 'Live replay (millions)'),
-        (trainer_axes, 'Trainer samples/s (k)'),
+        (games_axes, 'Games / block'),
+        (positions_axes, 'Search visits / move'),
+        (replay_axes, 'Live replay (mil.)'),
+        (trainer_axes, 'Train samples/s (k)'),
     ):
-        configure_axes(axis, label, paper=True)
+        configure_axes(axis, '', paper=True)
+        axis.set_xlabel(label, fontsize=9)
+        axis.tick_params(labelsize=8)
+        axis.set_xticks((0, 200, 400))
         axis.set_xlim(0, 410)
     games = [float(point.completed_games) for point in points]
     games_axes.plot(x, games, color='#1f7065', linewidth=0.75, alpha=0.35)
     games_axes.plot(x, smooth(games), color='#1f7065', linewidth=2.2)
-    positions_axes.plot(x, [point.materialized_positions / 1e6 for point in points], color='#1f5875', linewidth=2.2)
+    positions_axes.step(
+        [steps / 1000 for steps, _ in search_samples],
+        [visits for _, visits in search_samples],
+        where='post',
+        color='#1f5875',
+        linewidth=2.2,
+    )
+    positions_axes.set_ylim(250, 650)
+    positions_axes.set_yticks((300, 450, 600))
     replay_axes.plot(
         x,
         [point.replay_live_rows / 1e6 for point in points],
@@ -288,10 +298,8 @@ def render_volume_paper(points: tuple[TrainingPoint, ...]) -> None:
     throughput = [point.training_samples_per_second / 1000 for point in points]
     trainer_axes.plot(x, throughput, color='#1f5875', linewidth=0.75, alpha=0.35)
     trainer_axes.plot(x, smooth(throughput), color='#1f5875', linewidth=2.2)
-    games_axes.tick_params(labelbottom=False)
-    positions_axes.tick_params(labelbottom=False)
-    figure.supxlabel('Completed optimizer steps (thousands)', y=0.02)
-    figure.subplots_adjust(left=0.12, right=0.98, top=0.97, bottom=0.15, wspace=0.34, hspace=0.16)
+    figure.supxlabel('Completed optimizer steps (thousands)', y=0.02, fontsize=9)
+    figure.subplots_adjust(left=0.065, right=0.99, top=0.95, bottom=0.33, wspace=0.44)
     save_figure(figure, FIGURE_DIRECTORY / 'final-training-volume-and-throughput-paper.svg')
 
 
@@ -308,7 +316,8 @@ def main() -> None:
     for paper in variants:
         configure_style(paper=paper)
         render_loss_figure(points, paper=paper)
-        render_volume_figure(points, paper=paper)
+        if not paper:
+            render_volume_figure(points, paper=False)
 
 
 if __name__ == '__main__':

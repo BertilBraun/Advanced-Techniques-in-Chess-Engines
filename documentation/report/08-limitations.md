@@ -28,12 +28,9 @@ and a larger replay window to retain more diverse experience. Each changes a dif
 learning, and each also changes compute demand or data age. They should be compared by strength gained at matched
 compute, not solely by training loss or update count.
 
-The limited larger-model continuation reached parity without demonstrating a higher plateau. It therefore leaves
-capacity as an open hypothesis rather than ruling it out.
-
 ## Rating calibration and evaluation scope
 
-The benchmark scale derives from a published calibration of fixed-node Stockfish 13, rather than direct matches
+The benchmark scale derives from a published calibration of fixed-node Stockfish 13 [9], rather than direct matches
 against unrestricted engines. Each final match contains 100 games, and the reported intervals capture match
 sampling uncertainty with the calibration anchors held fixed. Agreement between opponent rungs is close at the
 deepest budget and weaker at shallow budgets. A larger match set and broader opponent field would help distinguish
@@ -41,14 +38,14 @@ sampling variation from calibration and matchup effects.
 
 The search-budget curve combines deeper search with increased parallelism. It measures the deployed operating
 points, not the isolated effect of search depth. Backend differences likewise enter policy-only, searched, and
-student evaluations. [Appendix B](appendix-b-evaluation-tables.md) records these settings for matched replication.
+student evaluations.
 
 ## Workload dependence and development cost
 
 The rejected optimizations remain plausible under other workloads. Diverse chess self-play produced too few
 exact graph or inference-cache hits to offset lookup and synchronization costs; repeated analysis may offer more
-reuse. Similarly, actor-trainer overlap limited the cadence gain from adaptive stopping. An inference-bound
-training regime could obtain a larger benefit from the same reduction in simulations.
+reuse. In the GPU-bound training workload, actor-trainer overlap limited the cadence gain from adaptive stopping:
+reducing search work did not proportionally reduce the complete training cycle.
 
 The $43.20 rental cost covers the final training run, excluding development experiments and evaluation. It
 characterizes the cost of executing the recipe rather than discovering it. Reproduction also depends on hardware

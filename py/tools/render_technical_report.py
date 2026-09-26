@@ -122,9 +122,10 @@ TABLE_CAPTIONS = {
     ('05-systems-optimization.md', 1): 'Actor overlap: optimizer throughput and concurrent search',
     ('06-final-chess-recipe.md', 1): 'Final training run',
     ('04a-search.md', 1): 'Parallel search at 1,000 visits against 20,000-node Stockfish',
-    ('07-final-run-results.md', 1): 'Distilled student strength at two training durations',
+    ('07-final-run-results.md', 1): 'Distilled student strength across search budgets',
     ('appendix-c-supporting-comparisons.md', 1): 'CNN width: measured throughput versus arithmetic prediction',
     ('appendix-c-supporting-comparisons.md', 2): 'Depth and width: throughput ratios across batch sizes',
+    ('appendix-c-supporting-comparisons.md', 3): 'Trainer throughput under actor overlap',
     ('appendix-d-reproducibility.md', 1): 'Chess input planes in tensor order (zero-based indices)',
 }
 MARKDOWN = MarkdownIt('commonmark').enable('table')

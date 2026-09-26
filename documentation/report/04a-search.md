@@ -101,7 +101,7 @@ below the experiment's resolution.
 
 The three approaches failed for different reasons. The threshold rule lacked an identifiable safe signal; the
 predicted allocator improved policy fidelity but not learning; and the in-search stopper removed mostly
-off-critical-path work. In a non-overlapped or inference-bound learner, that last tradeoff may change.
+off-critical-path work while search and training shared the available GPU capacity.
 
 ## Parallel leaves: buying latency with search quality
 
