@@ -13,7 +13,7 @@ differs. Scores are for the model; intervals are the gauntlet's 95% bounds.
 |---|---|---|---:|
 | Policy only, SF 2,000 nodes, 100 games | **0.855** (79/13/8) [0.795, 0.91] | 0.395 (28/23/49) [0.305, 0.48] | ≈ +380 Elo |
 | 64 searches, SF 10,000 nodes, 100 games | **0.885** (80/17/3) [0.84, 0.93] | 0.485 (32/33/35) [0.405, 0.565] | ≈ +365 Elo |
-| 1,000 searches, SF 50,000 nodes, 40 games | PHASE_A_1000_LC0 | 0.5625 (10/25/5) [0.4625, 0.6625] | |
+| 1,000 searches, SF 50,000 nodes, 40 games | **0.8625** (30/9/1) [0.80, 0.925] | 0.5625 (10/25/5) [0.4625, 0.6625] | ≈ +275 Elo |
 
 Against an opponent checkpoint 1026 plays dead even at 64 searches, the Lc0 evaluator in the same search scores
 88.5%. **The search exploits a stronger evaluator; the plateau is in the learned function, not the harness.**
@@ -61,15 +61,17 @@ about 1.6 passes over the 1.96M training rows), policy and WDL losses, 40,000 he
 | 2,500 | 2.2463 | 0.1224 | 0.3342 |
 | 3,000 | 2.2450 | 0.1211 | 0.3336 |
 
-Checkpoint 1026's own gap before fine-tuning was not measured, so how far imitation moved is not known.
+Checkpoint 1026's gap before any fine-tuning, measured at the start of the follow-up run, is **0.2364**: the pilot closed about half of it and its raw policy gained nothing measurable.
 
 | vs Stockfish 13 | Student | Checkpoint 1026 | Teacher |
 |---|---|---|---|
 | Policy only, 2,000 nodes | 0.405 (24/33/43) [0.33, 0.48] | 0.395 [0.305, 0.48] | 0.855 |
 | 64 searches, 10,000 nodes | **0.38** (22/32/46) [0.31, 0.45] | 0.485 [0.405, 0.565] | 0.885 |
+| 1,000 searches, 50,000 nodes, 40 games | **0.35** (8/12/20) [0.2625, 0.45] | 0.5625 [0.4625, 0.6625] | 0.8625 |
 
-The raw policy did not get measurably stronger, and searched play got weaker by roughly 75 Elo (the intervals
-touch). The pilot does not show that this network cannot absorb the teacher: it shows that 3,000 steps of joint
+The raw policy did not get measurably stronger, and searched play got weaker: about 75 Elo at 64 searches
+(intervals touch) and about 150 Elo at 1,000 searches (intervals separate). A loss that grows with search depth
+points at the value function rather than the policy. The pilot does not show that this network cannot absorb the teacher: it shows that 3,000 steps of joint
 policy-and-value fine-tuning does not. Consistent with the plan's warning, the value head was retrained on the
 teacher's WDL, a different quantity from the discounted outcomes the search and its FPU were tuned against, which
 fits a searched loss with an unchanged raw policy.
