@@ -8,6 +8,7 @@ from src.distillation.dataset import DistillationDatasetManifest, manifest_path,
 from src.util.atomic_file import write_text_atomically
 
 COMPATIBILITY_FIELDS = (
+    'record_layout',
     'game',
     'action_size',
     'payload_bytes',
@@ -35,11 +36,12 @@ def _require_compatible(sources: tuple[DistillationDatasetManifest, ...]) -> Non
         raise ValueError(f'Datasets must come from distinct random seeds; got {seeds}.')
 
 
-def merge_datasets(inputs: tuple[Path, ...], output: Path) -> DistillationDatasetManifest:
+def merge_datasets(inputs: tuple[Path, ...], output: Path, delete_inputs: bool = False) -> DistillationDatasetManifest:
     manifests = tuple(read_manifest(path) for path in inputs)
     _require_compatible(manifests)
 
-    itemsize = record_dtype(manifests[0].payload_bytes).itemsize
+    # The record size depends on the layout; Lc0-teacher datasets carry no auxiliary fields.
+    itemsize = record_dtype(manifests[0].payload_bytes, manifests[0].record_layout).itemsize
     for path, manifest in zip(inputs, manifests, strict=True):
         expected = itemsize * manifest.position_count
         if path.stat().st_size != expected:
@@ -50,6 +52,10 @@ def merge_datasets(inputs: tuple[Path, ...], output: Path) -> DistillationDatase
         for path in inputs:
             with path.open('rb') as source:
                 shutil.copyfileobj(source, destination, length=16 * 1024 * 1024)
+            if delete_inputs:
+                # A 50M-position merge would otherwise need its whole size twice over on a node's disk.
+                destination.flush()
+                path.unlink()
 
     # Generator settings are taken from the last source because the held-out tail comes from it.
     merged = manifests[-1].model_copy(
@@ -66,6 +72,11 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', required=True, action='append', type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument(
+        '--delete-inputs',
+        action='store_true',
+        help='Delete each input file once copied; the input manifests are kept for provenance.',
+    )
     return parser.parse_args()
 
 
@@ -75,7 +86,7 @@ def main() -> None:
         raise ValueError('Merging requires at least two input datasets.')
     if arguments.output.exists():
         raise ValueError(f'Refusing to overwrite {arguments.output}.')
-    merged = merge_datasets(tuple(arguments.input), arguments.output)
+    merged = merge_datasets(tuple(arguments.input), arguments.output, arguments.delete_inputs)
     print(f'Merged {len(arguments.input)} datasets into {arguments.output}: {merged.position_count} positions.')
 
 

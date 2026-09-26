@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import numpy as np
 import pytest
 import torch
-from src.distillation.dataset import CHESS_PAYLOAD_BYTES, DistillationRecordLayout, record_dtype
+from src.distillation.dataset import (
+    CHESS_PAYLOAD_BYTES,
+    DistillationDatasetManifest,
+    DistillationRecordLayout,
+    open_dataset,
+    record_dtype,
+    write_dataset,
+)
 from src.distillation.lc0_teacher import Lc0TeacherNetwork, sampling_temperature_at
 from src.games.chess.contract import (
     CHESS_BINARY_CHANNEL_COUNT,
@@ -12,6 +22,7 @@ from src.games.chess.contract import (
 )
 from tools.build_lc0_policy_map import flip_uci_ranks, lc0_move_notation
 from tools.build_lc0_teacher_model import Lc0TeacherModel
+from tools.distill_merge_datasets import merge_datasets
 
 STARTING_TEMPERATURE = 1.3
 FINAL_TEMPERATURE = 0.1
@@ -129,3 +140,44 @@ def test_the_teacher_adapter_chunks_batches_beyond_the_fixed_size() -> None:
     network = Lc0TeacherNetwork(ConstantBackbone(policy_size=1880, wdl=(0.5, 0.3, 0.2)))
     output = network.training_output(torch.zeros((150, LC0_CHANNEL_COUNT, 8, 8)))
     assert output.policy_logits.shape[0] == 150
+
+
+def core_part(directory: Path, name: str, seed: int, rows: int) -> Path:
+    path = directory / f'{name}.bin'
+    records = np.zeros(rows, dtype=record_dtype(CHESS_PAYLOAD_BYTES, DistillationRecordLayout.CORE))
+    records['legal_count'] = seed
+    manifest = DistillationDatasetManifest(
+        game='chess',
+        position_count=rows,
+        action_size=1880,
+        payload_bytes=CHESS_PAYLOAD_BYTES,
+        maximum_policy_entries=64,
+        maximum_legal_actions=218,
+        teacher_generation=0,
+        teacher_weights_sha256='0' * 64,
+        teacher_parameter_count=1,
+        random_seed=seed,
+        random_opening_plies=8,
+        sampling_temperature=1.3,
+        sample_one_position_in=1,
+        random_perturbation_probability=0.0,
+        maximum_game_plies=300,
+        builder_source_revision='test',
+        record_layout=DistillationRecordLayout.CORE,
+    )
+    write_dataset(path, records, manifest)
+    return path
+
+
+def test_core_layout_parts_merge_to_their_combined_rows(tmp_path: Path) -> None:
+    parts = (core_part(tmp_path, 'a', 1, 3), core_part(tmp_path, 'b', 2, 5))
+    merged = merge_datasets(parts, tmp_path / 'merged.bin')
+    records, _ = open_dataset(tmp_path / 'merged.bin')
+    assert merged.position_count == 8
+    assert records['legal_count'].tolist() == [1, 1, 1, 2, 2, 2, 2, 2]
+
+
+def test_merge_can_delete_each_part_once_copied(tmp_path: Path) -> None:
+    parts = (core_part(tmp_path, 'a', 1, 3), core_part(tmp_path, 'b', 2, 5))
+    merge_datasets(parts, tmp_path / 'merged.bin', delete_inputs=True)
+    assert not any(part.exists() for part in parts)
