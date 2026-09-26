@@ -763,7 +763,11 @@ def _rung_result(
         stockfish_threads=engine_configuration.threads,
         stockfish_hash_mib=engine_configuration.hash_mib,
         model_search_budget=arguments.model_search_budget,
-        inference_backend=_gauntlet_inference_backend(
+        # Record the backend that served, not the configured one; the Lc0 diagnostic's first results recorded
+        # TensorRT while TorchScript served.
+        inference_backend=TorchScriptInferenceBackend()
+        if GAUNTLET_FORCE_TORCHSCRIPT
+        else _gauntlet_inference_backend(
             configuration,
             arguments.model_search_budget.inference_batch_size,
         ),
