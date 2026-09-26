@@ -40,7 +40,41 @@ Checkpoint 1026 policy-only against SF13 at 2,000 nodes scored 0.395 here agains
 evaluation. The intervals only just exclude each other; the serving path differs (float32 TorchScript here).
 The in-session matched comparison above is the result; archived numbers are context.
 
-PHASE_B_PENDING
+## Phase B — a first distillation pilot does not transfer the teacher's strength
+
+**Data.** 2,000,000 positions from 23k search-free games of the teacher: up to eight random opening plies,
+temperature 1.3 falling to 0.1 across ply 80, argmax after. Each record stores the project's own 52-plane
+input with the teacher's plain policy (top 64 legal moves) and WDL; no search targets, no terminal outcome,
+no auxiliary targets. The teacher was queried on Lc0 planes built from the real move history.
+
+**Training.** Checkpoint 1026 loaded strictly (205 tensors; 72 auxiliary-head and QAT tensors dropped),
+6,261,007 parameters, float, AdamW at 2e-4 with 100 warm-up steps, batch 1,024, **3,000 steps** (3.07M samples,
+about 1.6 passes over the 1.96M training rows), policy and WDL losses, 40,000 held-out rows. Cut from a planned
+6,000 steps to fit the reporting window.
+
+| Step | Held-out policy | Gap above the teacher's entropy | Held-out WDL |
+|---:|---:|---:|---:|
+| floor | 2.1239 | — | 0.3066 |
+| 500 | 2.2899 | 0.1661 | 0.3546 |
+| 1,000 | 2.2775 | 0.1536 | 0.3426 |
+| 1,500 | 2.2648 | 0.1409 | 0.3410 |
+| 2,500 | 2.2463 | 0.1224 | 0.3342 |
+| 3,000 | 2.2450 | 0.1211 | 0.3336 |
+
+Checkpoint 1026's own gap before fine-tuning was not measured, so how far imitation moved is not known.
+
+| vs Stockfish 13 | Student | Checkpoint 1026 | Teacher |
+|---|---|---|---|
+| Policy only, 2,000 nodes | 0.405 (24/33/43) [0.33, 0.48] | 0.395 [0.305, 0.48] | 0.855 |
+| 64 searches, 10,000 nodes | **0.38** (22/32/46) [0.31, 0.45] | 0.485 [0.405, 0.565] | 0.885 |
+
+The raw policy did not get measurably stronger, and searched play got weaker by roughly 75 Elo (the intervals
+touch). The pilot does not show that this network cannot absorb the teacher: it shows that 3,000 steps of joint
+policy-and-value fine-tuning does not. Consistent with the plan's warning, the value head was retrained on the
+teacher's WDL, a different quantity from the discounted outcomes the search and its FPU were tuned against, which
+fits a searched loss with an unchanged raw policy.
+
+PHASE_B_NEXT
 
 ## Provenance
 
