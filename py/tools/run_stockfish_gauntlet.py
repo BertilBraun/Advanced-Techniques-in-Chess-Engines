@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import random
 import subprocess
 import time
@@ -53,6 +54,7 @@ from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import (
     BatchedInferenceParams,
     InferenceBackendConfiguration,
+    InferencePrecision,
     TensorRtInferenceBackend,
     TorchScriptInferenceBackend,
 )
@@ -69,6 +71,12 @@ from tools.search_budget import (
     add_model_search_budget_arguments,
     model_search_budget,
 )
+
+# Lc0 teacher branch: the wrapped Lc0 network cannot run in bfloat16, so its arms are served through
+# TorchScript in float32. Environment variables rather than flags because shard workers inherit them;
+# unset, both keep the production behaviour.
+GAUNTLET_INFERENCE_PRECISION = InferencePrecision(os.environ.get('GAUNTLET_INFERENCE_PRECISION', 'bfloat16'))
+GAUNTLET_FORCE_TORCHSCRIPT = os.environ.get('GAUNTLET_TORCHSCRIPT_INFERENCE') == '1'
 
 
 class PrefixOpeningSelection(FrozenModel):
@@ -350,6 +358,7 @@ def _search_configuration(
             inference_batch_size=budget.inference_batch_size,
             outstanding_batches_per_worker=budget.outstanding_batches_per_worker,
             backend=inference_backend,
+            precision=GAUNTLET_INFERENCE_PRECISION,
         ),
     )
 
@@ -488,7 +497,9 @@ def _shard_context(request: _ShardRequest) -> _ShardContext:
         ),
         search=_search_configuration(
             request.model_search_budget,
-            _gauntlet_inference_backend(loaded, request.model_search_budget.inference_batch_size),
+            TorchScriptInferenceBackend()
+            if GAUNTLET_FORCE_TORCHSCRIPT
+            else _gauntlet_inference_backend(loaded, request.model_search_budget.inference_batch_size),
         ),
     )
 
