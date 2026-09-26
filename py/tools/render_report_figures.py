@@ -178,9 +178,9 @@ def training_figure(rows: int) -> tuple[Figure, list[Axes]]:
 
 
 def render_auxiliary(diagnostics: Diagnostics) -> None:
-    figure, axes = training_figure(2)
-    training_axis(axes[0], 'Next-policy loss')
-    training_axis(axes[1], 'Remaining-length loss')
+    figure, axes = horizontal_training_figure(('Next-policy loss', 'Remaining-length loss'))
+    figure.subplots_adjust(top=0.88, wspace=0.45)
+    figure.supxlabel('Completed optimizer steps (thousands)', y=0.01, fontsize=9)
     line(axes[0], diagnostics.samples(Metric.NEXT_POLICY), BLUE)
     line(axes[1], diagnostics.samples(Metric.REMAINING_LENGTH), TEAL)
     axes[1].ticklabel_format(axis='y', style='sci', scilimits=(0, 0), useMathText=True)

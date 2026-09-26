@@ -122,7 +122,10 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
     x = [point.optimizer_steps / 1000 for point in points]
     figure: Figure
     axes: list[Axes]
-    figure, axes = plt.subplots(2, 1, figsize=(6.4, 4.4) if paper else (9.3, 6.4), sharex=True, height_ratios=(2.1, 1))
+    if paper:
+        figure, axes = plt.subplots(1, 2, figsize=(7.4, 2.8), sharex=True)
+    else:
+        figure, axes = plt.subplots(2, 1, figsize=(9.3, 6.4), sharex=True, height_ratios=(2.1, 1))
     figure.patch.set_facecolor('white')
     for axis in axes:
         axis.set_facecolor('white')
@@ -178,15 +181,25 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
             color='#1f5875',
             fontsize=10,
         )
-    rate_axes.set_xlabel('Completed optimizer steps (thousands)')
-    rate_axes.set_xlim(0, 445 if paper else 410)
+    if paper:
+        figure.supxlabel('Completed optimizer steps (thousands)', y=0.01, fontsize=10)
+        for axis in axes:
+            axis.set_xticks((0, 200, 400))
+        loss_axes.set_xlabel('Training loss')
+        rate_axes.set_xlabel('Learning rate')
+        loss_axes.set_ylabel('')
+        rate_axes.set_ylabel('')
+    else:
+        rate_axes.set_xlabel('Completed optimizer steps (thousands)')
+    rate_axes.set_xlim(0, 510 if paper else 410)
     if not paper:
         figure.suptitle('Final lineage: training objectives and learning rate', x=0.09, ha='left', color='#203444')
     figure.subplots_adjust(
-        left=0.13 if paper else 0.10,
+        left=0.07 if paper else 0.10,
         right=0.98,
         top=0.88 if paper else 0.91,
-        bottom=0.13 if paper else 0.11,
+        bottom=0.30 if paper else 0.11,
+        wspace=0.30,
         hspace=0.15 if paper else 0.12,
     )
     suffix = '-paper.svg' if paper else '.svg'

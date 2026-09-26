@@ -121,8 +121,8 @@ TABLE_CAPTIONS = {
     ('02-methodology-and-evidence.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
     ('05-systems-optimization.md', 1): 'Actor overlap: optimizer throughput and concurrent search',
     ('06-final-chess-recipe.md', 1): 'Final training run',
-    ('07-final-run-results.md', 1): 'Parallel search at 1,000 visits against 20,000-node Stockfish',
-    ('07-final-run-results.md', 2): 'Distilled student strength at two training durations',
+    ('04a-search.md', 1): 'Parallel search at 1,000 visits against 20,000-node Stockfish',
+    ('07-final-run-results.md', 1): 'Distilled student strength at two training durations',
     ('appendix-c-supporting-comparisons.md', 1): 'CNN width: measured throughput versus arithmetic prediction',
     ('appendix-c-supporting-comparisons.md', 2): 'Depth and width: throughput ratios across batch sizes',
     ('appendix-d-reproducibility.md', 1): 'Chess input planes in tensor order (zero-based indices)',
@@ -278,8 +278,9 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
     if any(len(row) != columns for row in rows):
         raise ValueError('Inconsistent Markdown table width.')
     specification = '@{}' + 'l' * columns + '@{}'
-    environment = 'table' if appendix else 'table*'
-    lines = [r'\begin{' + environment + '}[H]' if appendix else r'\begin{table*}[!t]']
+    environment = 'table*' if source.name == '02-methodology-and-evidence.md' else 'table'
+    placement = '[H]' if appendix else '[!t]'
+    lines = [r'\begin{' + environment + '}' + placement]
     lines.append(r'\centering\normalsize' if appendix else r'\centering\small')
     caption = TABLE_CAPTIONS[(source.name, table_number)]
     lines.append(r'\caption{' + escape_tex(caption) + r'}\label{tab:' + source.stem + '-' + str(table_number) + '}')

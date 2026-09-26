@@ -23,7 +23,7 @@ and training efficiency.
 
 ## Training volume and model transition
 
-Table 3 summarizes the scale of the final run. Using a conservative mean of 100 searched plies per game and
+Table 4 summarizes the scale of the final run. Using a conservative mean of 100 searched plies per game and
 roughly 600 simulations per move gives an estimated 195 billion search simulations.
 
 | Quantity | Final training |

@@ -98,10 +98,10 @@ The overlap sweep compared keeping 8, 16, or all 32 actors active during trainin
 and the remaining wait for self-play.
 Moving from half to all actors active nearly doubled the trainer's work time for only a small reduction in the
 complete cycle. The retained half-active policy balances ongoing game production against optimizer throughput;
-Table 2 gives both sides of this tradeoff. Complete-cycle time includes training and the remaining wait for
+Table 3 gives both sides of this tradeoff. Complete-cycle time includes training and the remaining wait for
 self-play data; with all actors paused, training alone reached 25.3 thousand samples/s.
 
-| Active actors | Training samples/s (k) | Searches/s (k) | Complete cycle (s) |
+| Actors | Train (k/s) | Search (k/s) | Cycle (s) |
 | ---: | ---: | ---: | ---: |
 | 8 | 21.5 | 506 | 117 |
 | 16 | 17.1 | 606 | 113 |

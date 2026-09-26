@@ -39,7 +39,7 @@ Points beyond the plotted windows belong to subsequent experiments or the unreli
 
 ## Parallel-search and student controls
 
-The parallel-search comparison in Chapter 8 used 1,000 visits against 20,000-node Stockfish. Before rounding,
+The parallel-search comparison in Section 4.1 used 1,000 visits against 20,000-node Stockfish. Before rounding,
 the ratings for one, four, and sixteen parallel leaves were 2,823, 2,804, and 2,778 Elo, respectively.
 Reported rating differences use these unrounded values. Match-time ranges span the two recorded timing sources.
 

@@ -116,11 +116,19 @@ games can fill it before per-tree parallelism has any effect. A sweep that delib
 estimated a loss of 6.4 ± 4.7 Elo per doubling of parallel leaves. With that uncertainty, comparisons at specific
 search budgets are more informative than treating the estimate as a general rule.
 
-The tradeoff also depended on the total budget. At 1,000 searches, a final fixed-network sweep measured point
-losses of 19 Elo with four leaves and 45 Elo with sixteen leaves relative to serial search, while sixteen-way
-parallelism was substantially more damaging at 100 searches. The likely explanation is that a deep search will
-eventually visit more of the temporarily suboptimal leaves selected from stale state. Chapter 8 pairs these strength
-measurements with the time saved by parallel search.
+The tradeoff also depended on the total budget. Table 2 pairs strength with match duration in a fixed-network
+sweep at 1,000 searches against 20,000-node Stockfish.
+
+| Leaves | Elo | Time (min) | Elo change |
+| ---: | ---: | ---: | ---: |
+| 1 | 2,820 | 18.1–18.5 | 0 |
+| 4 | 2,800 | 3.4–3.8 | −19 |
+| 16 | 2,780 | 1.3–1.8 | −45 |
+
+Four- and sixteen-way parallelism reduced match time by roughly factors of five and eleven. Their strength
+differences were smaller than the overlapping match intervals. At only 100 searches, however, sixteen-way
+parallelism reduced the central strength estimate by about 235 Elo. A deeper search will eventually visit more
+of the temporarily suboptimal leaves selected from stale state, making the same concurrency less disruptive.
 
 The resulting choice differs between training and interactive play. Many independent self-play games can fill
 batches without much per-tree parallelism. A player waiting for one move has only one root, making parallel leaves
