@@ -1,7 +1,9 @@
 # 6. Three failures that changed the method
 
-Three plausible shortcuts failed at different boundaries: replay admission, inference-artifact fidelity, and model
-promotion. In each case, a convenient success signal measured something other than the behavior the system needed.
+Three shortcuts looked useful until their effects reached the games themselves. Skipping expensive endgames
+withheld the examples needed to learn them. Reusing a compiled inference engine changed the model's predictions.
+Promoting by training loss selected a player that fitted replay better but played worse. Each failure changed how
+the system decides whether an apparent improvement is safe to use.
 
 ## Late-game target poisoning
 
@@ -26,45 +28,40 @@ from one full search at the final cut position. A controlled continuation study 
 early cut positions, the searched root value reduced Brier error from 0.491 to 0.444 and cross-entropy from 0.851 to
 0.756 relative to the material target. The same ordering held on a later set of 1,144 positions. Later, the forced
 cheap-search tail was removed altogether, returning properly searched endgame positions to replay. The second change
-closed the data hole that a better terminal value alone could not repair. Because other late-game changes were
-bundled around the same period, neither step receives an isolated Elo credit. The evidence establishes the failure
-mechanism and target-quality improvement, not a one-variable strength estimate.
+closed the data hole that a better cutoff value alone could not repair. Together, the changes restored both useful
+endgame examples and a better estimate for games that still had to be stopped.
 
 ![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
 
-Figure 7: The cutoff repair fixes target provenance; restoring fully searched endgames breaks the feedback loop at
-its source.
+Figure 7: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
+returns the examples needed to learn conversion.
 
-Search eligibility, replay admission, and terminal-value provenance must be designed together. Weakening or
-discarding one part of a trajectory can make the model least competent there; subsequent self-play then reinforces
-the same blind spot.
+Deciding which moves deserve search also decides what the network gets to learn. Discarding one part of the game
+can make the player weakest there, causing later self-play to repeat the same blind spot.
 
-## A mechanically valid but semantically invalid TensorRT refit
+## When a successful TensorRT refit changed the model
 
-The deployment pipeline builds a structural TensorRT template and refits it with each new quantized checkpoint. One
-template was built from a checkpoint whose clipped activation quantizers had many numerically equal scales. At high
-optimization levels, TensorRT optimized the engine around those equalities. Training later separated the scales,
-but the refit API still accepted every replacement weight, reported no missing weights, and returned success. The
-resulting engine was structurally valid and semantically wrong.
+Rebuilding a TensorRT engine after every training block is expensive, so the deployment pipeline builds a template
+and replaces its weights through refitting. Quantized computation also uses scale factors to map integer values
+to their numerical ranges. In one template, many of those scales happened to be equal, and TensorRT's higher
+optimization levels compiled around that equality. Later training made the scales different. Refitting still
+accepted every replacement and reported success, but the engine no longer reproduced the network's predictions.
 
-The defect was visible only when the published engine was treated as a chess model rather than as a successfully
-serialized object. On 516 real positions, the faulty template produced legal-policy KL near 1.05 and repeated refits
+Comparing predictions on 516 real positions exposed the defect. KL divergence measures how much two probability
+distributions disagree, with zero meaning agreement. The faulty engine's move probabilities differed from the
+source network by a KL divergence near 1.05, and repeated refits
 of the same inputs changed individual logits by 10--15. Building at a lower optimization level, or first making the
 template's scale constants distinct, reduced legal-policy KL to about 0.0012 and made repeated refits deterministic.
 The failure required three conditions: equal scales in the build source, optimization level four or higher, and a
-later refit that made those scales unequal. Tests with identity batch normalization and zero biases rejected
-constant folding as the cause. These probes isolated the refit-template defect.
+later refit that made those scales unequal.
 
 Template construction now separates equal quantization scales before optimization and uses a safer default
-optimization level. More importantly, deployment publication no longer treats deserialization, complete weight
-accounting, or refit success as evidence of model equivalence. It evaluates the engine on real encoded positions and
-records legal-move top-one agreement, legal-policy KL, and WDL error against the source artifact. Those checks cover
-the semantics that search actually consumes: which legal move the policy prefers, how its probability mass changes,
-and whether the value distribution remains faithful.
+optimization level. Each exported engine is then compared with its source network on real positions: does it prefer
+the same legal move, assign similar probabilities to alternatives, and preserve the win/draw/loss prediction?
+Top-one agreement, policy KL, and WDL error measure these three aspects of the behaviour that search consumes.
 
-A compiler or refitter can meet its mechanical contract while violating the model's behavioral contract. Published
-artifacts therefore require representative behavioral probes alongside their graph, template, runtime, and refit
-manifest.
+The practical lesson is to test the exported player, not just the export operation. A successful engine build or
+refit cannot substitute for checking that it still predicts the intended moves and values.
 
 ## Promotion from incomparable training losses
 
@@ -75,7 +72,7 @@ once the candidate received extra optimizer quanta over the same replay distribu
 systematic advantage on replay loss without proving equal playing strength. The loss gate promoted a candidate whose
 deployed artifact passed inference-fidelity checks but was still about 270 Elo weaker in play.
 
-Promotion now measures the property that publication requires. The candidate plays paired head-to-head matches
+Promotion now tests playing strength directly. The candidate plays paired head-to-head matches
 against the active deployment artifact and must score at least 0.48 in two consecutive completed evaluations. A
 failing score resets the sequence; a failed or cancelled match contributes no evidence. Candidate-start timing,
 extra catch-up training, and promotion are separate controls. Function-preserving growth is likewise a separate

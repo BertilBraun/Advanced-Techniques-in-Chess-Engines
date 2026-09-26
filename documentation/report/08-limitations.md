@@ -1,20 +1,40 @@
-# 9. What the evidence does not establish
+# 9. Limitations and open questions
 
-The complete run measures the assembled system, but it cannot assign an Elo gain to each ingredient. Several
-component studies used one seed, a short horizon, frozen replay, or a local proxy. They help explain mechanisms and
-screen choices, but do not establish long-run online gains. Historical policy-head and global-context comparisons
-without complete artifacts remain qualitative. The larger network reached parity in a limited continuation; more
-training would be needed to separate optimization difficulty from limits in capacity, replay, or target quality.
+## Which changes caused the gains?
 
-The final ratings come from 100-game paired matches against fixed-node Stockfish 13 and a historical node-to-Elo
-calibration. The bootstrap intervals cover match sampling, not uncertainty in that calibration. Opponent rungs
-disagree at shallow budgets; policy-only and searched play use different inference artifacts; and deep-search
-parallelism varies with budget. Figure 9 therefore shows attainable operating points under the stated protocol,
-not an isolated search-scaling law or a rating against unrestricted engines.
+The final run shows what the assembled system achieved, but it does not separate the contribution of every
+ingredient. Component experiments often used one seed, short continuations, or frozen replay to make comparisons
+affordable. They can explain why a design was chosen without showing how much Elo it added to the final player.
+The historical policy-head and global-context comparisons are less complete still: some conclusions rely on
+qualitative observations because their original results were not preserved.
 
-The rejected methods' economics also depend on workload. Exact graph reuse and inference-cache hits were too rare
-in diverse chess self-play; adaptive stopping saved simulations but barely shortened training under actor/trainer
-overlap. A repetitive analysis service or non-overlapped learner might behave differently. The student comparison
-uses a different deployment backend from the teacher. The $43.20 rental figure covers only the selected training
-path, not total project spending. Finally, a reproducible run should preserve its recipe, artifacts, match protocol,
-and statistical results; proprietary drivers and TensorRT versions preclude a promise of bitwise-identical weights.
+This matters most for choices that change several parts of learning at once. Progressive sizing improves early
+self-play throughput but changes the network's capacity and training history. Replay growth, reuse, and fresh-game
+supply also interact. Longer matched-compute comparisons would be needed to separate their effects. Likewise, the
+larger model reached parity during its limited continuation, leaving open whether more training, different targets,
+or another initialization would let it use its additional capacity.
+
+## How should the ratings be interpreted?
+
+The reported Elo values put the matches on a common benchmark scale using a published calibration of Stockfish 13
+node limits. They are not direct measurements against unrestricted engines. Each final match contains 100 games,
+and the intervals quantify uncertainty from those games; uncertainty in the historical calibration is additional.
+The two opponent rungs agree closely at the deepest model budget but disagree more at shallow budgets. More games
+and a wider opponent field would help establish how much of that discrepancy comes from sampling or calibration.
+
+The strength curve also reflects the settings used to make each search budget practical. Deeper points use more
+parallel leaves, so the curve measures the resulting player rather than varying depth alone. Policy-only play and
+searched play use different inference backends, as do the compact student and teacher. Appendix B records these
+evaluation settings so comparisons can be repeated on the same basis.
+
+## Where might the conclusions change?
+
+Several negative results depend on the workload. Diverse chess self-play offered few exact graph or cache hits;
+repeated analysis of the same positions could make reuse more valuable. Adaptive stopping saved search without
+greatly shortening a training cycle because search overlapped the optimizer. A learner that spends most of its time
+waiting for inference could benefit more from the same saving.
+
+The $43.20 cost describes the final training run, not the experimentation needed to develop it. Reproducing the
+recipe is therefore different from repeating the entire project. Hardware contention, drivers, and TensorRT
+versions can also change throughput. The preserved configuration, model, and evaluation protocol provide the
+starting point for a repeatable comparison, rather than a promise of identical weights or timing on another node.

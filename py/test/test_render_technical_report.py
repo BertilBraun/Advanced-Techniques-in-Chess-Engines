@@ -33,6 +33,11 @@ def test_report_prose_rejects_external_markdown_links() -> None:
         inline_tex(paragraph.children or [])
 
 
+def test_roadmap_has_clickable_internal_section_links() -> None:
+    paragraph = MarkdownIt('commonmark').parse('[Chapter 3](03-system-and-methods.md)')[1]
+    assert inline_tex(paragraph.children or []) == r'\hyperref[sec:03-system-and-methods]{Chapter 3}'
+
+
 def test_investigations_use_numeric_section_hierarchy() -> None:
     search = Path('04a-search.md')
     assert r'\section{Research investigations}' in section_tex(
@@ -75,4 +80,4 @@ def test_main_result_table_has_caption() -> None:
     assert r'\begin{table*}[!t]' in output
     assert r'\caption{Final checkpoint against fixed-node Stockfish 13}' in output
     assert r'\label{tab:02-methodology-and-evidence-1}' in output
-    assert output.endswith('\\FloatBarrier\n')
+    assert r'\FloatBarrier' not in output

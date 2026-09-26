@@ -63,7 +63,11 @@ PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
 \titlespacing*{\subsection}{0pt}{0.9em}{0.3em}
 \setlength{\parindent}{1em}
 \setlength{\parskip}{0pt}
+\widowpenalty=10000
+\clubpenalty=10000
+\raggedbottom
 \setlength{\columnsep}{7mm}
+\setcounter{dbltopnumber}{1}
 \setlist[itemize]{leftmargin=1.25em,itemsep=0.08em,topsep=0.25em}
 \setlist[enumerate]{leftmargin=1.35em,itemsep=0.12em,topsep=0.25em}
 \captionsetup{font=small,labelfont=bf}
@@ -145,9 +149,14 @@ def inline_tex(tokens: list[Token], *, bibliography: bool = False) -> str:
             case 'strong_close' | 'em_close':
                 parts.append('}')
             case 'link_open':
+                address = token.attrGet('href')
+                if address in SOURCE_FILES:
+                    links.append(address)
+                    label = 'research' if address == '04a-search.md' else Path(address).stem
+                    parts.append(r'\hyperref[sec:' + label + ']{')
+                    continue
                 if not bibliography:
                     raise ValueError('External links in report prose must be bibliography citations.')
-                address = token.attrGet('href')
                 if address is None or urlparse(address).scheme not in {'https', 'http'}:
                     raise ValueError(f'Unsupported bibliography link: {address}')
                 links.append(address)
@@ -203,7 +212,7 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
             if Path(address).stem in {'appendix-training-stages', 'appendix-resignation'}:
                 height = '0.48'
     elif source.name == '07-final-run-results.md':
-        environment, placement, width, height = 'figure*', '!t', '0.87', '0.36'
+        environment, placement, width, height = 'figure*', 't', '0.87', '0.36'
     else:
         environment, placement, width, height = 'figure*', '!t', '0.98', '0.43'
     return (
@@ -256,8 +265,6 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
             lines.append(r'\midrule')
     lines.extend([r'\bottomrule', r'\end{tabular}'])
     lines.append(r'\end{' + environment + '}')
-    if not appendix:
-        lines.append(r'\FloatBarrier')
     return '\n'.join(lines) + '\n'
 
 
@@ -388,14 +395,13 @@ def build_report(output: Path) -> None:
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
-        if filename == '08-limitations.md':
-            parts.append(r'\FloatBarrier' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
     parts.extend(
         [
             r'\FloatBarrier' + '\n',
+            r'\balance' + '\n',
             bibliography_tex(),
-            r'\clearpage\onecolumn\raggedbottom' + '\n',
+            r'\clearpage\onecolumn\raggedbottom\widowpenalty=150\clubpenalty=150' + '\n',
             r'\appendix' + '\n',
             r'\renewcommand{\thefigure}{\Alph{section}.\arabic{figure}}' + '\n',
             r'\renewcommand{\thetable}{\Alph{section}.\arabic{table}}' + '\n',

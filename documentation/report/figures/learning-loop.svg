@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 90 1200 670" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 90 1200 610" role="img" aria-labelledby="title description">
   <title id="title">The chess self-play learning loop</title>
   <desc id="description">Python coordinates native C++ self-play, replay, distributed training, TensorRT inference, and paired Stockfish evaluation. The published model returns to self-play.</desc>
   <defs>
@@ -80,6 +80,4 @@
   <path d="M 344 143 L 355 150 L 344 157 Z" class="feedback-arrowhead"/>
   <text x="423" y="666" class="feedback-label">Elo feedback</text>
 
-  <text x="50" y="710" class="small">Solid arrows: data or model flow. Dashed orange arrow: evaluation feedback to selection.</text>
-  <text x="50" y="735" class="small">Diagram shows the normal training loop; source, checkpoint, and match identities are recorded separately.</text>
 </svg>

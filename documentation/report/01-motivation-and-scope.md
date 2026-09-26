@@ -33,6 +33,9 @@ A live chess demonstration is also available [12].
 
 ## Roadmap
 
-Chapter 2 presents the chess evaluation, and Chapter 3 introduces the system. The following chapters examine
-search, replay, network design, and the throughput needed to train them. Three failure studies lead into the final
-recipe and evaluation.
+[Chapter 2](02-methodology-and-evidence.md) presents the chess evaluation.
+[Chapter 3](03-system-and-methods.md) explains the AlphaZero learning principle and the system that implements it.
+[Chapter 4](04a-search.md) examines search, replay, and network design, followed by throughput engineering in
+[Chapter 5](05-systems-optimization.md). The three failure studies in [Chapter 6](05a-three-failures.md)
+lead into the final chess recipe in [Chapter 7](06-final-chess-recipe.md) and its training and evaluation results in
+[Chapter 8](07-final-run-results.md).

@@ -1,26 +1,84 @@
-# 3. System and training method
+# 3. Background and system design
+
+## Learning through search
+
+AlphaZero learns a chess player without examples of human play [1]. Its network has two jobs: the *policy* assigns
+probabilities to moves, while the *value* estimates the outcome of a position. Monte Carlo tree search (MCTS) brings
+these predictions together. It explores moves using both their policy probabilities and the results found so far,
+balancing promising continuations against less-explored alternatives. At a new leaf, the network evaluates the
+position; that value is backed up along the path to inform subsequent exploration.
+
+Search can therefore challenge the network's first impression. A promising move may reveal a strong reply for the
+opponent, while a less obvious move may lead to better positions. The root visit distribution becomes a policy
+target, and the completed game's outcome teaches the value prediction. Training folds this experience back into
+the network. Better predictions then guide later searches towards more useful continuations, sustaining a cycle
+of search, self-play, and learning.
+
+This is the central opportunity under limited compute: spend search to discover improvements, then learn enough
+from those improvements that the next search starts from a stronger player. It also explains why speed alone is
+insufficient. Cheap searches that mostly repeat the network's initial preference may produce many positions but
+little new policy information. Conversely, very deep searches can make good targets too expensive to supply in
+sufficient quantity. The experiments in Chapter 4 explore this balance.
+
+## Related work
+
+AlphaZero establishes the self-play learning framework [1]; KataGo shows how substantially its compute requirements
+can be reduced through changes to search, training, and network architecture [2]. KataGo is the closest practical
+precedent for this study's efficiency focus. Its fast/full search schedule, auxiliary objectives, and self-play
+methods [7] motivated several investigations here. Their usefulness still depends on the game: completing more
+long Go games and supplying more searched chess positions need not favour the same allocation of compute.
+
+Several narrower lines of work address where that compute should go. Dynamic simulation MCTS studies when to stop
+search [3], and targeted search control starts self-play from archived states to explore beyond ordinary opening
+trajectories [5]. Prioritized
+experience replay changes which stored examples are learned from again [4], while Monte Carlo graph search shares
+work across paths reaching the same state [6]. These ideas motivate the allocation, replay, restart, and reuse
+experiments below. Our contribution is an integrated, limited-compute chess study of those choices: the design that
+worked together, the measurements behind it, and the alternatives that did not repay their cost.
 
 ## One learning cycle
 
-The system improves by repeatedly turning played games into a stronger player. A published network guides search
-in many self-play games; the resulting positions and search policies enter replay; the trainer learns from that
-replay and publishes the next network. Evaluation checks whether the new player is actually stronger. Figure 1
-shows this cycle and the components that carry it. Chapter 5 asks which parts of the cycle limit how much learning
-can happen in a fixed time.
+Figure 1 follows a model through the implemented learning cycle. Python orchestration publishes its weights to the
+self-play actors and schedules training and evaluation. Each actor advances many chess games in native C++.
+Whenever search reaches positions needing evaluation, the actor groups them into batches for TensorRT, the
+optimized GPU inference engine.
+Returned policies and values allow the waiting searches to continue, update their visit statistics, and eventually
+choose the next moves. The expensive interaction is therefore between native search and batched inference, not
+between Python and each individual tree traversal.
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
 Figure 1: A published model guides batched native self-play; searched positions become replay targets for the
 trainer. Paired evaluation measures the published checkpoint and informs model-promotion decisions.
 
-Native C++ plays the games and runs search so Python does not handle every position or tree operation. Python
-coordinates workers, replay, training, publication, and evaluation. Both sides must interpret chess positions and
-network outputs identically; tests check their action mapping, features, symmetries, tensor shapes, and output order.
+When a game ends, its outcome completes the targets for its recorded positions. The replay pipeline converts these
+trajectories into stored examples, and the trainer draws batches from that accumulated experience. After a block of
+optimizer steps, the updated model is published back to the actors. Some self-play continues during training, so
+data production and learning overlap rather than alternating between an idle trainer and idle actors.
+
+Evaluation runs alongside this loop using the native chess engine to play paired matches. It measures progress
+without adding those matches to self-play training. Its feedback also determines when a larger candidate is ready
+to replace the active model. In Figure 1, the solid arrows carry positions, predictions, training data, or models;
+the dashed return path carries this evaluation feedback to Python orchestration.
+
+## Why the search loop stays in C++
+
+The language boundary follows the frequency of the work. A single played move needs hundreds or thousands of tree
+traversals, each involving board updates, move generation, selection, and backup. Running this inner loop through
+Python makes interpreter and boundary-crossing overhead recur at every search step. Keeping the complete loop in
+C++ lets actors retain trees and buffers, advance independent games while evaluations are pending, and feed the
+GPU without a Python callback for each leaf.
+
+Python remains useful at the coarser scale. It coordinates workers and model publication, manages replay, and runs
+training through PyTorch and its distributed libraries. Those tasks benefit from the existing ecosystem and ease
+of experimentation without putting Python on the path of every simulation. The split is an efficiency choice:
+native code supplies enough searched games for learning, while Python keeps the surrounding training system
+manageable. Chapter 5 measures the resulting throughput and the bottlenecks that remain.
 
 ## Chess representation and outputs
 
 The network sees the board, recent history, and rule-relevant state. It predicts a move policy and the probabilities
-of winning, drawing, or losing. Search uses those two outputs to choose moves and to create training targets. The
+of winning, drawing, or losing (WDL). Search uses those two outputs to choose moves and to create training targets. The
 retained model shares a convolutional representation between its outputs and scores moves by origin and destination;
 training-only auxiliary heads are removed from the serving artifact. Section 4.3 explains the representation
 choices, including the 1,880-action interface; Chapter 7 gives the selected model shape.
@@ -60,7 +118,8 @@ Training minimizes errors in the search policy and the game outcome. Two auxilia
 completed game: predicting the next move's searched policy and the remaining game length. They help train
 the shared network but do not run during self-play. Section 4.2 explains when those future-dependent targets exist.
 
-Eight persistent trainer processes, one per GPU, train in 500-step blocks with a global batch of 2,048 while some
+Eight persistent trainer processes use distributed data parallelism (DDP): each GPU trains on part of the batch,
+and their gradients are combined for the model update. They train in 500-step blocks with a global batch of 2,048 while some
 self-play workers continue producing games. A block followed by publication is a *generation*; its saved model is a
 *checkpoint*. Overlap matters: saving search work does not necessarily shorten a generation if training was already
 the limiting step. The adaptive-stopping test in Section 4.1 measures that distinction.

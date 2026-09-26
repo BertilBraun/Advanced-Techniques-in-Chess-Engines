@@ -23,9 +23,10 @@ busy in the retained topology.
 
 ## Batching and host-side submission
 
-Large neural batches help only while the host assembles, submits, and consumes them fast enough. Board encoding,
-persistent staging buffers, host-to-device copies, result processing, CUDA events and graph replay, process count,
-and inference-thread count were optimized as one submission path.
+Batching amortizes the cost of launching GPU work over many positions. It helps only if the CPU can encode those
+positions and submit the next batch before the GPU runs out of work. Reusing staging buffers avoids repeated
+allocation; asynchronous copies and completion events let CPU preparation overlap GPU execution. CUDA graph
+replay further reduces launch overhead by reusing a recorded sequence of GPU operations.
 
 In a controlled 32-process self-play workload, the optimized path increased search throughput from 512,679 to
 617,782 searches/s, a 20.5% gain, while reducing aggregate actor CPU consumption from 52.6 to 19.8 cores. Average
@@ -50,14 +51,14 @@ reached 75,889 positions/s against 40,716 for a TorchScript BF16 control in a ma
 Quantization-aware INT8 added a further 1.31x over TensorRT FP16 on the tested quantization-oriented network.
 Production-topology tests found INT8 gains of 14.4% for the smaller network and 39.1% for the medium network.
 
-Speed was useful only if the deployed network still played the same chess. Post-training INT8 changed policy and
-value outputs too much, so the retained scaled post-activation blocks were trained with fake quantization. Backbone
-convolutions run in INT8; the start block, heads, and linear layers remain at higher precision. Publication
-recalibrates the checkpoint, exports an explicit Q/DQ ONNX graph, and refits a TensorRT template [8]. Policy and
-value outputs are then checked on encoded positions. Section 4.3 explains the block design; Chapter 6 shows why
-successful engine construction alone could not establish fidelity.
+As Section 4.3 explains, the INT8 speedup required training the network to tolerate quantization. Most trunk
+convolutions run in INT8, while the start block, heads, and linear layers remain at higher precision. Export records
+the quantization and dequantization operations explicitly in ONNX so TensorRT can compile the intended arithmetic.
+Rather than rebuild the complete engine after every update, publication refits a prepared template with the new
+weights [8]. Chapter 6 examines a failure in this step that made output comparisons essential.
 
-`torch.compile` was another attempted speedup. It accelerated eager batch-64 inference by roughly 27--33%, but
+PyTorch's `torch.compile` offered another route: compile and fuse operations instead of executing each separately.
+It accelerated eager batch-64 inference by roughly 27--33%, but
 fused TorchScript remained faster. In the tested eight-GPU training workload, compilation reduced throughput by
 about 18% relative to eager execution, while bfloat16 autocast improved it by 9.2%. Compilation was not retained
 for production inference or training on this workload.
@@ -69,32 +70,29 @@ benchmarked at their actual serving batch and precision rather than selected fro
 
 ## Replay materialization and training supply
 
-Search work becomes useful training compute only after games finish and their observations pass replay admission.
-Completed games are atomically published, converted into typed columnar rows, and appended to a fixed-capacity
-memory-mapped replay. Materialization is partitioned before expensive conversion, bounds inbox scans and staging,
-quarantines malformed individual games, and fails loudly if systemic rejection prevents the learner from receiving
-data. This makes replay ingestion both a throughput stage and a scientific boundary.
+Once search is fast enough, moving its output to the trainer can become the bottleneck. Finished trajectories must
+be converted into training rows, stored, and assembled into batches without repeatedly copying or decoding the
+same data. Materialization performs that conversion in parallel and writes a circular memory-mapped replay store.
+The trainer can then access array-like columns directly and prefetch batches into pinned memory for GPU transfer.
 
-The trainer reads vectorized batches from the memory-mapped store with pinned-memory prefetch and one persistent DDP
-rank per GPU. A loader benchmark on 2.5 million rows improved from 3,943 to 32,579 samples/s after compacting 5,000
+A loader benchmark on 2.5 million rows improved from 3,943 to 32,579 samples/s after compacting 5,000
 small producer shards into 25 containers—8.26x faster and 44% above the measured trainer demand. In a later live interval,
 materialization appended 8,790 positions/s while accepted positions arrived at 1,365/s, leaving more than sixfold
 headroom. Materialization was not the bottleneck in that workload.
 
-A credit ledger links optimizer work to newly admitted positions. Each training quantum becomes eligible only after
-enough materialized data has arrived for the configured replay-reuse ratio. This prevents rejected games, ingestion
-stalls, or an accidental change in data reuse from appearing as normal optimizer progress. Persistent DDP ranks then
-avoid repeated startup and model construction costs. On the measured eight-GPU topology, a global batch of 2,048,
+Training waits for enough new replay positions to support its configured reuse ratio; processing the same old data
+faster would not solve a supply bottleneck. Persistent distributed trainer processes avoid startup and model
+construction costs between blocks. On the measured eight-GPU topology, a global batch of 2,048,
 bfloat16 autocast, and concurrent self-play produced 6,252 training samples/s; larger batches improved hardware
 throughput further but would also change update count and optimization semantics, so they were not adopted merely
 because the GPU benchmark was faster.
 
 ## Overlapping self-play and training
 
-Self-play, materialization, training, publication, and evaluation overlap without making the learner fully
-asynchronous. Optimizer work remains divided into explicit quanta, and actors switch models only at publication
-boundaries. A selected subset keeps producing games during training while the rest pause. This uses idle capacity
-without losing the identity of the model and data behind each quantum.
+Search and training compete for the same GPUs, but running them strictly in alternation leaves opportunities
+unused. Search also spends time on CPU work and transfers, while the trainer does not consume every resource
+equally. Keeping some actors active during a training block can use that spare capacity to produce the next games.
+The question is how much extra game supply compensates for the slower optimizer.
 
 The overlap fraction is a measured compromise. With no actors running, the trainer processed 25,275 samples/s.
 Keeping 8, 16, or all 32 actors active reduced trainer throughput to 21,492, 17,139, and 9,210 samples/s, while

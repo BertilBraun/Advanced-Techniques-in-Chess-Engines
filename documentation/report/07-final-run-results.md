@@ -1,6 +1,6 @@
 # 8. Final training and evaluation results
 
-The selected 14×160 chess model has 6.32 million parameters and reaches
+The final chess model, with 14 residual blocks and 160 channels, has 6.32 million parameters and reaches
 **3,251 benchmark Elo at 100,000 searches per move** in the paired Stockfish 13 evaluation introduced in
 Chapter 2. This chapter follows its
 2.5-day training trajectory, compares it with the previous chess recipe, and shows what additional search and a
@@ -8,14 +8,15 @@ much smaller distilled model achieve.
 
 ## Training progress
 
-The 64-search training ladder rose from 798 to 2,372.2 over 2.5 effective days, with a peak of 2,407.6 in that
+During training, the inexpensive 64-search ladder measured progress without repeatedly running deep-search matches.
+Its rating rose from 798 to 2,372.2 over 2.5 days, with a peak of 2,407.6 in that
 window. Figure 8 places this trajectory beside four earlier chess campaigns. The plot ends with the selected
 training run at 2.5 days; Appendix B explains the comparison windows.
 
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
 Figure 8: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
-the preceding baseline at 3.0 days; the matched comparison below uses a common rating calculation.
+the preceding baseline at 3.0 days; the matched comparison uses a common rating calculation.
 
 The plotted curves make the progression visible, but the previous baseline and final run originally used
 different ladder estimators. Recomputing their plateaus on the same three-rung estimator gives 2,283.9 and
@@ -33,7 +34,7 @@ selection. Thus the learner saw about four training presentations per admitted p
 trajectories and counting boundaries.
 
 At a conservative 100 searched plies and roughly 600 simulations per game move, 3.25 million completed games
-correspond to approximately 195 billion search simulations. Most require a neural-network evaluation.
+correspond to approximately 195 billion search simulations.
 
 Across 480 small-model quanta, median trainer throughput was 16,977 samples/s; across 337 medium-model quanta it
 was 11,194. The 2.5-day final training cost **$43.20** in node rental at $0.72/h. Appendix A shows the throughput
@@ -59,8 +60,10 @@ five seconds of thinking time on an RTX 4070 SUPER with the current setup.
 
 ### Parallel search trades time for strength
 
-The measured strength curve uses one parallel search at 100 and 1,000 searches per move, four at 10,000, and
-sixteen at 100,000. A controlled 1,000-search sweep against the same 20,000-node opponent shows why: one parallel
+Parallel search reduces the wait for a move by evaluating several leaves before their results return. As discussed
+in Section 4.1, this trades some search quality for better GPU use. The strength curve uses one parallel search at
+100 and 1,000 searches per move, four at 10,000, and sixteen at 100,000. A controlled 1,000-search sweep against
+the same 20,000-node opponent illustrates the tradeoff: one parallel
 search measured 2,823 Elo, four measured 2,804, and sixteen measured 2,778. Their central differences of 19 and
 45 Elo are smaller than the overlapping match intervals, while match time fell from about **18.3 minutes** to
 **3.6** and **1.6 minutes**, respectively. Four-way and sixteen-way parallelism made those matches roughly five

@@ -20,7 +20,7 @@ Wider node throughput remains open; total project spend is intentionally not a r
 
 1. [Abstract](00-abstract.md) and [motivation and scope](01-motivation-and-scope.md)
 2. [Methodology and evidence](02-methodology-and-evidence.md)
-3. [System and training method](03-system-and-methods.md)
+3. [Background and system design](03-system-and-methods.md)
 4. Investigations of [search](04a-search.md), [data and replay](04b-data-and-replay.md), and
    [networks and training](04c-networks-and-training.md)
 5. [Systems optimization](05-systems-optimization.md)
@@ -36,6 +36,7 @@ Wider node throughput remains open; total project spend is intentionally not a r
 12. [Research coverage matrix](coverage-matrix.md)
 13. [Publication plan](publication-plan.md)
 14. [Narrative outline and visualization strategy](narrative-outline.md)
+15. [Editorial rules](editorial-rules.md) for reader-first revision (not part of the paper)
 
 ## Report status
 
