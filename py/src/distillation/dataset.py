@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from pydantic import Field
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_plane_bytes_into
 from src.replay.columnar import ReplayColumnViews
@@ -16,7 +17,9 @@ from src.util.frozen_model import FrozenModel
 
 MAXIMUM_POLICY_ENTRIES = 64
 MAXIMUM_LEGAL_ACTIONS = 218
-CHESS_PAYLOAD_BYTES = 183
+# Derived rather than pinned: the Lc0 teacher branch changes the plane layout, and a stale literal
+# here silently mis-strides every record.
+CHESS_PAYLOAD_BYTES = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
 
 
 class DistillationRecordLayout(str, Enum):

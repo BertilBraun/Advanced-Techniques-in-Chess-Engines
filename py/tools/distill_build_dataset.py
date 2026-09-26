@@ -13,9 +13,11 @@ from src.distillation.dataset import (
     MAXIMUM_LEGAL_ACTIONS,
     MAXIMUM_POLICY_ENTRIES,
     DistillationDatasetManifest,
+    DistillationRecordLayout,
     record_dtype,
     write_dataset,
 )
+from src.distillation.lc0_teacher import Lc0Teacher, load_lc0_teacher, sampling_temperature_at
 from src.distillation.teacher import LoadedTeacher, load_teacher, read_network_definition
 from src.evaluation.inference import decode_packed_inputs
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT, ChessPosition
@@ -37,10 +39,13 @@ PROGRESS_INTERVAL_SECONDS = 10.0
 
 @dataclass(frozen=True)
 class BuilderArguments:
-    teacher_run_state: Path
+    teacher_run_state: Path | None
     teacher_generation: int
     teacher_layers: int
     teacher_hidden_size: int
+    lc0_teacher: Path | None
+    greedy_after_ply: int | None
+    final_temperature: float
     output: Path
     positions: int
     parallel_games: int
@@ -232,13 +237,14 @@ def report_progress(recorded: int, total: int, completed_games: int, elapsed_sec
 
 
 def generate_records(
-    teacher: LoadedTeacher,
+    teacher: LoadedTeacher | Lc0Teacher,
     arguments: BuilderArguments,
     device: torch.device,
     head_indices: AuxiliaryHeadIndices,
+    record_layout: DistillationRecordLayout,
 ) -> npt.NDArray:
     generator = np.random.default_rng(arguments.random_seed)
-    records = np.zeros(arguments.positions, dtype=record_dtype(CHESS_PAYLOAD_BYTES))
+    records = np.zeros(arguments.positions, dtype=record_dtype(CHESS_PAYLOAD_BYTES, record_layout))
     slots = [
         GameSlot(position=open_game(generator, arguments.random_opening_plies), ply=arguments.random_opening_plies)
         for _ in range(arguments.parallel_games)
@@ -281,8 +287,16 @@ def generate_records(
                 recorded += 1
             if generator.random() < arguments.random_perturbation_probability:
                 chosen = int(generator.integers(len(legal)))
+            elif arguments.greedy_after_ply is not None and slot.ply >= arguments.greedy_after_ply:
+                chosen = int(np.argmax(legal_logits))
             else:
-                chosen = int(generator.choice(len(legal), p=softmax(legal_logits / arguments.sampling_temperature)))
+                temperature = sampling_temperature_at(
+                    slot.ply,
+                    arguments.sampling_temperature,
+                    arguments.final_temperature,
+                    arguments.greedy_after_ply,
+                )
+                chosen = int(generator.choice(len(legal), p=softmax(legal_logits / temperature)))
             slot.position = CHESS_STATE_CONTRACT.child_position(slot.position, int(legal[chosen]))
             slot.ply += 1
             game_over = CHESS_STATE_CONTRACT.natural_terminal_wdl(slot.position) is not None
@@ -304,19 +318,36 @@ def parse_arguments() -> BuilderArguments:
     parser = argparse.ArgumentParser(
         description='Generate diverse chess positions and label them with the raw head outputs of a teacher network.'
     )
-    parser.add_argument('--teacher-run-state', type=Path, required=True, help='Run-state directory holding model_N.pt.')
-    parser.add_argument('--teacher-generation', type=int, required=True, help='Generation of the teacher checkpoint.')
+    parser.add_argument('--teacher-run-state', type=Path, help='Run-state directory holding model_N.pt.')
+    parser.add_argument('--teacher-generation', type=int, default=0, help='Generation of the teacher checkpoint.')
     parser.add_argument(
         '--teacher-layers',
         type=int,
-        required=True,
+        default=0,
         help='Residual block count; used only when the checkpoint manifest carries no network definition.',
     )
     parser.add_argument(
         '--teacher-hidden-size',
         type=int,
-        required=True,
+        default=0,
         help='Trunk width; used only when the checkpoint manifest carries no network definition.',
+    )
+    parser.add_argument(
+        '--lc0-teacher',
+        type=Path,
+        help='Scripted Lc0 teacher from build_lc0_teacher_model.py, used instead of a project checkpoint.',
+    )
+    parser.add_argument(
+        '--greedy-after-ply',
+        type=int,
+        help='Interpolate temperature to --final-temperature across this ply and play the argmax beyond it. '
+        'Without it the fixed --sampling-temperature applies at every ply, which is the older behaviour.',
+    )
+    parser.add_argument(
+        '--final-temperature',
+        type=float,
+        default=0.1,
+        help='Temperature reached at --greedy-after-ply; ignored when that is unset.',
     )
     parser.add_argument('--output', type=Path, required=True, help='Dataset file to write; manifest sits beside it.')
     parser.add_argument('--positions', type=int, required=True, help='Number of labelled positions to collect.')
@@ -339,11 +370,18 @@ def parse_arguments() -> BuilderArguments:
     parser.add_argument('--random-seed', type=int, required=True, help='Seed of the position-generation sampler.')
     parser.add_argument('--device-id', type=int, default=0, help='CUDA device index; CPU when CUDA is unavailable.')
     parsed = parser.parse_args()
+    if (parsed.lc0_teacher is None) == (parsed.teacher_run_state is None):
+        parser.error('Pass exactly one of --lc0-teacher or --teacher-run-state.')
+    if parsed.teacher_run_state is not None and not (parsed.teacher_layers and parsed.teacher_hidden_size):
+        parser.error('--teacher-layers and --teacher-hidden-size are required with --teacher-run-state.')
     return BuilderArguments(
         teacher_run_state=parsed.teacher_run_state,
         teacher_generation=parsed.teacher_generation,
         teacher_layers=parsed.teacher_layers,
         teacher_hidden_size=parsed.teacher_hidden_size,
+        lc0_teacher=parsed.lc0_teacher,
+        greedy_after_ply=parsed.greedy_after_ply,
+        final_temperature=parsed.final_temperature,
         output=parsed.output,
         positions=parsed.positions,
         parallel_games=parsed.parallel_games,
@@ -360,20 +398,30 @@ def parse_arguments() -> BuilderArguments:
 def main() -> None:
     arguments = parse_arguments()
     device = torch.device('cuda', arguments.device_id) if torch.cuda.is_available() else torch.device('cpu')
-    definition = resolve_teacher_definition(arguments)
-    head_indices = locate_auxiliary_heads(definition.auxiliary_heads)
-    weights_path = model_save_path(arguments.teacher_generation, arguments.teacher_run_state)
-    teacher = load_teacher(
-        weights_path=weights_path,
-        architecture=definition.architecture,
-        dimensions=definition.dimensions,
-        auxiliary_heads=definition.auxiliary_heads,
-        device=device,
-        generation=arguments.teacher_generation,
-    )
+    if arguments.lc0_teacher is not None:
+        # Lc0 exposes only a policy and a WDL head, so nothing auxiliary is captured for this arm.
+        auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = ()
+        head_indices = locate_auxiliary_heads(auxiliary_heads)
+        weights_path = arguments.lc0_teacher
+        teacher = load_lc0_teacher(arguments.lc0_teacher, device)
+        record_layout = DistillationRecordLayout.CORE
+    else:
+        definition = resolve_teacher_definition(arguments)
+        auxiliary_heads = definition.auxiliary_heads
+        head_indices = locate_auxiliary_heads(auxiliary_heads)
+        weights_path = model_save_path(arguments.teacher_generation, arguments.teacher_run_state)
+        teacher = load_teacher(
+            weights_path=weights_path,
+            architecture=definition.architecture,
+            dimensions=definition.dimensions,
+            auxiliary_heads=definition.auxiliary_heads,
+            device=device,
+            generation=arguments.teacher_generation,
+        )
+        record_layout = DistillationRecordLayout.WITH_AUXILIARY
     print(f'Teacher {weights_path} on {device}: {teacher.parameter_count} parameters', flush=True)
 
-    records = generate_records(teacher, arguments, device, head_indices)
+    records = generate_records(teacher, arguments, device, head_indices, record_layout)
 
     revision = read_source_revision()
     manifest = DistillationDatasetManifest(
@@ -393,7 +441,8 @@ def main() -> None:
         random_perturbation_probability=arguments.random_perturbation_probability,
         maximum_game_plies=arguments.maximum_game_plies,
         builder_source_revision=revision.commit + ('-dirty' if revision.dirty else ''),
-        captured_auxiliary_heads=tuple(head.kind for head in definition.auxiliary_heads),
+        captured_auxiliary_heads=tuple(head.kind for head in auxiliary_heads),
+        record_layout=record_layout,
     )
     write_dataset(arguments.output, records, manifest)
     print(f'Wrote {arguments.positions} positions to {arguments.output}', flush=True)
