@@ -198,6 +198,10 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
     caption_text = caption.content.replace('\n', ' ').strip()
     if appendix:
         environment, placement, width, height = 'figure', 'H', '0.70', '0.34'
+        if Path(address).stem.startswith('appendix-'):
+            width = '0.78'
+            if Path(address).stem in {'appendix-training-stages', 'appendix-resignation'}:
+                height = '0.48'
     elif source.name == '07-final-run-results.md':
         environment, placement, width, height = 'figure*', '!t', '0.87', '0.36'
     else:

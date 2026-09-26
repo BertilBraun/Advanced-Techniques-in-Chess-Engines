@@ -84,6 +84,28 @@ improve the accepted result and are outside the report curve. The previous four-
 3.0-day observation: 143 points and terminal Elo 2,265.4. Its later, noisier evaluation interval is likewise outside
 the report curve. The derived JSON records both cutoffs and reasons without altering the original evidence.
 
+### Additional appendix diagnostics
+
+[`training-diagnostics.json`](training-diagnostics.json) preserves auxiliary losses, pre-clipping gradient norms,
+visit budgets, elapsed replay age, and resignation diagnostics for the same 817 observations in the trajectory CSV.
+The export records the archive and trajectory SHA-256 values. The renderer joins by source run and generation,
+then plots completed optimizer steps; it does not concatenate later experiments or mix tag-native step axes.
+
+From `py`, regenerate the compact export and six appendix figures with:
+
+```powershell
+uv run --group publication python -m tools.render_report_figures --archive 'C:\Projects\AZ\.codex-diagnostics\final-2026-09-23\evidence-tensorboard.tgz'
+```
+
+Omit `--archive` to render from the tracked JSON without accessing the large archive. The policy/search training
+figure uses the existing ladder export, cut at exactly 2.5 days. The cross-campaign figure and existing volume
+diagnostics remain under their original renderers.
+
+Replay age uses `replay_diagnostics/age_seconds_mean`, avoiding model-local generation-age resets. The gradient
+norm is averaged over each training quantum. Resignation displays threshold, rolling audit rates, and saved plies
+on separate panels, not cumulative game counts. Its safety panel shows enabled periods with raw excursions above
+the 2.5% calibration target retained; saved plies are estimated from continuation audits.
+
 ### Matched-estimator plateau check
 
 The [derivation](../../../py/tools/derive_ladder_plateau_comparison.py) recomputes the original retrospective from

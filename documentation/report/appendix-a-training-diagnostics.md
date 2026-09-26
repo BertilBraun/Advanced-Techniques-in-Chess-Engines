@@ -26,3 +26,40 @@ capacity steps: 209.15 million net positions were materialized, while 16 million
 small model's median measured trainer throughput was 16,977 samples/s across 480 quanta; the medium model's was
 11,194 across 337. Model shape, schedule, and concurrent workload differ, so the gap is not an isolated model-size
 effect. All panels describe the selected lineage, whose coordinator counters sum to 3,249,647 completed games.
+
+![Next-policy and remaining-game-length losses on separate scales](figures/appendix-auxiliary-losses.svg)
+
+Figure A.3: The two auxiliary losses use separate scales so the much smaller remaining-length loss stays visible.
+Faint curves show the recorded values, with 11-quantum moving averages overlaid. The dashed line marks the
+small-to-medium transition, as in the following optimizer-step plots.
+
+![Mean pre-clipping gradient norm with the configured clipping threshold](figures/appendix-gradient-norm.svg)
+
+Figure A.4: Mean pre-clipping gradient norm in each 500-step training block. The dotted line is the configured
+norm limit of 1.0. The mean rises above that limit during medium-model training; the optimizer clips individual
+steps before applying them.
+
+![Policy-only and 64-search training ladders over the final 2.5-day window](figures/appendix-policy-search-progress.svg)
+
+Figure A.5: Policy-only and 64-search playing strength both improve through the final training window. Faint
+lines show individual training-ladder evaluations; solid lines smooth eleven evaluations. These are the training
+monitors; Table 1 reports the larger final evaluation matches.
+
+![Trainer throughput, search visit budget, and active model on a shared training axis](figures/appendix-training-stages.svg)
+
+Figure A.6: Aligned panels show trainer throughput, the self-play search budget, and the active network.
+The small-to-medium switch is accompanied by lower trainer throughput. Search rises from 300 to 600 visits
+on this selected-checkpoint trajectory; the configuration's later 800-visit stage lies beyond it.
+
+![Replay occupancy versus capacity and elapsed age of sampled positions](figures/appendix-replay-age.svg)
+
+Figure A.7: Replay fills each expanded capacity, while the mean elapsed age of sampled positions grows to roughly
+two hours. The age panel uses time since position creation, so it remains comparable across the model switch.
+
+![Resignation threshold, rolling false-nonloss audit, and estimated saved plies](figures/appendix-resignation.svg)
+
+Figure A.8: Resignation adapts its threshold as training progresses. The middle panel shows the rolling observed
+false-nonloss rate and its one-sided 95% upper bound while the logged resignation gate is enabled; the dotted
+line marks the 2.5% calibration target, with observed excursions retained. The bottom panel estimates saved plies
+from continued audit games. Faint raw traces and eleven-quantum averages show variation without cumulative counts
+obscuring the useful changes.

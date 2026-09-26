@@ -55,6 +55,7 @@ The physical memory map is preallocated once, while its logical capacity grows f
 The early window stays small when little data exists; later growth preserves more openings, endgames, and policy
 history. In an earlier campaign, playing strength continued to improve after fixed-dataset policy accuracy largely
 saturated, reinforcing the value of fresh and varied positions. Appendix D gives the full capacity schedule.
+Figure A.7 shows how the occupied window and sampled-position age evolve together during the final training.
 
 Replay reuse introduces a second tradeoff. The configured ratio is the number of optimizer presentations funded by
 each newly admitted row. In the retained setting, four presentations are credited per row; a 500-step quantum at a
@@ -99,6 +100,7 @@ immediately but relaxes by at most 0.01 per publication. An intentionally aggres
 journaling, persistence, and exclusion of a capped continuation. It tested the mechanism, not the safety of a
 production threshold. The retained system therefore calibrates and audits resignation continuously; neither zero
 error nor a separate Elo gain has been established.
+Figure A.8 shows the threshold, rolling audit, and estimated saved plies during the final training.
 
 A ply cap creates a harder target problem because there is no observed result at all. The project compared material
 heuristics, raw network value, values from adjacent searches, and a fresh search at the cut position. Playing games

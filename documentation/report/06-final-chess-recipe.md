@@ -39,8 +39,8 @@ native inference batch settings.
 Games begin approximately equally often from up to eight random legal opening plies and from recent restart
 states. Restart candidates are screened for value, remaining length, age, and branchable visit mass; an unavailable
 restart falls back to a random opening. Game caps grow from 150 to 250 plies, and greedy move selection begins
-later as training matures. Resignation is calibrated against no-resignation games so that the upper bound on a
-false nonloss stays below 2.5%; 20% of games are designated as such safety continuations at creation.
+later as training matures. Resignation is calibrated against no-resignation games with a 2.5% upper-bound target
+for false nonloss; 20% of games are designated as such safety continuations at creation.
 
 Replay capacity grows through ten stages from 600,000 to 20 million live rows. Each admitted position funds four
 training presentations. Sampling keeps 30% uniform probability while otherwise prioritizing bounded policy
