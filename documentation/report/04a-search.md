@@ -56,13 +56,6 @@ slots with one leaf per tree. Allowing four leaves per tree raised the average b
 throughput by roughly 20%, but it did so by making each search less serial. A policy intended to save compute thus
 created pressure to accept a search-quality tradeoff merely to keep the accelerator occupied.
 
-Most importantly, a forced cheap-search tail made the endgame failure self-reinforcing. It removed searched
-endgame rows because cheap moves were not admitted as primary targets. A shallow estimate at the ply cap could then
-be propagated through many earlier rows of the same game. The original motive was reasonable—avoid filling replay
-with noisy positions from very long endings—but it also withheld the examples needed to learn conversion. One
-full search at the cut position replaced the heuristic bootstrap; later, removing the cheap tail restored searched
-endgame positions. Chapter 6 follows how these changes broke the failure loop.
-
 The retained design searches every recorded move to the scheduled cap, preserving both policy targets and
 endgame coverage.
 

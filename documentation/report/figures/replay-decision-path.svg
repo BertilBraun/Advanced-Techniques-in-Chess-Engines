@@ -52,7 +52,7 @@
 
   <path d="M455 272 V296" class="arrow"/>
   <polygon points="448,295 455,309 462,295" fill="#17615b"/>
-  <rect x="326" y="314" width="840" height="79" rx="7" class="credit"/>
+  <rect x="326" y="314" width="549" height="79" rx="7" class="credit"/>
   <text x="349" y="347" class="credit-label">Presentation credit</text>
-  <text x="349" y="375" class="credit-body">Durable append grants four training presentations per new row.</text>
+  <text x="349" y="375" class="credit-body">Four training presentations per durably appended row.</text>
 </svg>
