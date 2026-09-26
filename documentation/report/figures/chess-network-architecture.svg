@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 550" role="img" aria-labelledby="title description">
+  <title id="title">Shared chess network architecture</title>
+  <desc id="description">Fifty-two board planes enter a convolutional stem and a shared residual backbone. Policy, win draw loss, and two training-only auxiliary heads branch from the same board features.</desc>
+  <defs><style>
+    text { font-family: "Segoe UI", Arial, sans-serif; fill: #182b3d; }
+    .heading { font-size: 22px; font-weight: 600; }
+    .body { font-size: 18px; }
+    .small { font-size: 16px; }
+    .path { fill: none; stroke: #33485e; stroke-width: 2.5; }
+    .arrow { fill: #33485e; }
+  </style></defs>
+  <rect x="25" y="178" width="205" height="190" rx="10" fill="#e9eff5" stroke="#567e9c" stroke-width="2"/>
+  <text x="45" y="213" class="heading">Chess position</text>
+  <text x="45" y="244" class="body">52 planes, each 8 × 8</text>
+  <text x="45" y="283" class="small">Pieces and recent moves</text>
+  <text x="45" y="309" class="small">Rule-relevant state</text>
+  <text x="45" y="340" class="small">Side-to-move perspective</text>
+  <path d="M230 273 H275" class="path"/><path d="M270 266 L282 273 L270 280 Z" class="arrow"/>
+  <rect x="282" y="92" width="335" height="355" rx="10" fill="#e5f0ed" stroke="#267b6e" stroke-width="2"/>
+  <text x="307" y="128" class="heading">Shared backbone</text>
+  <rect x="308" y="151" width="283" height="58" rx="6" fill="white" stroke="#79a99f"/>
+  <text x="327" y="186" class="body">3 × 3 convolutional stem</text>
+  <path d="M449 209 V235" class="path"/><path d="M442 229 L449 241 L456 229 Z" class="arrow"/>
+  <rect x="308" y="241" width="283" height="124" rx="6" fill="white" stroke="#79a99f"/>
+  <text x="327" y="273" class="body">14 residual blocks</text>
+  <text x="327" y="302" class="body">160 feature channels</text>
+  <text x="327" y="338" class="small">Global context every second block</text>
+  <text x="307" y="398" class="body">One learned board representation</text>
+  <text x="307" y="425" class="small">All heads train these shared features</text>
+  <path d="M617 273 H668 V108 H729 M668 273 H729 M668 273 V454 H729" class="path"/>
+  <path d="M723 101 L735 108 L723 115 Z M723 266 L735 273 L723 280 Z M723 447 L735 454 L723 461 Z" class="arrow"/>
+  <rect x="735" y="24" width="440" height="158" rx="10" fill="#e9eff5" stroke="#567e9c" stroke-width="2"/>
+  <text x="760" y="59" class="heading">Policy head</text>
+  <text x="760" y="90" class="body">Score origin–destination square pairs</text>
+  <text x="760" y="119" class="body">Scores for 1,880 chess actions</text>
+  <text x="760" y="151" class="small">Legal mask + normalization give search priors</text>
+  <rect x="735" y="209" width="440" height="130" rx="10" fill="#f7efd9" stroke="#ad8336" stroke-width="2"/>
+  <text x="760" y="246" class="heading">Value head</text>
+  <text x="760" y="277" class="body">Predict win / draw / loss probabilities</text>
+  <text x="760" y="310" class="small">Expected value evaluates search leaves</text>
+  <rect x="735" y="382" width="440" height="145" rx="10" fill="#f0ebf6" stroke="#83679f" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="760" y="419" class="heading">Auxiliary heads — training only</text>
+  <text x="760" y="451" class="body">Next searched policy</text>
+  <text x="760" y="480" class="body">Remaining game length</text>
+  <text x="760" y="510" class="small">Not computed in the inference network</text>
+</svg>

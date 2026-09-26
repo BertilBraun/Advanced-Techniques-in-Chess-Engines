@@ -1,5 +1,10 @@
 # 2. Evaluating the chess system
 
+We measure thinking effort in search visits rather than seconds. For a given model and search configuration, this
+budget is hardware-independent: faster hardware finishes sooner instead of receiving more search. Fixed budgets
+also keep background load from changing the amount of search performed. We report approximate thinking time
+separately to give these budgets a practical scale.
+
 The most direct test of the system is whether its final model wins games. We played it against Stockfish 13 at fixed
 search limits, starting from 50 openings and playing each once with each colour. The model played without search and
 at four progressively larger search budgets. For each budget, we tested two Stockfish limits rather than trusting a

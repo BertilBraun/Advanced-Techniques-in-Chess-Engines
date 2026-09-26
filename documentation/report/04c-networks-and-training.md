@@ -11,13 +11,13 @@ features into policy, value, and auxiliary predictions.
 
 The same legal move can be assigned a score by a dense action list, by its move type on a spatial board, or by its
 origin and destination squares. All three families were implemented against the chess move interface; the selected
-interface gathers 1,880 canonical actions. Figure 4 shows what each head asks the network to predict. In the
+interface gathers 1,880 canonical actions. Figure 5 shows what each head asks the network to predict. In the
 controlled fitting experiments, lower policy cross-entropy means closer agreement with the target move
 distribution; differences are reported in nats, using natural logarithms.
 
 ![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
-Figure 4: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
+Figure 5: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
 head scores square pairs before gathering legal actions.
 
 The **dense head** flattened a small spatial projection into 1,880 logits. Dense heads trained successful models,
@@ -152,7 +152,7 @@ the tested alternatives.
 
 ![Small-to-medium promotion is supported while the larger-model transition remains unresolved](figures/progressive-model-sizing.svg)
 
-Figure 5: The small model buys early self-play throughput, and a medium candidate trains on the same replay before
+Figure 6: The small model buys early self-play throughput, and a medium candidate trains on the same replay before
 paired-match promotion. The larger candidate may avoid catch-up with function-preserving growth, but the limited
 continuation did not demonstrate a strength gain; the reported checkpoint remains medium-sized.
 

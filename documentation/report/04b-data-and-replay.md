@@ -6,12 +6,12 @@ revisit positions where search corrected the network's move preference. These ch
 creates new experience, while replay sampling reuses experience already collected. A game stopped at the ply cap
 also needs a trustworthy value target because its actual outcome is unknown.
 
-Figure 3 follows the route from a starting position to a training batch. We then examine how the system creates
+Figure 4 follows the route from a starting position to a training batch. We then examine how the system creates
 games, stores their searched positions, and decides which positions to revisit.
 
 ![Generation, admission, selection, weighting, and presentation credit as distinct replay decisions](figures/replay-decision-path.svg)
 
-Figure 3: Starting positions shape the games that are played. Their searched positions enter replay, where
+Figure 4: Starting positions shape the games that are played. Their searched positions enter replay, where
 sampling determines which examples the learner revisits. New examples also set the pace of optimizer updates.
 
 ## Starting games where information is likely

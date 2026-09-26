@@ -13,7 +13,7 @@ strength, agreement with a deeper policy, strength of the next trained model, an
 
 ![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
 
-Figure 2: Why the search alternatives were not retained. Fast/full search discarded useful targets; predicted
+Figure 3: Why the search alternatives were not retained. Fast/full search discarded useful targets; predicted
 allocation improved policy agreement but weakened learning; stopping saved search without much faster training;
 and exact graph or cache reuse saved too little work to repay its overhead.
 

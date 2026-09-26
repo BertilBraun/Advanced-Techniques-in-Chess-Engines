@@ -33,7 +33,7 @@ endgame examples and a better estimate for games that still had to be stopped.
 
 ![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
 
-Figure 7: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
+Figure 8: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
 returns the examples needed to learn conversion.
 
 Deciding which moves deserve search also decides what the network gets to learn. Discarding one part of the game

@@ -10,12 +10,12 @@ much smaller distilled model achieve.
 
 During training, the inexpensive 64-search ladder measured progress without repeatedly running deep-search matches.
 Its rating rose from 798 to 2,372.2 over 2.5 days, with a peak of 2,407.6 in that
-window. Figure 8 places this trajectory beside four earlier chess campaigns. The plot ends with the selected
+window. Figure 9 places this trajectory beside four earlier chess campaigns. The plot ends with the selected
 training run at 2.5 days; Appendix B explains the comparison windows.
 
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
-Figure 8: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
+Figure 9: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
 the preceding baseline at 3.0 days; the matched comparison uses a common rating calculation.
 
 The plotted curves make the progression visible, but the previous baseline and final run originally used
@@ -44,13 +44,13 @@ traces; the cost excludes the separate experiments and evaluations.
 
 Search transforms the same trained network from **1,658 benchmark Elo without search** to
 **3,251 at 100,000 searches per move**, a difference of 1,593 points on this benchmark. Table 1 in Chapter 2 gives all ten
-paired-match rows; Figure 9 shows the selected rating at each budget, with the alternate tested opponent rung
+paired-match rows; Figure 10 shows the selected rating at each budget, with the alternate tested opponent rung
 visible beside it. Gains continue through the deepest measured point, though each later increase in search buys a
 smaller increment of Elo.
 
 ![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
 
-Figure 9: Connected points use the opponent rung with score nearest 50%; pale diamonds mark the other tested rung,
+Figure 10: Connected points use the opponent rung with score nearest 50%; pale diamonds mark the other tested rung,
 and bars show 95% match-bootstrap intervals. The categorical horizontal axis separates policy-only play from
 100, 1,000, 10,000, and 100,000 searches per move; its spacing does not represent compute.
 
