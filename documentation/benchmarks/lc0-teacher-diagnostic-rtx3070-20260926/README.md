@@ -96,6 +96,38 @@ Holding the value recovered part of the pilot's searched loss, but neither stude
 1026, and neither raw policy is. **Halving the cross-entropy gap to the teacher produced no measurable gain in
 playing strength.**
 
+### Top-move agreement with the teacher
+
+`measure_teacher_agreement.py` replayed the four 64-search Stockfish 13 matches (checkpoint 1026, both students
+and the teacher) and scored each network's raw policy against the teacher's at the 21,563 positions where the
+evaluated model was to move, with the teacher queried on real game history. It did the same on 20,000 held-out
+dataset rows using their stored teacher policy.
+
+| Network | Position set | Top-move agreement | Probability on teacher's move | KL from teacher |
+|---|---|---:|---:|---:|
+| Checkpoint 1026 | match | 0.595 | 0.345 | 0.268 |
+| Pilot student | match | 0.633 | 0.319 | 0.179 |
+| Anchored student | match | **0.640** | 0.327 | 0.178 |
+| Checkpoint 1026 | dataset | 0.602 | 0.329 | 0.236 |
+| Pilot student | dataset | 0.680 | 0.310 | 0.122 |
+| Anchored student | dataset | **0.687** | 0.317 | 0.118 |
+
+By phase on match positions, agreement barely varies (1026: 0.593 opening, 0.604 middlegame, 0.586 late;
+anchored: 0.632, 0.635, 0.648).
+
+- **Distillation moved the policy, but little of the way.** Top-move agreement on the positions games actually
+  reach rose from 0.595 to 0.640: 4.5 of the 40.5 points separating checkpoint 1026 from the teacher.
+- **Distribution shift halves the gain.** The same students gained 8.5 points on dataset rows but 4.5 on match
+  positions, and their KL is half again as large on match positions (0.178 against 0.118). Checkpoint 1026 itself
+  shows no such difference (0.595 against 0.602).
+- **The students became less decisive, not more.** Probability on the teacher's top move fell from 0.345 to 0.327
+  while agreement rose: the teacher's raw policy is broad (2.12 nats of entropy), and imitating it flattens the
+  prior this search was tuned against.
+- **The null match results are consistent with a small real gain.** As a crude linear reading, 4.5 of 40.5
+  agreement points of a roughly 380 Elo policy gap is about 40 Elo, below what 100-game matches resolve
+  (their intervals span about ±60 Elo). The pilot matches do not show the student cannot learn the teacher; they
+  show it learned about a ninth of what separates them on the positions that matter.
+
 ## Reading
 
 - **Ruled out: the search and the harness.** A stronger evaluator in the unchanged search, served through the
@@ -103,22 +135,25 @@ playing strength.**
   275 above it at 1,000.
 - **Ruled out: joint or policy-only fine-tuning of checkpoint 1026 on 2M search-free teacher positions, at up to
   10,000 steps, as a way to close that gap.** Held-out imitation improved steadily and play did not.
-- **Open, in the order they can be tested:**
-  1. *The metric does not measure what matters.* Mean cross-entropy over all legal moves on teacher-generated
-     positions can halve without the top move changing where games are decided. Top-move agreement with the
-     teacher on positions reached in the actual matches is the direct check and needs no new training.
-  2. *Distribution shift.* Training positions come from the teacher's raw-policy games; match positions come
-     from this engine's search against Stockfish. Held-out rows share the training distribution, so they cannot
-     show this; labelling a few hundred thousand match-reached positions with the teacher can.
-  3. *Representation.* The teacher is a 20M-parameter attention network; the student is a 6.3M convolutional
-     one encoding eight recent moves rather than eight board states. A student trained from scratch on the same
-     data separates "cannot represent" from "cannot adapt from 1026".
-  4. *Too little data or too short a schedule.* The half of the gap that remains may be where the strength is.
+- **Measured: the students agree with the teacher's top move on 64% of match positions, up from 59.5%.** About
+  half the gain seen on the training distribution is lost to distribution shift, and the rest is small enough that
+  100-game matches cannot resolve it.
+- **Open:**
+  1. *Representation or capacity.* On its own training distribution the student plateaued at 69% top-move
+     agreement and 0.118 nats of KL by step 8,000 while its training loss kept falling: it overfits before it
+     matches the teacher. A student trained from scratch on the same data separates "cannot represent" from
+     "cannot adapt from 1026".
+  2. *Data.* The overfitting says 2M positions are too few for this student; match-reached positions labelled by
+     the teacher would also remove the half of the gain lost to shift.
+  3. *Prior sharpness.* Imitating a broad teacher flattens the student's prior; the search's exploration
+     constant and FPU were tuned for checkpoint 1026's sharper one and were not re-tuned for the students.
+  4. *Architecture.* The teacher is a 20M-parameter attention network; the student is a 6.3M convolutional one
+     that encodes eight recent moves rather than eight board states.
 
 ## What this cost
 
 One RTX 3070 node, roughly 3 hours including provisioning, the lc0 build, the gate, two distillation runs and
-fifteen matches. Evidence: `.codex-diagnostics/lc0-teacher-diagnostic-20260926/evidence-final.tgz`
+fifteen matches, plus the agreement check. Evidence: `.codex-diagnostics/lc0-teacher-diagnostic-20260926/evidence-final.tgz`
 (`6d82ffb0c25478820bea4c66ecee764bf95c1690718eb565fdd499cdfc60a48f`), 15 match result files, training logs and the
 node scripts. The dataset (2.1 GB) and the student weights were not fetched.
 
