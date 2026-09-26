@@ -96,6 +96,7 @@ STUDENT_ARGUMENTS = Arguments(
     generation=0,
     initial_checkpoint=None,
     value_anchor_checkpoint=None,
+    architecture_checkpoint=None,
 )
 
 

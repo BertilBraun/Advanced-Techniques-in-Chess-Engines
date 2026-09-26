@@ -149,6 +149,7 @@ class Arguments:
     generation: int
     initial_checkpoint: Path | None
     value_anchor_checkpoint: Path | None
+    architecture_checkpoint: Path | None
 
 
 @dataclass(frozen=True)
@@ -667,10 +668,11 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
     torch.cuda.manual_seed_all(arguments.random_seed)
 
     auxiliary_heads = arguments.distil_auxiliary_heads
-    if arguments.initial_checkpoint is None:
+    architecture_source = arguments.initial_checkpoint or arguments.architecture_checkpoint
+    if architecture_source is None:
         architecture = student_architecture(arguments)
     else:
-        architecture = initial_checkpoint_architecture(arguments.initial_checkpoint)
+        architecture = initial_checkpoint_architecture(architecture_source)
     model = create_model(
         architecture,
         device,
@@ -920,6 +922,11 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
     parser.add_argument(
+        '--architecture-checkpoint',
+        type=Path,
+        help='checkpoint_N.json whose architecture a from-scratch student uses; its weights are not loaded.',
+    )
+    parser.add_argument(
         '--value-anchor-checkpoint',
         type=Path,
         help='checkpoint_N.json whose frozen WDL output replaces the dataset WDL target, training policy only.',
@@ -979,6 +986,7 @@ def parse_arguments() -> Arguments:
         generation=namespace.generation,
         initial_checkpoint=namespace.initial_checkpoint,
         value_anchor_checkpoint=namespace.value_anchor_checkpoint,
+        architecture_checkpoint=namespace.architecture_checkpoint,
     )
     match arguments.dataset_input:
         case DistillationFileInput(path=path):
