@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mmap
 from enum import Enum
 from pathlib import Path
 
@@ -101,6 +102,10 @@ def open_dataset(dataset_path: Path) -> tuple[npt.NDArray, DistillationDatasetMa
     records = np.memmap(dataset_path, dtype=record_dtype(manifest.payload_bytes, manifest.record_layout), mode='r')
     if len(records) != manifest.position_count:
         raise ValueError(f'Dataset holds {len(records)} rows but its manifest declares {manifest.position_count}.')
+    # Training gathers random rows. With the kernel's default readahead each 1.2 KB row pulled in ~128 KB, so a
+    # dataset larger than memory ran at 16% GPU on disk reads; random advice keeps it to one page per row.
+    if hasattr(mmap, 'MADV_RANDOM'):
+        records._mmap.madvise(mmap.MADV_RANDOM)
     return records, manifest
 
 
