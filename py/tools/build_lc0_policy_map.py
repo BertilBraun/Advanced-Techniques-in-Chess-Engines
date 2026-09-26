@@ -59,7 +59,14 @@ def lc0_move_notation(fen: str, move_uci: str) -> str:
     """
     import chess
 
-    board = chess.Board(fen)
+    return lc0_move_spelling(chess.Board(fen), move_uci)
+
+
+def lc0_move_spelling(board: object, move_uci: str) -> str:
+    """As lc0_move_notation, for a board already parsed; parsing per move dominated the walk."""
+    import chess
+
+    assert isinstance(board, chess.Board)
     move = chess.Move.from_uci(move_uci)
     if board.is_castling(move):
         rook_file = 'h' if chess.square_file(move.to_square) > chess.square_file(move.from_square) else 'a'
@@ -108,9 +115,11 @@ def build(move_table: tuple[str, ...], position_count: int, seed: int) -> Policy
     positions_walked = 0
 
     def record(position: AlphaZeroCpp.ChessPosition) -> None:
-        fen = position.fen
+        import chess
+
+        board = chess.Board(position.fen)
         for action_id in position.legal_actions():
-            move_uci = lc0_move_notation(fen, position.action_uci(action_id))
+            move_uci = lc0_move_spelling(board, position.action_uci(action_id))
             canonical = move_uci if position.current_player == 1 else flip_uci_ranks(move_uci)
             lc0_index = lc0_index_of.get(canonical)
             if lc0_index is None:
