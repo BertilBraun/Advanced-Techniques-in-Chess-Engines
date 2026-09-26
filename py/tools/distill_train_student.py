@@ -7,7 +7,7 @@ import os
 import re
 import socket
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Literal, TypeAlias
@@ -148,6 +148,7 @@ class Arguments:
     random_seed: int
     generation: int
     initial_checkpoint: Path | None
+    value_anchor_checkpoint: Path | None
 
 
 @dataclass(frozen=True)
@@ -678,6 +679,16 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
     )
     if arguments.initial_checkpoint is not None:
         load_initial_weights(model, arguments.initial_checkpoint, device)
+    value_anchor = None
+    if arguments.value_anchor_checkpoint is not None:
+        value_anchor = create_model(
+            initial_checkpoint_architecture(arguments.value_anchor_checkpoint), device, CHESS_NETWORK_DIMENSIONS, ()
+        )
+        load_initial_weights(value_anchor, arguments.value_anchor_checkpoint, device)
+        value_anchor.eval()
+        for parameter in value_anchor.parameters():
+            parameter.requires_grad_(False)
+        log(f'WDL targets come from the frozen {arguments.value_anchor_checkpoint}, not the dataset.')
     optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
     # One step path for both: the production trainer's shim routes DDP's forward to training_output,
     # and wrapping in it unconditionally keeps single-GPU and data-parallel runs on the same call.
@@ -715,6 +726,11 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         f' auxiliary{auxiliary_loss_report(auxiliary_heads, floor) or " (none)"}.'
     )
     log('Headline metric is the held-out policy gap above the policy floor, excluding value and auxiliary losses.')
+    initial_loss = evaluate(model, evaluation_batches, objective, device)
+    log(
+        f'step 0 held-out policy {initial_loss.policy:.4f} | headline policy gap above floor '
+        f'{initial_loss.policy - floor.policy:.4f}'
+    )
 
     generator = np.random.default_rng(arguments.random_seed + rank)
     model.train()
@@ -744,6 +760,15 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
             device,
             auxiliary_heads,
         )
+        if value_anchor is not None:
+            # Policy learns from the teacher while value is held to the anchor: retraining the value head on
+            # the teacher's WDL cost the first pilot about 75 Elo in search with an unchanged raw policy.
+            with (
+                torch.no_grad(),
+                torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'),
+            ):
+                anchor_wdl = torch.softmax(value_anchor.training_output(batch.states).wdl_logits.float(), dim=1)
+            batch = replace(batch, wdl_targets=anchor_wdl.to(batch.wdl_targets.dtype))
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
             loss = objective.calculate_loss(step_model(batch.states), batch)
@@ -895,6 +920,11 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
     parser.add_argument(
+        '--value-anchor-checkpoint',
+        type=Path,
+        help='checkpoint_N.json whose frozen WDL output replaces the dataset WDL target, training policy only.',
+    )
+    parser.add_argument(
         '--initial-checkpoint',
         type=Path,
         help='checkpoint_N.json to continue from; its architecture replaces the architecture flags.',
@@ -948,6 +978,7 @@ def parse_arguments() -> Arguments:
         random_seed=namespace.random_seed,
         generation=namespace.generation,
         initial_checkpoint=namespace.initial_checkpoint,
+        value_anchor_checkpoint=namespace.value_anchor_checkpoint,
     )
     match arguments.dataset_input:
         case DistillationFileInput(path=path):

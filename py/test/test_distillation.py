@@ -95,6 +95,7 @@ STUDENT_ARGUMENTS = Arguments(
     random_seed=1,
     generation=0,
     initial_checkpoint=None,
+    value_anchor_checkpoint=None,
 )
 
 
