@@ -60,6 +60,27 @@ stored position. Storage is negligible: records are 875 payload bytes plus a spa
 - 32 vCPU (16 workable) — search-free generation is CPU-bound on move generation
 - 64 GB RAM, 100 GB disk
 
+**`nproc` and `free` report the host, not the container.** Vast.ai limits the container through
+cgroup v1, so the effective allocation is only visible in the quota files. Two candidate nodes probed
+on 2026-09-26 both advertised far more than they grant:
+
+| Node | Advertised | cgroup CPU quota | cgroup memory | GPU |
+|---|---|---:|---:|---|
+| 85.238.208.233:40711 | 56 vCPU, 251 GB | **13.44 CPUs** | **120.8 GiB** | RTX 3060 Ti 8 GiB, CC 8.6 |
+| 83.233.222.244:26204 | 28 vCPU, 62 GB | **13.44 CPUs** | **42.5 GiB** | RTX 3070 8 GiB, CC 8.6 |
+
+Measured, not just read: a CPU-bound Python workload scaled near-linearly to 14 processes (26.6 and
+29.0 units/s) and then fell at 28 (21.9 and 12.7 units/s) while the cgroup throttle counters climbed
+by 13.2 s and 29.5 s. Anything sized from `nproc` oversubscribes the quota by 2-4x and runs slower
+than sized correctly. Both GPUs were dedicated, idle, and downloaded a PyTorch wheel at 58-60 MB/s
+sustained.
+
+Derive parallelism from the quota everywhere on the node:
+
+    EFFECTIVE_CPUS=$(( $(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us) / $(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us) ))
+
+`deployment/benchmark_node.sh` reads only the cgroup v2 path and reports `unknown` on these nodes.
+
 ## Runbook
 
 Everything below runs on the node. Nothing native has been compiled locally, so step 2 is the first
@@ -79,7 +100,7 @@ note.
 ### 2. Build and run the native tests
 
     cmake -S cpp -B ~/advanced-chess-compile-check       -DCMAKE_BUILD_TYPE=CompileCheck -DBUILD_TESTING=OFF       -DBUILD_BENCHMARKS=OFF -DENABLE_NATIVE_ARCHITECTURE=OFF
-    cmake --build ~/advanced-chess-compile-check --target AlphaZeroCpp --parallel "$(nproc)"
+    cmake --build ~/advanced-chess-compile-check --target AlphaZeroCpp --parallel "${EFFECTIVE_CPUS}"
 
 Then a Release build with `NativeTests` enabled, since anything measured or deployed needs Release.
 
@@ -165,6 +186,15 @@ nothing at that point.
 Search-free play, one evaluation per position, storing the teacher's plain policy and WDL. No
 auxiliary targets are captured, no terminal outcome and no discounting. Measure throughput and
 storage on this pilot before scaling to millions; the pilot is a pipeline check, not the dataset.
+
+The builder is one process, so on its own it uses about one of the ~13 granted cores. For the full
+dataset run several builders with distinct `--random-seed` values against the one GPU and merge:
+
+    python tools/distill_merge_datasets.py --input part-0.bin --input part-1.bin ... --output lc0-dataset.bin
+
+Size the builder count from `EFFECTIVE_CPUS` minus one for the GPU feeder, and measure where
+throughput stops rising rather than assuming it scales; the merged dataset's held-out tail comes
+from the last `--input`, so pass a builder whose seed is not reused elsewhere last.
 
 Because we play the games ourselves, every position carries real move history, so the teacher is
 never asked to infer a position's past.
