@@ -4,6 +4,11 @@ project(AlphaZeroSelfPlay LANGUAGES CXX)
 option(BUILD_TESTING "Build native C++ tests" OFF)
 option(BUILD_BENCHMARKS "Build native C++ benchmarks" OFF)
 option(ENABLE_TENSORRT "Enable the TensorRT inference backend" OFF)
+option(CHESS_LC0_INPUT "Feed the chess search Lc0's 112-plane input instead of the project's 52 planes" OFF)
+if(CHESS_LC0_INPUT)
+    # Global so the extension, NativeTests and benchmarks agree on the input layout.
+    add_compile_definitions(CHESS_LC0_INPUT)
+endif()
 include(CTest)
 
 # --- Export compile commands for Clang-Tidy ---

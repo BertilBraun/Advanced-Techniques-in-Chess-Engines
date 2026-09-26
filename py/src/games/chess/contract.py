@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
 import numpy as np
@@ -20,10 +21,50 @@ OWN_QUEEN_SIDE_CASTLING_PLANE = 13
 OPPONENT_KING_SIDE_CASTLING_PLANE = 14
 OPPONENT_QUEEN_SIDE_CASTLING_PLANE = 15
 CHECKERBOARD_PLANE = 38
-# Lc0 teacher branch: Lc0's INPUT_CLASSICAL_112_PLANE layout replaces this project's 52 planes.
-# Must stay in step with ChessRepresentationDimensions in cpp/src/games/chess/encoding.
-CHESS_CHANNEL_COUNT = 112
-CHESS_BINARY_CHANNEL_COUNT = 109
+PROJECT_CHANNEL_COUNT = 52
+PROJECT_BINARY_CHANNEL_COUNT = 40
+LC0_CHANNEL_COUNT = 112
+LC0_BINARY_CHANNEL_COUNT = 109
+
+# The layout the search feeds its network. `lc0` must be paired with an extension built with
+# -DCHESS_LC0_INPUT=ON; ensure_native_input_layout() checks the pairing. Lc0 planes are available
+# through `lc0_packed_encoding()` in either build, so a teacher can be queried while a project network
+# is trained.
+CHESS_SEARCH_INPUT = os.environ.get('ENGINE_CHESS_INPUT', 'project')
+if CHESS_SEARCH_INPUT not in {'project', 'lc0'}:
+    raise ValueError(f"ENGINE_CHESS_INPUT must be 'project' or 'lc0', got {CHESS_SEARCH_INPUT!r}.")
+CHESS_CHANNEL_COUNT = LC0_CHANNEL_COUNT if CHESS_SEARCH_INPUT == 'lc0' else PROJECT_CHANNEL_COUNT
+CHESS_BINARY_CHANNEL_COUNT = LC0_BINARY_CHANNEL_COUNT if CHESS_SEARCH_INPUT == 'lc0' else PROJECT_BINARY_CHANNEL_COUNT
+
+LC0_PACKED_PLANE_LAYOUT = PackedPlaneLayout(
+    board_size=8,
+    binary_plane_count=LC0_BINARY_CHANNEL_COUNT,
+    scalar_count=LC0_CHANNEL_COUNT - LC0_BINARY_CHANNEL_COUNT,
+)
+LC0_BINARY_CHANNELS = tuple(range(LC0_BINARY_CHANNEL_COUNT))
+LC0_SCALAR_CHANNELS = tuple(range(LC0_BINARY_CHANNEL_COUNT, LC0_CHANNEL_COUNT))
+
+
+def ensure_native_input_layout() -> None:
+    import AlphaZeroCpp
+
+    native = AlphaZeroCpp.CHESS_INPUT_CHANNEL_COUNT
+    if native != CHESS_CHANNEL_COUNT:
+        raise RuntimeError(
+            f'The loaded extension feeds its search {native} planes but ENGINE_CHESS_INPUT={CHESS_SEARCH_INPUT} '
+            f'expects {CHESS_CHANNEL_COUNT}. Load the extension built for this layout.'
+        )
+
+
+def decode_lc0_planes(payloads: tuple[bytes, ...]) -> npt.NDArray[np.int8]:
+    from src.games.representation import decode_packed_planes_batch
+
+    return decode_packed_planes_batch(
+        tuple(PackedPlanePayload(payload) for payload in payloads),
+        LC0_PACKED_PLANE_LAYOUT,
+        LC0_BINARY_CHANNELS,
+        LC0_SCALAR_CHANNELS,
+    )
 
 
 class ChessPosition(Protocol):
@@ -49,6 +90,8 @@ class ChessPosition(Protocol):
     def approximate_result_score(self) -> float: ...
 
     def packed_encoding(self) -> bytes: ...
+
+    def lc0_packed_encoding(self) -> bytes: ...
 
 
 class ChessStateContract(GameStateContract[ChessPosition]):

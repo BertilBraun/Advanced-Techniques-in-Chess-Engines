@@ -21,8 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from src.evaluation.inference import decode_packed_inputs
-from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes
 
 MOVE_PRIOR_PATTERN = re.compile(r'^info string\s+(?P<move>[a-h][1-8][a-h][1-8][qrbn]?)\s.*\(P:\s*(?P<prior>[0-9.]+)%\)')
 WDL_PATTERN = re.compile(r'\bwdl\s+(\d+)\s+(\d+)\s+(\d+)\b')
@@ -106,7 +105,7 @@ def query_wrapped_teacher(
     for move_uci in moves_uci:
         position = CHESS_STATE_CONTRACT.child_position(position, position.action_id_from_uci(move_uci))
     legal_action_ids = np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(position), dtype=np.int64)
-    decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, (CHESS_STATE_CONTRACT.encode_network_input(position),))
+    decoded = decode_lc0_planes((position.lc0_packed_encoding(),))
     with torch.inference_mode():
         policy_logits, wdl = model(torch.from_numpy(decoded).to(device))
     legal_logits = policy_logits[0].float().cpu().numpy()[legal_action_ids].astype(np.float64)

@@ -21,13 +21,7 @@ FIXTURES = json.loads(
 
 @pytest.mark.parametrize('fixture', FIXTURES, ids=lambda fixture: fixture['fen'])
 def test_python_codec_round_trips_the_native_fixture_payloads(fixture: dict[str, str]) -> None:
-    raw = bytes.fromhex(fixture['packed_hex'])
-    if len(raw) != CHESS_LAYOUT.payload_bytes:
-        pytest.skip(
-            'Fixtures were recorded against the 52-plane encoder. Regenerate them on the node against '
-            'the Lc0 112-plane encoder; the check re-arms itself once the payload length matches.'
-        )
-    payload = PackedPlanePayload(raw)
+    payload = PackedPlanePayload(bytes.fromhex(fixture['packed_hex']))
     decoded = decode_packed_planes(payload, CHESS_LAYOUT, BINARY_CHANNELS, SCALAR_CHANNELS)
     assert decoded.shape == (CHESS_STATE_CONTRACT.representation.channels, 8, 8)
     re_encoded = encode_packed_planes(decoded, CHESS_LAYOUT, BINARY_CHANNELS, SCALAR_CHANNELS)

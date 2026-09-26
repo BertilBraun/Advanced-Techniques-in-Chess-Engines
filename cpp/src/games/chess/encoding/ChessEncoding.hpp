@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <torch/torch.h>
 
 enum class ChessActionEncoding {
@@ -17,18 +18,40 @@ enum class ChessActionEncoding {
 
 inline constexpr ChessActionEncoding chessActionEncoding = ChessActionEncoding::Reduced;
 
-// The Lc0 teacher branch encodes Lc0's own 112-plane input instead of this project's 52 planes:
-// 8 history positions x 13 planes, then castling, side to move, rule 50 and the two constant planes.
-// The project's own networks cannot run against this layout; that is deliberate and this branch is
-// not merged.
-struct ChessRepresentationDimensions {
-    static constexpr int boardLength = 8;
+// Two input layouts exist side by side. The project's own 52 planes feed its networks; Lc0's
+// INPUT_CLASSICAL_112_PLANE layout feeds an Lc0 teacher. Both encoders are always compiled, so a
+// teacher can be queried while a project network is trained. CHESS_LC0_INPUT only chooses which one
+// the search and the inference pipeline use.
+#ifdef CHESS_LC0_INPUT
+inline constexpr bool chessSearchUsesLc0Input = true;
+#else
+inline constexpr bool chessSearchUsesLc0Input = false;
+#endif
+
+struct ProjectInputDimensions {
+    static constexpr int binaryChannelCount = 40;
+    static constexpr int scalarChannelCount = 12;
+    static constexpr int channelCount = binaryChannelCount + scalarChannelCount;
+};
+
+struct Lc0InputDimensions {
     static constexpr int historyPositionCount = 8;
     static constexpr int planesPerHistoryPosition = 13;
-    static constexpr int channelCount = 112;
-    static constexpr int binaryChannelCount =
-        historyPositionCount * planesPerHistoryPosition + 5;
+    // 8 x 13 history, 4 castling, side to move; the scalars are rule 50, zeros and ones.
+    static constexpr int binaryChannelCount = historyPositionCount * planesPerHistoryPosition + 5;
     static constexpr int scalarChannelCount = 3;
+    static constexpr int channelCount = binaryChannelCount + scalarChannelCount;
+};
+static_assert(Lc0InputDimensions::channelCount == 112);
+
+using SearchInputDimensions =
+    std::conditional_t<chessSearchUsesLc0Input, Lc0InputDimensions, ProjectInputDimensions>;
+
+struct ChessRepresentationDimensions {
+    static constexpr int boardLength = 8;
+    static constexpr int channelCount = SearchInputDimensions::channelCount;
+    static constexpr int binaryChannelCount = SearchInputDimensions::binaryChannelCount;
+    static constexpr int scalarChannelCount = SearchInputDimensions::scalarChannelCount;
     static constexpr int policyPlaneCount = 76;
     static constexpr int policyPlaneActionCount = policyPlaneCount * boardLength * boardLength;
     static constexpr int reducedActionCount = 1880;
@@ -60,9 +83,17 @@ struct ChessEncoding {
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
 
+using ProjectEncodedBoard = EncodedPlanes<ChessRepresentationDimensions::boardLength,
+                                          ProjectInputDimensions::binaryChannelCount,
+                                          ProjectInputDimensions::scalarChannelCount>;
+using Lc0EncodedBoard = EncodedPlanes<ChessRepresentationDimensions::boardLength,
+                                      Lc0InputDimensions::binaryChannelCount,
+                                      Lc0InputDimensions::scalarChannelCount>;
 using CompressedEncodedBoard = EncodedPlanes<ChessRepresentationDimensions::boardLength,
                                              ChessRepresentationDimensions::binaryChannelCount,
                                              ChessRepresentationDimensions::scalarChannelCount>;
 
+[[nodiscard]] ProjectEncodedBoard encodeProjectBoard(const Board &board);
+[[nodiscard]] Lc0EncodedBoard encodeLc0Board(const Board &board);
 [[nodiscard]] CompressedEncodedBoard encodeBoard(const Board &board);
 [[nodiscard]] torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed);

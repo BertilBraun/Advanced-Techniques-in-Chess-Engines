@@ -20,7 +20,12 @@ from src.distillation.dataset import (
 from src.distillation.lc0_teacher import Lc0Teacher, load_lc0_teacher, sampling_temperature_at
 from src.distillation.teacher import LoadedTeacher, load_teacher, read_network_definition
 from src.evaluation.inference import decode_packed_inputs
-from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT, ChessPosition
+from src.games.chess.contract import (
+    CHESS_NETWORK_DIMENSIONS,
+    CHESS_STATE_CONTRACT,
+    ChessPosition,
+    decode_lc0_planes,
+)
 from src.games.representation import PackedPlanePayload
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path
 from src.training.network import (
@@ -260,7 +265,11 @@ def generate_records(
         legal_action_ids = tuple(
             np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(slot.position), dtype=np.int64) for slot in slots
         )
-        decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, packed_states)
+        if isinstance(teacher, Lc0Teacher):
+            # The teacher reads Lc0's planes; the record keeps the project's, which the student trains on.
+            decoded = decode_lc0_planes(tuple(slot.position.lc0_packed_encoding() for slot in slots))
+        else:
+            decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, packed_states)
         with torch.inference_mode():
             output = teacher.network.training_output(torch.from_numpy(decoded).to(device))
             policy_logits = output.policy_logits.float().cpu().numpy()
