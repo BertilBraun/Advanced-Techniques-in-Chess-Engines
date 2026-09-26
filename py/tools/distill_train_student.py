@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
@@ -17,6 +18,7 @@ import torch
 import torch.distributed as distributed
 from pydantic import Field
 from src.distillation.dataset import build_replay_training_batch, build_training_batch, open_dataset, read_manifest
+from src.distillation.teacher import read_network_definition
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
@@ -145,6 +147,7 @@ class Arguments:
     device_ids: tuple[int, ...]
     random_seed: int
     generation: int
+    initial_checkpoint: Path | None
 
 
 @dataclass(frozen=True)
@@ -251,6 +254,30 @@ def student_attention_bias(arguments: Arguments):
                 hidden_size=arguments.smolgen_hidden_size,
                 generated_size=arguments.smolgen_generated_size,
             )
+
+
+def initial_checkpoint_architecture(manifest_path: Path) -> NetworkConfiguration:
+    definition = read_network_definition(manifest_path)
+    if definition is None:
+        raise SystemExit(f'{manifest_path} carries no network definition to continue from.')
+    return definition.architecture
+
+
+def load_initial_weights(model: torch.nn.Module, manifest_path: Path, device: torch.device) -> None:
+    """Continues a trained checkpoint rather than starting from scratch.
+
+    Auxiliary heads are dropped because this student trains only policy and WDL, and QAT quantizer
+    ranges are dropped because the student trains in float; every remaining tensor must match exactly.
+    """
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    state = torch.load(manifest_path.parent / manifest['model_path'], map_location=device, weights_only=True)
+    kept = {
+        key: value
+        for key, value in state.items()
+        if not key.startswith('auxiliary_head_modules.') and '_quantizer.' not in key
+    }
+    model.load_state_dict(kept, strict=True)
+    log(f'Initialised from {manifest_path}: {len(kept)} tensors, {len(state) - len(kept)} auxiliary or QAT dropped.')
 
 
 def student_architecture(arguments: Arguments) -> NetworkConfiguration:
@@ -639,13 +666,18 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
     torch.cuda.manual_seed_all(arguments.random_seed)
 
     auxiliary_heads = arguments.distil_auxiliary_heads
-    architecture = student_architecture(arguments)
+    if arguments.initial_checkpoint is None:
+        architecture = student_architecture(arguments)
+    else:
+        architecture = initial_checkpoint_architecture(arguments.initial_checkpoint)
     model = create_model(
         architecture,
         device,
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(auxiliary_heads, dataset.action_size),
     )
+    if arguments.initial_checkpoint is not None:
+        load_initial_weights(model, arguments.initial_checkpoint, device)
     optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
     # One step path for both: the production trainer's shim routes DDP's forward to training_output,
     # and wrapping in it unconditionally keeps single-GPU and data-parallel runs on the same call.
@@ -862,6 +894,11 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--devices', nargs='+', type=int, help='Data-parallel device IDs; overrides --device-id.')
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
+    parser.add_argument(
+        '--initial-checkpoint',
+        type=Path,
+        help='checkpoint_N.json to continue from; its architecture replaces the architecture flags.',
+    )
     namespace = parser.parse_args()
     if namespace.replay_store is None:
         if namespace.replay_experiment is not None or namespace.orchestrator_recorded_replay_sha256 is not None:
@@ -910,6 +947,7 @@ def parse_arguments() -> Arguments:
         device_ids=tuple(namespace.devices) if namespace.devices else (namespace.device_id,),
         random_seed=namespace.random_seed,
         generation=namespace.generation,
+        initial_checkpoint=namespace.initial_checkpoint,
     )
     match arguments.dataset_input:
         case DistillationFileInput(path=path):

@@ -94,6 +94,7 @@ STUDENT_ARGUMENTS = Arguments(
     device_ids=(0,),
     random_seed=1,
     generation=0,
+    initial_checkpoint=None,
 )
 
 
