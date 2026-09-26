@@ -105,7 +105,9 @@ convolutions to propagate that information.
 
 A *head* maps these shared features to a particular prediction. The policy head represents each square with learned
 origin and destination vectors; their dot products score moves, with additional offsets distinguishing promotion
-pieces. Mapping these scores to 1,880 actions, masking illegal moves, and normalizing produces the move probabilities
+pieces. The fixed encoding contains 1,880 actions: 1,792 origin–destination pairs along sliding-piece rays or knight
+jumps, plus 88 promotion moves distinguishing the four promotion pieces. King and ordinary pawn moves use the same
+ray pairs. Mapping the scores to these actions, masking illegal moves, and normalizing produces the move probabilities
 that guide search. The value head instead predicts win, draw, and loss (WDL). Search uses the win probability minus
 the loss probability as its scalar estimate; training retains the full distribution, distinguishing a likely draw
 from equally likely winning and losing outcomes.
