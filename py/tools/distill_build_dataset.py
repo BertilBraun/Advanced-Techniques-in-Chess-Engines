@@ -49,6 +49,7 @@ class BuilderArguments:
     teacher_layers: int
     teacher_hidden_size: int
     lc0_teacher: Path | None
+    lc0_teacher_parameter_count: int | None
     greedy_after_ply: int | None
     final_temperature: float
     output: Path
@@ -347,6 +348,12 @@ def parse_arguments() -> BuilderArguments:
         help='Scripted Lc0 teacher from build_lc0_teacher_model.py, used instead of a project checkpoint.',
     )
     parser.add_argument(
+        '--lc0-teacher-parameter-count',
+        type=int,
+        help='Recorded in the manifest. A traced ONNX conversion holds its weights as graph constants, so counting '
+        'the scripted module sees only a fraction of them; pass the count from inspect_lc0_network.py.',
+    )
+    parser.add_argument(
         '--greedy-after-ply',
         type=int,
         help='Interpolate temperature to --final-temperature across this ply and play the argmax beyond it. '
@@ -389,6 +396,7 @@ def parse_arguments() -> BuilderArguments:
         teacher_layers=parsed.teacher_layers,
         teacher_hidden_size=parsed.teacher_hidden_size,
         lc0_teacher=parsed.lc0_teacher,
+        lc0_teacher_parameter_count=parsed.lc0_teacher_parameter_count,
         greedy_after_ply=parsed.greedy_after_ply,
         final_temperature=parsed.final_temperature,
         output=parsed.output,
@@ -442,7 +450,7 @@ def main() -> None:
         maximum_legal_actions=MAXIMUM_LEGAL_ACTIONS,
         teacher_generation=arguments.teacher_generation,
         teacher_weights_sha256=file_sha256(weights_path),
-        teacher_parameter_count=teacher.parameter_count,
+        teacher_parameter_count=arguments.lc0_teacher_parameter_count or teacher.parameter_count,
         random_seed=arguments.random_seed,
         random_opening_plies=arguments.random_opening_plies,
         sampling_temperature=arguments.sampling_temperature,
