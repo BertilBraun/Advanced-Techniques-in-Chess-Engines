@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from src.distillation.lc0_teacher import teacher_input_dtype
 from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes
 
 MOVE_PRIOR_PATTERN = re.compile(r'^info string\s+(?P<move>[a-h][1-8][a-h][1-8][qrbn]?)\s.*\(P:\s*(?P<prior>[0-9.]+)%\)')
@@ -145,7 +146,7 @@ def query_wrapped_teacher(
     legal_action_ids = np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(position), dtype=np.int64)
     decoded = decode_lc0_planes((position.lc0_packed_encoding(),)).astype(np.float32)
     with torch.inference_mode():
-        policy_logits, wdl = model(torch.from_numpy(decoded).to(device))
+        policy_logits, wdl = model(torch.from_numpy(decoded).to(device=device, dtype=teacher_input_dtype(model)))
     legal_logits = policy_logits[0].float().cpu().numpy()[legal_action_ids].astype(np.float64)
     shifted = np.exp(legal_logits - legal_logits.max())
     probabilities = shifted / shifted.sum()
@@ -183,8 +184,8 @@ def batch_and_precision_checks(
             position = CHESS_STATE_CONTRACT.child_position(position, position.action_id_from_uci(move_uci))
         positions.append(position)
     model = torch.jit.load(str(teacher_model), map_location=device).eval()
-    batched = legal_priors_batch(model, device, torch.float32, positions)
-    single = [legal_priors_batch(model, device, torch.float32, [position])[0] for position in positions]
+    batched = legal_priors_batch(model, device, teacher_input_dtype(model), positions)
+    single = [legal_priors_batch(model, device, teacher_input_dtype(model), [position])[0] for position in positions]
     batch_difference = max(float(np.abs(a - b).max()) for a, b in zip(batched, single, strict=True))
     try:
         half = torch.jit.load(str(teacher_model), map_location=device).eval().to(torch.bfloat16)

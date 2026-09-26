@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from src.distillation.dataset import open_dataset
+from src.distillation.lc0_teacher import teacher_input_dtype
 from src.evaluation.inference import decode_packed_inputs
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, decode_lc0_planes
 from src.games.representation import PackedPlanePayload
@@ -112,7 +113,7 @@ def teacher_policies(
         chunk = positions[start : start + TEACHER_BATCH]
         planes = decode_lc0_planes(tuple(position.lc0_packed_encoding() for position in chunk)).astype(np.float32)
         with torch.inference_mode():
-            logits, _ = teacher(torch.from_numpy(planes).to(device))
+            logits, _ = teacher(torch.from_numpy(planes).to(device=device, dtype=teacher_input_dtype(teacher)))
         values = logits.float().cpu().numpy()
         for row, position in enumerate(chunk):
             legal = np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(position), dtype=np.int64)

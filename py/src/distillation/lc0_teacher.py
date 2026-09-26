@@ -26,10 +26,11 @@ class Lc0TeacherNetwork:
 
     def __init__(self, module: torch.nn.Module) -> None:
         self._module = module
+        self._input_dtype = teacher_input_dtype(module)
 
     def training_output(self, encoded: torch.Tensor) -> TeacherOutput:
         # The scripted teacher runs a fixed batch of LC0_TEACHER_BATCH rows; larger batches are chunked.
-        pieces = [self._module(chunk) for chunk in encoded.split(LC0_TEACHER_BATCH)]
+        pieces = [self._module(chunk.to(self._input_dtype)) for chunk in encoded.split(LC0_TEACHER_BATCH)]
         policy_logits = torch.cat([policy for policy, _ in pieces])
         wdl_probabilities = torch.cat([wdl for _, wdl in pieces])
         return TeacherOutput(
@@ -43,6 +44,11 @@ class Lc0TeacherNetwork:
 class Lc0Teacher:
     network: Lc0TeacherNetwork
     parameter_count: int
+
+
+def teacher_input_dtype(module: torch.nn.Module) -> torch.dtype:
+    """The dtype a scripted teacher was traced in, read from its padding buffer; float32 when it has none."""
+    return next((buffer.dtype for name, buffer in module.named_buffers() if name == 'padding'), torch.float32)
 
 
 def load_lc0_teacher(path: Path, device: torch.device) -> Lc0Teacher:

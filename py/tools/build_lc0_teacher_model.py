@@ -121,6 +121,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--onnx', type=Path, required=True, help='Lc0 network exported with `lc0 leela2onnx`.')
     parser.add_argument('--policy-map', type=Path, required=True, help='Output of build_lc0_policy_map.py.')
     parser.add_argument('--output', type=Path, required=True, help='TorchScript module to write.')
+    parser.add_argument(
+        '--precision',
+        choices=('float32', 'float16'),
+        default='float32',
+        help='Dtype the teacher is traced and served in; the input must arrive in the same dtype.',
+    )
     return parser.parse_args()
 
 
@@ -148,11 +154,13 @@ def main() -> None:
     if not bool(torch.all(torch.isfinite(policy))):
         raise SystemExit('Wrapped policy output contains non-finite logits.')
 
-    # Traced on the serving device so any constant the ONNX conversion creates inline lands there; the
-    # search and the tools all serve on cuda:0.
+    # Traced on the serving device and in the serving dtype: the ONNX conversion creates constants inline,
+    # and tracing freezes their device and dtype. A float32 trace cast to half afterwards keeps float32
+    # constants and fails on its first matmul, which is why this is decided before tracing.
     trace_device = torch.device('cuda', 0) if torch.cuda.is_available() else torch.device('cpu')
-    model = model.to(trace_device)
-    scripted = torch.jit.trace(model, sample.to(trace_device))
+    trace_dtype = torch.float16 if arguments.precision == 'float16' else torch.float32
+    model = model.to(device=trace_device, dtype=trace_dtype)
+    scripted = torch.jit.trace(model, sample.to(device=trace_device, dtype=trace_dtype))
     torch.jit.save(scripted, str(arguments.output))
     print(f'Wrote {arguments.output}')
 
