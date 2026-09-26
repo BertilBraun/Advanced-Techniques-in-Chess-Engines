@@ -67,8 +67,13 @@ def test_roadmap_has_clickable_internal_section_links() -> None:
 def test_investigations_use_numeric_section_hierarchy() -> None:
     search = Path('04a-search.md')
     assert r'\section{Research investigations}' in section_tex(
-        '4.1. Search', appendix=False, level=1, appendix_letter='', source=search
+        '4. Research investigations',
+        appendix=False,
+        level=1,
+        appendix_letter='',
+        source=Path('04-research-investigations.md'),
     )
+    assert r'\section{' not in section_tex('4.1. Search', appendix=False, level=1, appendix_letter='', source=search)
     assert r'\subsection{Search}' in section_tex(
         '4.1. Search', appendix=False, level=1, appendix_letter='', source=search
     )

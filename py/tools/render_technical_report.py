@@ -20,6 +20,7 @@ SOURCE_FILES = (
     '01-motivation-and-scope.md',
     '02-methodology-and-evidence.md',
     '03-system-and-methods.md',
+    '04-research-investigations.md',
     '04a-search.md',
     '04b-data-and-replay.md',
     '04c-networks-and-training.md',
@@ -294,12 +295,9 @@ def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str,
             )
         heading = re.sub(r'^\d+(?:\.\d+)?\.\s*', '', title)
         if source.name.startswith(('04a-', '04b-', '04c-')):
-            introduction = (
-                r'\section{Research investigations}\label{sec:research}' + '\n'
-                if source.name.startswith('04a-')
-                else ''
-            )
-            return introduction + r'\subsection{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
+            return r'\subsection{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
+        if source.name == '04-research-investigations.md':
+            return r'\section{' + escape_tex(heading) + r'}\label{sec:research}\label{sec:' + source.stem + '}' + '\n'
         return r'\section{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
     if level == 2:
         if source.name.startswith(('04a-', '04b-', '04c-')) and not appendix:

@@ -21,7 +21,7 @@ Wider node throughput remains open; total project spend is intentionally not a r
 1. [Abstract](00-abstract.md) and [motivation and scope](01-motivation-and-scope.md)
 2. [Methodology and evidence](02-methodology-and-evidence.md)
 3. [Background and system design](03-system-and-methods.md)
-4. Investigations of [search](04a-search.md), [data and replay](04b-data-and-replay.md), and
+4. [Research investigations](04-research-investigations.md): [search](04a-search.md), [data and replay](04b-data-and-replay.md), and
    [networks and training](04c-networks-and-training.md)
 5. [Systems optimization](05-systems-optimization.md)
 6. [Three failures that changed the method](05a-three-failures.md)

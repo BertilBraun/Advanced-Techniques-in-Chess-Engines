@@ -1,5 +1,9 @@
 # 9. Limitations and open questions
 
+The results establish the strength of the integrated system, but leave open which changes contributed most and
+how far the recipe can scale. This chapter examines the limits of the experiments, the rating calibration, and
+the directions that remain unresolved.
+
 ## Which changes caused the gains?
 
 The final run shows what the assembled system achieved, but it does not separate the contribution of every

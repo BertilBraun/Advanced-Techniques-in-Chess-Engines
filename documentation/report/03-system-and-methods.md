@@ -1,5 +1,9 @@
 # 3. Background and system design
 
+This chapter introduces the AlphaZero learning loop and the system used to run it under limited compute.
+It follows the path from network predictions through search and self-play to replay and training, establishing
+the foundations for the experiments in Chapter 4.
+
 ## Learning through search
 
 AlphaZero learns a chess player without examples of human play [1]. Its network has two jobs: the *policy* assigns
@@ -190,9 +194,9 @@ from merely making more passes over an unchanged pool of experience.
 
 ## Training
 
-Training distils the results of search and play into predictions that the next search can obtain in a single
-network evaluation. For one position, the objective combines policy and outcome cross-entropies with auxiliary
-supervision:
+Training distils search and game outcomes into network predictions. The loss is the cross-entropy between the
+searched and predicted policies, plus the cross-entropy between target and predicted win/draw/loss probabilities,
+plus auxiliary losses. For one position:
 
 ```math
 \mathcal{L} = -\sum_a \pi_a\log p_a
@@ -212,10 +216,7 @@ information. The auxiliary losses add next-policy and remaining-length supervisi
 An unfinished game cannot reveal its true remaining length, so that auxiliary loss is omitted rather than trained
 towards a fabricated zero.
 
-Distributed data parallelism (DDP) spreads a global batch of 2,048 across eight GPUs, then combines their gradients
-into one shared optimizer update. A learning-rate schedule controls the update scale as training progresses,
-while gradient clipping limits unusually large gradients. This parallelism accelerates learning from a batch
-without creating eight independently trained players.
+Training uses distributed data parallel across all eight GPUs with a global batch size of 2,048.
 
 Updates are grouped into blocks of 500 optimizer steps. A block followed by publication is a *generation*, and a
 saved set of model weights is a *checkpoint*. Half the self-play actors continue working while a block runs.
