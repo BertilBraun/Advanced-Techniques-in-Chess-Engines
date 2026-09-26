@@ -14,6 +14,7 @@ from src.distillation.dataset import (
     write_dataset,
 )
 from src.distillation.lc0_teacher import Lc0TeacherNetwork, sampling_temperature_at
+from src.distillation.stockfish_moves import ScoredMove, sample_scored_move
 from src.games.chess.contract import (
     CHESS_BINARY_CHANNEL_COUNT,
     CHESS_CHANNEL_COUNT,
@@ -181,3 +182,19 @@ def test_merge_can_delete_each_part_once_copied(tmp_path: Path) -> None:
     parts = (core_part(tmp_path, 'a', 1, 3), core_part(tmp_path, 'b', 2, 5))
     merge_datasets(parts, tmp_path / 'merged.bin', delete_inputs=True)
     assert not any(part.exists() for part in parts)
+
+
+STOCKFISH_CANDIDATES = (ScoredMove(10, 0.60), ScoredMove(11, 0.57), ScoredMove(12, 0.30))
+
+
+def test_near_equal_stockfish_moves_are_both_played() -> None:
+    generator = np.random.default_rng(0)
+    chosen = {sample_scored_move(STOCKFISH_CANDIDATES, 0.05, generator) for _ in range(200)}
+    assert {10, 11} <= chosen
+
+
+def test_clearly_worse_stockfish_moves_are_practically_never_played() -> None:
+    generator = np.random.default_rng(0)
+    chosen = [sample_scored_move(STOCKFISH_CANDIDATES, 0.05, generator) for _ in range(2000)]
+    # A move 0.30 worse weighs e^-6 of the best: about 0.2% of choices, never a routine event.
+    assert chosen.count(12) / len(chosen) < 0.01

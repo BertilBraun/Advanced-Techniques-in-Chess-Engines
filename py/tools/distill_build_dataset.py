@@ -18,6 +18,7 @@ from src.distillation.dataset import (
     write_dataset,
 )
 from src.distillation.lc0_teacher import Lc0Teacher, load_lc0_teacher, sampling_temperature_at
+from src.distillation.stockfish_moves import StockfishMovePool, sample_scored_move
 from src.distillation.teacher import LoadedTeacher, load_teacher, read_network_definition
 from src.evaluation.inference import decode_packed_inputs
 from src.games.chess.contract import (
@@ -50,6 +51,11 @@ class BuilderArguments:
     teacher_hidden_size: int
     lc0_teacher: Path | None
     lc0_teacher_parameter_count: int | None
+    stockfish_executable: Path | None
+    stockfish_nodes: int
+    stockfish_multi_pv: int
+    stockfish_temperature: float
+    stockfish_engines: int
     greedy_after_ply: int | None
     final_temperature: float
     output: Path
@@ -248,6 +254,7 @@ def generate_records(
     device: torch.device,
     head_indices: AuxiliaryHeadIndices,
     record_layout: DistillationRecordLayout,
+    stockfish: StockfishMovePool | None,
 ) -> npt.NDArray:
     generator = np.random.default_rng(arguments.random_seed)
     records = np.zeros(arguments.positions, dtype=record_dtype(CHESS_PAYLOAD_BYTES, record_layout))
@@ -262,6 +269,7 @@ def generate_records(
     reported_at = started_at
 
     while recorded < arguments.positions:
+        stockfish_analyses = None if stockfish is None else stockfish.analyse_async([slot.position for slot in slots])
         packed_states = tuple(CHESS_STATE_CONTRACT.encode_network_input(slot.position) for slot in slots)
         legal_action_ids = tuple(
             np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(slot.position), dtype=np.int64) for slot in slots
@@ -276,6 +284,7 @@ def generate_records(
             policy_logits = output.policy_logits.float().cpu().numpy()
             wdl_probabilities = torch.softmax(output.wdl_logits.float(), dim=1).cpu().numpy()
             auxiliary = capture_auxiliary_outputs(output.auxiliary_logits, head_indices)
+        stockfish_moves = None if stockfish_analyses is None else [analysis.result() for analysis in stockfish_analyses]
 
         for row, slot in enumerate(slots):
             if recorded == arguments.positions:
@@ -296,9 +305,12 @@ def generate_records(
                 )
                 recorded += 1
             if generator.random() < arguments.random_perturbation_probability:
-                chosen = int(generator.integers(len(legal)))
+                action_id = int(legal[generator.integers(len(legal))])
+            elif stockfish_moves is not None:
+                # Stockfish chooses the move; the teacher only labelled the position above.
+                action_id = sample_scored_move(stockfish_moves[row], arguments.stockfish_temperature, generator)
             elif arguments.greedy_after_ply is not None and slot.ply >= arguments.greedy_after_ply:
-                chosen = int(np.argmax(legal_logits))
+                action_id = int(legal[np.argmax(legal_logits)])
             else:
                 temperature = sampling_temperature_at(
                     slot.ply,
@@ -306,8 +318,8 @@ def generate_records(
                     arguments.final_temperature,
                     arguments.greedy_after_ply,
                 )
-                chosen = int(generator.choice(len(legal), p=softmax(legal_logits / temperature)))
-            slot.position = CHESS_STATE_CONTRACT.child_position(slot.position, int(legal[chosen]))
+                action_id = int(legal[generator.choice(len(legal), p=softmax(legal_logits / temperature))])
+            slot.position = CHESS_STATE_CONTRACT.child_position(slot.position, action_id)
             slot.ply += 1
             game_over = CHESS_STATE_CONTRACT.natural_terminal_wdl(slot.position) is not None
             if game_over or slot.ply >= arguments.maximum_game_plies:
@@ -346,6 +358,22 @@ def parse_arguments() -> BuilderArguments:
         '--lc0-teacher',
         type=Path,
         help='Scripted Lc0 teacher from build_lc0_teacher_model.py, used instead of a project checkpoint.',
+    )
+    parser.add_argument(
+        '--stockfish-executable',
+        type=Path,
+        help='Stockfish chooses every move (sampled from its MultiPV by expected score); the teacher only labels.',
+    )
+    parser.add_argument('--stockfish-nodes', type=int, default=1000, help='Nodes per Stockfish move choice.')
+    parser.add_argument('--stockfish-multipv', type=int, default=4, help='Candidate moves Stockfish scores.')
+    parser.add_argument(
+        '--stockfish-temperature',
+        type=float,
+        default=0.05,
+        help='Temperature over expected scores in [0, 1]; a move 0.05 worse is chosen e^-1 as often as the best.',
+    )
+    parser.add_argument(
+        '--stockfish-engines', type=int, default=4, help='Single-threaded Stockfish processes per builder.'
     )
     parser.add_argument(
         '--lc0-teacher-parameter-count',
@@ -397,6 +425,11 @@ def parse_arguments() -> BuilderArguments:
         teacher_hidden_size=parsed.teacher_hidden_size,
         lc0_teacher=parsed.lc0_teacher,
         lc0_teacher_parameter_count=parsed.lc0_teacher_parameter_count,
+        stockfish_executable=parsed.stockfish_executable,
+        stockfish_nodes=parsed.stockfish_nodes,
+        stockfish_multi_pv=parsed.stockfish_multipv,
+        stockfish_temperature=parsed.stockfish_temperature,
+        stockfish_engines=parsed.stockfish_engines,
         greedy_after_ply=parsed.greedy_after_ply,
         final_temperature=parsed.final_temperature,
         output=parsed.output,
@@ -438,7 +471,24 @@ def main() -> None:
         record_layout = DistillationRecordLayout.WITH_AUXILIARY
     print(f'Teacher {weights_path} on {device}: {teacher.parameter_count} parameters', flush=True)
 
-    records = generate_records(teacher, arguments, device, head_indices, record_layout)
+    stockfish = None
+    if arguments.stockfish_executable is not None:
+        stockfish = StockfishMovePool(
+            arguments.stockfish_executable,
+            arguments.stockfish_engines,
+            arguments.stockfish_nodes,
+            arguments.stockfish_multi_pv,
+        )
+        print(
+            f'Stockfish chooses moves: {arguments.stockfish_engines} engines, {arguments.stockfish_nodes} nodes, '
+            f'MultiPV {arguments.stockfish_multi_pv}, temperature {arguments.stockfish_temperature}',
+            flush=True,
+        )
+    try:
+        records = generate_records(teacher, arguments, device, head_indices, record_layout, stockfish)
+    finally:
+        if stockfish is not None:
+            stockfish.close()
 
     revision = read_source_revision()
     manifest = DistillationDatasetManifest(
