@@ -4,7 +4,12 @@ import pytest
 import torch
 from src.distillation.dataset import CHESS_PAYLOAD_BYTES, DistillationRecordLayout, record_dtype
 from src.distillation.lc0_teacher import Lc0TeacherNetwork, sampling_temperature_at
-from src.games.chess.contract import CHESS_BINARY_CHANNEL_COUNT, CHESS_CHANNEL_COUNT, CHESS_STATE_CONTRACT
+from src.games.chess.contract import (
+    CHESS_BINARY_CHANNEL_COUNT,
+    CHESS_CHANNEL_COUNT,
+    CHESS_STATE_CONTRACT,
+    LC0_CHANNEL_COUNT,
+)
 from tools.build_lc0_policy_map import flip_uci_ranks, lc0_move_notation
 from tools.build_lc0_teacher_model import Lc0TeacherModel
 
@@ -55,7 +60,7 @@ def test_temperature_is_fixed_without_a_greedy_ply() -> None:
 def test_teacher_wdl_survives_the_callers_softmax() -> None:
     probabilities = (0.6, 0.25, 0.15)
     network = Lc0TeacherNetwork(ConstantBackbone(policy_size=1880, wdl=probabilities))
-    output = network.training_output(torch.zeros((2, CHESS_CHANNEL_COUNT, 8, 8)))
+    output = network.training_output(torch.zeros((2, LC0_CHANNEL_COUNT, 8, 8)))
     recovered = torch.softmax(output.wdl_logits, dim=1)
     assert recovered[0].tolist() == pytest.approx(list(probabilities), abs=1e-6)
 
@@ -71,18 +76,18 @@ def wrapped_constant_model() -> Lc0TeacherModel:
 
 
 def test_each_action_reads_its_lc0_logit() -> None:
-    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+    policy, _ = wrapped_constant_model()(torch.zeros((1, LC0_CHANNEL_COUNT, 8, 8)))
     assert policy[0, 3].item() == pytest.approx(0.0)
     assert policy[0, 1].item() == pytest.approx(1.0)
 
 
 def test_actions_sharing_an_lc0_index_read_the_same_logit() -> None:
-    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+    policy, _ = wrapped_constant_model()(torch.zeros((1, LC0_CHANNEL_COUNT, 8, 8)))
     assert policy[0, 1].item() == policy[0, 2].item()
 
 
 def test_unmapped_actions_stay_finite_and_negligible() -> None:
-    policy, _ = wrapped_constant_model()(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
+    policy, _ = wrapped_constant_model()(torch.zeros((1, LC0_CHANNEL_COUNT, 8, 8)))
     assert torch.isfinite(policy).all().item()
     assert policy[0, 0].item() < -1.0e3
 
@@ -112,3 +117,15 @@ def test_core_records_carry_no_auxiliary_fields() -> None:
 )
 def test_moves_are_spelled_as_lc0_indexes_them(fen: str, move_uci: str, expected: str) -> None:
     assert lc0_move_notation(fen, move_uci) == expected
+
+
+def test_the_wrapper_answers_any_batch_up_to_the_fixed_size() -> None:
+    small, _ = wrapped_constant_model()(torch.zeros((3, LC0_CHANNEL_COUNT, 8, 8)))
+    full, _ = wrapped_constant_model()(torch.zeros((64, LC0_CHANNEL_COUNT, 8, 8)))
+    assert small.shape[0] == 3 and full.shape[0] == 64
+
+
+def test_the_teacher_adapter_chunks_batches_beyond_the_fixed_size() -> None:
+    network = Lc0TeacherNetwork(ConstantBackbone(policy_size=1880, wdl=(0.5, 0.3, 0.2)))
+    output = network.training_output(torch.zeros((150, LC0_CHANNEL_COUNT, 8, 8)))
+    assert output.policy_logits.shape[0] == 150

@@ -20,6 +20,8 @@ LC0_POLICY_SIZE = 1858
 PROJECT_ACTION_SIZE = 1880
 LC0_INPUT_PLANES = 112
 WDL_SIZE = 3
+# The largest batch the evaluation pipeline sends (--inference-batch-size); larger callers chunk.
+FIXED_BATCH = 64
 # Finite, because the pipeline rejects a non-finite logit on any action it considers legal.
 UNMAPPED_LOGIT = -1.0e4
 
@@ -42,13 +44,19 @@ class Lc0TeacherModel(nn.Module):
         super().__init__()
         self.backbone = backbone
         self.register_buffer('permutation', permutation)
+        self.register_buffer('padding', torch.zeros((FIXED_BATCH, LC0_INPUT_PLANES, 8, 8)))
         self.wdl_is_already_probability = wdl_is_already_probability
         self.policy_output_index = policy_output_index
         self.wdl_output_index = wdl_output_index
 
     def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # The pipeline hands the network its own dtype (bfloat16 in evaluation), so no cast here.
-        outputs = self.backbone(encoded_boards[:, :LC0_INPUT_PLANES])
+        # The pipeline hands the network its own dtype (bfloat16 in evaluation), so no cast here. The
+        # ONNX conversion's reshapes freeze whatever batch size they were traced with, so the backbone
+        # always sees exactly FIXED_BATCH rows: pad up, run, and keep the real rows.
+        planes = encoded_boards[:, :LC0_INPUT_PLANES]
+        batch = planes.shape[0]
+        padded = torch.cat((planes, self.padding), dim=0)[:FIXED_BATCH]
+        outputs = [output[:batch] for output in self.backbone(padded)]
         lc0_policy = outputs[self.policy_output_index].to(torch.float32)
         lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
         # Derived from the output rather than torch.full: tracing bakes an explicit device and batch size
@@ -130,10 +138,10 @@ def main() -> None:
     ).eval()
 
     with torch.inference_mode():
-        sample = torch.zeros((4, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
+        sample = torch.zeros((FIXED_BATCH, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
         sample[:, LC0_INPUT_PLANES - 1] = 1.0
         policy, wdl = model(sample)
-    if policy.shape != (4, PROJECT_ACTION_SIZE) or wdl.shape != (4, 3):
+    if policy.shape != (FIXED_BATCH, PROJECT_ACTION_SIZE) or wdl.shape != (FIXED_BATCH, 3):
         raise SystemExit(f'Wrapped model produced {policy.shape} and {wdl.shape}.')
     if not bool(torch.all((wdl.sum(dim=1) - 1.0).abs() < 1.0e-2)):
         raise SystemExit('Wrapped WDL output is not a probability distribution.')

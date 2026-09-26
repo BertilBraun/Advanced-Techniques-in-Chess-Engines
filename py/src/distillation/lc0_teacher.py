@@ -7,6 +7,8 @@ from pathlib import Path
 
 import torch
 
+LC0_TEACHER_BATCH = 64
+
 
 @dataclass(frozen=True)
 class TeacherOutput:
@@ -26,7 +28,10 @@ class Lc0TeacherNetwork:
         self._module = module
 
     def training_output(self, encoded: torch.Tensor) -> TeacherOutput:
-        policy_logits, wdl_probabilities = self._module(encoded)
+        # The scripted teacher runs a fixed batch of LC0_TEACHER_BATCH rows; larger batches are chunked.
+        pieces = [self._module(chunk) for chunk in encoded.split(LC0_TEACHER_BATCH)]
+        policy_logits = torch.cat([policy for policy, _ in pieces])
+        wdl_probabilities = torch.cat([wdl for _, wdl in pieces])
         return TeacherOutput(
             policy_logits=policy_logits,
             wdl_logits=torch.log(wdl_probabilities.clamp_min(1e-9)),
