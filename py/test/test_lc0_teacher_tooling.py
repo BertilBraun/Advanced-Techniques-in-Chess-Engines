@@ -5,7 +5,7 @@ import torch
 from src.distillation.dataset import CHESS_PAYLOAD_BYTES, DistillationRecordLayout, record_dtype
 from src.distillation.lc0_teacher import Lc0TeacherNetwork, sampling_temperature_at
 from src.games.chess.contract import CHESS_BINARY_CHANNEL_COUNT, CHESS_CHANNEL_COUNT, CHESS_STATE_CONTRACT
-from tools.build_lc0_policy_map import flip_uci_ranks
+from tools.build_lc0_policy_map import flip_uci_ranks, lc0_move_notation
 from tools.build_lc0_teacher_model import Lc0TeacherModel
 
 STARTING_TEMPERATURE = 1.3
@@ -63,7 +63,9 @@ def test_teacher_wdl_survives_the_callers_softmax() -> None:
 def test_policy_permutation_places_each_lc0_logit_on_its_action() -> None:
     permutation = torch.tensor([[3, 0, 1]], dtype=torch.int64)
     backbone = ConstantBackbone(policy_size=3, wdl=(1.0, 0.0, 0.0))
-    model = Lc0TeacherModel(backbone, permutation, wdl_is_already_probability=True)
+    model = Lc0TeacherModel(
+        backbone, permutation, wdl_is_already_probability=True, policy_output_index=0, wdl_output_index=1
+    )
     policy, _ = model(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
     assert policy[0, 3].item() == pytest.approx(0.0)
     assert policy[0, 0].item() == pytest.approx(1.0)
@@ -73,7 +75,9 @@ def test_policy_permutation_places_each_lc0_logit_on_its_action() -> None:
 def test_unmapped_policy_entries_stay_finite() -> None:
     permutation = torch.tensor([[3, 0, 1]], dtype=torch.int64)
     backbone = ConstantBackbone(policy_size=3, wdl=(1.0, 0.0, 0.0))
-    model = Lc0TeacherModel(backbone, permutation, wdl_is_already_probability=True)
+    model = Lc0TeacherModel(
+        backbone, permutation, wdl_is_already_probability=True, policy_output_index=0, wdl_output_index=1
+    )
     policy, _ = model(torch.zeros((1, CHESS_CHANNEL_COUNT, 8, 8), dtype=torch.int8))
     assert torch.isfinite(policy).all().item()
 
@@ -88,3 +92,18 @@ def test_core_records_carry_no_auxiliary_fields() -> None:
     core = record_dtype(CHESS_PAYLOAD_BYTES, DistillationRecordLayout.CORE)
     assert 'next_policy_count' not in core.names
     assert 'wdl' in core.names
+
+
+@pytest.mark.parametrize(
+    ('fen', 'move_uci', 'expected'),
+    [
+        ('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1g1', 'e1h1'),
+        ('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1c1', 'e1a1'),
+        ('r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1', 'e8g8', 'e8h8'),
+        ('8/P6k/8/8/8/8/8/K7 w - - 0 1', 'a7a8n', 'a7a8'),
+        ('8/P6k/8/8/8/8/8/K7 w - - 0 1', 'a7a8q', 'a7a8q'),
+        ('8/8/8/8/8/8/8/K6k w - - 0 1', 'a1a2', 'a1a2'),
+    ],
+)
+def test_moves_are_spelled_as_lc0_indexes_them(fen: str, move_uci: str, expected: str) -> None:
+    assert lc0_move_notation(fen, move_uci) == expected

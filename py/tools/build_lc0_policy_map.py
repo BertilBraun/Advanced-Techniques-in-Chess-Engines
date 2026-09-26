@@ -48,6 +48,24 @@ def flip_uci_ranks(move_uci: str) -> str:
     return flipped + move_uci[4:]
 
 
+def lc0_move_notation(fen: str, move_uci: str) -> str:
+    """Rewrites a UCI move into the spelling Lc0's policy table uses.
+
+    Lc0 encodes castling as the king capturing its own rook (e1h1, not e1g1) and a knight promotion as
+    the bare move (a7a8, not a7a8n); queen, rook and bishop promotions keep their suffix.
+    """
+    import chess
+
+    board = chess.Board(fen)
+    move = chess.Move.from_uci(move_uci)
+    if board.is_castling(move):
+        rook_file = 'h' if chess.square_file(move.to_square) > chess.square_file(move.from_square) else 'a'
+        return move_uci[:2] + rook_file + move_uci[1]
+    if move.promotion == chess.KNIGHT:
+        return move_uci[:4]
+    return move_uci
+
+
 def build(move_table: tuple[str, ...], position_count: int, seed: int) -> PolicyMap:
     import AlphaZeroCpp
 
@@ -63,8 +81,9 @@ def build(move_table: tuple[str, ...], position_count: int, seed: int) -> Policy
                 break
             positions_walked += 1
             legal_action_ids = position.legal_actions()
+            fen = position.fen
             for action_id in legal_action_ids:
-                move_uci = position.action_uci(action_id)
+                move_uci = lc0_move_notation(fen, position.action_uci(action_id))
                 canonical = move_uci if position.current_player == 1 else flip_uci_ranks(move_uci)
                 lc0_index = lc0_index_of.get(canonical)
                 if lc0_index is None:

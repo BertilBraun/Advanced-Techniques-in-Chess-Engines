@@ -18,38 +18,66 @@ from torch import nn
 
 LC0_POLICY_SIZE = 1858
 PROJECT_ACTION_SIZE = 1880
-RULE50_PLANE_INDEX = 109
+LC0_INPUT_PLANES = 112
+WDL_SIZE = 3
 # Finite, because the pipeline rejects a non-finite logit on any action it considers legal.
 UNMAPPED_LOGIT = -1.0e4
 
 
 class Lc0TeacherModel(nn.Module):
-    """Adapts Lc0's input scaling, policy indexing and value head to this project's contract."""
+    """Adapts Lc0's policy indexing and value head to this project's contract.
 
-    def __init__(self, backbone: nn.Module, permutation: torch.Tensor, wdl_is_already_probability: bool) -> None:
+    The planes reach the network exactly as Lc0's own encoder produces them: for the classical input
+    the rule-50 plane carries the raw ply count, which is what the exported graph expects.
+    """
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        permutation: torch.Tensor,
+        wdl_is_already_probability: bool,
+        policy_output_index: int,
+        wdl_output_index: int,
+    ) -> None:
         super().__init__()
         self.backbone = backbone
         self.register_buffer('permutation', permutation)
         self.wdl_is_already_probability = wdl_is_already_probability
+        self.policy_output_index = policy_output_index
+        self.wdl_output_index = wdl_output_index
 
     def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        planes = encoded_boards.to(torch.float32)
-        rule50 = planes[:, RULE50_PLANE_INDEX : RULE50_PLANE_INDEX + 1] / 99.0
-        planes = torch.cat(
-            (planes[:, :RULE50_PLANE_INDEX], rule50, planes[:, RULE50_PLANE_INDEX + 1 :]),
-            dim=1,
-        )
-        lc0_policy, lc0_wdl = self.backbone(planes)
+        planes = encoded_boards[:, :LC0_INPUT_PLANES].to(torch.float32)
+        outputs = self.backbone(planes)
+        lc0_policy = outputs[self.policy_output_index].to(torch.float32)
+        lc0_wdl = outputs[self.wdl_output_index].to(torch.float32)
         batch = lc0_policy.shape[0]
         policy = torch.full(
             (batch, PROJECT_ACTION_SIZE),
             UNMAPPED_LOGIT,
-            dtype=lc0_policy.dtype,
+            dtype=torch.float32,
             device=lc0_policy.device,
         )
         policy.scatter_(1, self.permutation.expand(batch, -1), lc0_policy)
         wdl = lc0_wdl if self.wdl_is_already_probability else torch.softmax(lc0_wdl, dim=1)
         return policy, wdl
+
+
+def locate_outputs(backbone: nn.Module) -> tuple[int, int]:
+    """Exports differ in output order and may carry a moves-left head, so outputs are found by width."""
+    with torch.inference_mode():
+        probe = torch.zeros((2, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
+        probe[:, LC0_INPUT_PLANES - 1] = 1.0
+        outputs = backbone(probe)
+    if isinstance(outputs, torch.Tensor):
+        outputs = (outputs,)
+    widths = [tuple(output.shape) for output in outputs]
+    print(f'Backbone outputs: {widths}')
+    policy = [index for index, shape in enumerate(widths) if shape[-1] == LC0_POLICY_SIZE]
+    wdl = [index for index, shape in enumerate(widths) if shape[-1] == WDL_SIZE]
+    if len(policy) != 1 or len(wdl) != 1:
+        raise SystemExit(f'Expected one {LC0_POLICY_SIZE}-wide policy and one {WDL_SIZE}-wide WDL output: {widths}')
+    return policy[0], wdl[0]
 
 
 def load_backbone(onnx_path: Path) -> nn.Module:
@@ -73,12 +101,12 @@ def build_permutation(policy_map_path: Path) -> torch.Tensor:
     return torch.tensor(entries, dtype=torch.int64).unsqueeze(0)
 
 
-def wdl_is_probability(backbone: nn.Module) -> bool:
+def wdl_is_probability(backbone: nn.Module, wdl_output_index: int) -> bool:
     """Lc0 exports differ in whether the value head is softmaxed; decide it by measurement."""
     with torch.inference_mode():
-        probe = torch.zeros((2, 112, 8, 8), dtype=torch.float32)
-        probe[:, 111] = 1.0
-        _, wdl = backbone(probe)
+        probe = torch.zeros((2, LC0_INPUT_PLANES, 8, 8), dtype=torch.float32)
+        probe[:, LC0_INPUT_PLANES - 1] = 1.0
+        wdl = backbone(probe)[wdl_output_index]
     sums = wdl.sum(dim=1)
     within_unit_range = bool(torch.all(wdl >= 0.0) and torch.all(wdl <= 1.0))
     sums_to_one = bool(torch.all((sums - 1.0).abs() < 1.0e-3))
@@ -98,11 +126,18 @@ def main() -> None:
     arguments = parse_arguments()
     backbone = load_backbone(arguments.onnx)
     permutation = build_permutation(arguments.policy_map)
-    model = Lc0TeacherModel(backbone, permutation, wdl_is_probability(backbone)).eval()
+    policy_index, wdl_index = locate_outputs(backbone)
+    model = Lc0TeacherModel(
+        backbone,
+        permutation,
+        wdl_is_probability(backbone, wdl_index),
+        policy_index,
+        wdl_index,
+    ).eval()
 
     with torch.inference_mode():
-        sample = torch.zeros((4, 112, 8, 8), dtype=torch.int8)
-        sample[:, 111] = 1
+        sample = torch.zeros((4, LC0_INPUT_PLANES, 8, 8), dtype=torch.int8)
+        sample[:, LC0_INPUT_PLANES - 1] = 1
         policy, wdl = model(sample)
     if policy.shape != (4, PROJECT_ACTION_SIZE) or wdl.shape != (4, 3):
         raise SystemExit(f'Wrapped model produced {policy.shape} and {wdl.shape}.')

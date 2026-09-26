@@ -98,6 +98,25 @@ def query_lc0(
     return TeacherReference(priors=priors, wdl=wdl)
 
 
+def standard_uci(fen: str, move_uci: str) -> str:
+    """Lc0 may print castling as king-takes-rook; compare in standard UCI."""
+    import chess
+
+    board = chess.Board(fen)
+    move = chess.Move.from_uci(move_uci)
+    if board.is_castling(move):
+        kingside = chess.square_file(move.to_square) > chess.square_file(move.from_square)
+        return move_uci[:2] + ('g' if kingside else 'c') + move_uci[1]
+    return move_uci
+
+
+def position_fen(moves_uci: tuple[str, ...]) -> str:
+    position = CHESS_STATE_CONTRACT.initial_position()
+    for move_uci in moves_uci:
+        position = CHESS_STATE_CONTRACT.child_position(position, position.action_id_from_uci(move_uci))
+    return position.fen
+
+
 def query_wrapped_teacher(
     model: torch.jit.ScriptModule, device: torch.device, moves_uci: tuple[str, ...]
 ) -> tuple[dict[str, float], tuple[float, float, float]]:
@@ -167,6 +186,11 @@ def main() -> None:
     for moves_uci in opening_lines:
         reference = query_lc0(
             arguments.lc0_binary, arguments.lc0_network, moves_uci, arguments.nodes, arguments.extra_lc0_argument
+        )
+        fen = position_fen(moves_uci)
+        reference = TeacherReference(
+            priors={standard_uci(fen, move): prior for move, prior in reference.priors.items()},
+            wdl=reference.wdl,
         )
         ours, our_wdl = query_wrapped_teacher(model, device, moves_uci)
         comparisons.append(compare(reference, ours, our_wdl, moves_uci))
