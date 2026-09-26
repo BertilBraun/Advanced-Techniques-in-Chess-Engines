@@ -71,6 +71,26 @@ def test_input_plane_table_wraps_descriptions_at_page_width() -> None:
     assert r'\label{tab:appendix-d-reproducibility-1}' in output
 
 
+def test_training_evidence_is_in_main_text_without_duplicate_appendix_figure() -> None:
+    training = (REPORT_ROOT / '06-final-chess-recipe.md').read_text(encoding='utf-8')
+    diagnostics = (REPORT_ROOT / 'appendix-a-training-diagnostics.md').read_text(encoding='utf-8')
+    assert 'final-training-volume-and-throughput-paper.svg' in training
+    assert 'final-training-volume-and-throughput-paper.svg' not in diagnostics
+    assert 'appendix-training-stages.svg' not in diagnostics
+    assert '3.25 million' in training
+
+
+def test_main_results_tables_and_architecture_sweeps_render(tmp_path: Path) -> None:
+    for filename, count in (
+        ('05-systems-optimization.md', 1),
+        ('06-final-chess-recipe.md', 1),
+        ('07-final-run-results.md', 2),
+        ('appendix-c-supporting-comparisons.md', 2),
+    ):
+        output = markdown_tex(REPORT_ROOT / filename, tmp_path, appendix=filename.startswith('appendix-'))
+        assert output.count(r'\begin{table') == count
+
+
 @pytest.mark.parametrize(
     ('source', 'expected'),
     [
@@ -142,7 +162,7 @@ def test_appendix_table_has_caption_without_upscaling_type() -> None:
         table_number=2,
         appendix=True,
     )
-    assert r'\caption{Parallel-search strength and wall time}' in output
+    assert r'\caption{Depth and width: throughput ratios across batch sizes}' in output
     assert r'\centering\normalsize' in output
     assert r'\setlength{\tabcolsep}{9pt}' in output
     assert r'\resizebox' not in output

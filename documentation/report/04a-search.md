@@ -179,5 +179,5 @@ preferred move.
 For an unvisited move, first-play urgency starts from a reduced parent value rather than an optimistic default.
 A 0.99 per-ply discount favours nearer favourable outcomes, while retaining 60% of subtree visits after a played
 move reuses analysis without allowing old statistics to dominate completely. Together with native batching,
-these mechanisms make fixed-budget search both exploratory and affordable. Chapter 7 summarizes the recipe;
+these mechanisms make fixed-budget search both exploratory and affordable. Appendix D specifies the recipe;
 Appendix D gives the numerical settings.

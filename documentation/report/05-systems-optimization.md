@@ -67,6 +67,9 @@ Similar parameter counts did not imply similar inference cost. Width and depth c
 TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN
 shapes, but no analytic parameter-count rule predicted the fastest network. Progressive model sizes were therefore
 benchmarked at their actual serving batch and precision rather than selected from FLOPs alone.
+The width and depth sweeps in [Appendix C](appendix-c-supporting-comparisons.md), Tables C1 and C2,
+quantify this mismatch: narrower networks were not consistently faster, and changing batch size could reverse
+the ranking of deep-narrow and shallow-wide designs.
 
 ## Replay materialization and training supply
 
@@ -91,11 +94,18 @@ Self-play and training compete for GPU capacity but have different resource prof
 traversal and transfer intervals that allow useful overlap with optimizer work. Scheduling must therefore balance
 the slower training block against the reduction in subsequent waiting for new games.
 
-The overlap sweep compared keeping 8, 16, or all 32 actors active during training. Including both training time
-and the remaining wait for self-play, their estimated complete-quantum times were 117.1, 112.9, and 111.2 seconds.
+The overlap sweep compared keeping 8, 16, or all 32 actors active during training, measuring both training time
+and the remaining wait for self-play.
 Moving from half to all actors active nearly doubled the trainer's work time for only a small reduction in the
 complete cycle. The retained half-active policy balances ongoing game production against optimizer throughput;
-[Appendix C](appendix-c-supporting-comparisons.md), Table C1 gives both sides of this tradeoff.
+Table 2 gives both sides of this tradeoff. Complete-cycle time includes training and the remaining wait for
+self-play data; with all actors paused, training alone reached 25.3 thousand samples/s.
+
+| Active actors | Training samples/s (k) | Searches/s (k) | Complete cycle (s) |
+| ---: | ---: | ---: | ---: |
+| 8 | 21.5 | 506 | 117 |
+| 16 | 17.1 | 606 | 113 |
+| 32 | 9.21 | 742 | 111 |
 
 The useful overlap fraction depends on search cost. As visit budgets and model size rise, self-play becomes more
 expensive relative to training; actor settings measured at the beginning cannot simply be extrapolated to later
@@ -110,4 +120,4 @@ from limiting training, and actor overlap replenishes replay during optimizer up
 Additional search capacity can support more games at a fixed budget or deeper searches per position. Those uses
 alter data diversity and target quality differently, while replay reuse controls their rate of consumption.
 The systems improvements therefore expand the feasible training regime; the recipe determines how that capacity
-is spent. Chapter 8 evaluates the resulting progress in playing strength over wall-clock time.
+is spent. Chapter 7 evaluates the resulting progress in playing strength over wall-clock time.

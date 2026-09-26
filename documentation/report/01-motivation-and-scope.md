@@ -37,5 +37,5 @@ A live chess demonstration is also available [12].
 [Chapter 3](03-system-and-methods.md) explains the AlphaZero learning principle and the system that implements it.
 [Chapter 4](04a-search.md) examines search, replay, and network design, followed by throughput engineering in
 [Chapter 5](05-systems-optimization.md). The three failure studies in [Chapter 6](05a-three-failures.md)
-lead into the final chess recipe in [Chapter 7](06-final-chess-recipe.md) and its training and evaluation results in
-[Chapter 8](07-final-run-results.md).
+lead into training progress in [Chapter 7](06-final-chess-recipe.md) and playing strength in
+[Chapter 8](07-final-run-results.md). [Appendix D](appendix-d-reproducibility.md) specifies the final recipe.

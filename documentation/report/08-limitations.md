@@ -13,9 +13,23 @@ matched evaluations.
 
 The attribution problem is strongest for coupled choices. Progressive sizing changes capacity and training
 history as well as self-play cost; replay growth and reuse alter both data exposure and demand for fresh games.
-Longer matched-compute experiments are needed to separate those effects. The larger-model continuation established
-parity, but not a benefit from additional capacity, leaving training duration, target quality, and initialization
-as unresolved factors in further scaling.
+Matched-compute experiments are needed to separate those effects.
+
+## Persistent plateaus and the remaining engine gap
+
+The remaining gap to leading engines is estimated at roughly 400 Elo. Closing it requires more than improving
+the implementation of the existing recipe. Across the project's training runs, playing strength repeatedly
+approached a plateau and did not escape it during extended training. These observations make additional hours
+under unchanged settings an unpromising route to a substantial gain.
+
+Four changes are the most plausible next tests: substantially larger models to increase representational
+capacity; more search during self-play to improve targets; lower replay reuse to increase fresh-game exposure;
+and a larger replay window to retain more diverse experience. Each changes a different potential limit on
+learning, and each also changes compute demand or data age. They should be compared by strength gained at matched
+compute, not solely by training loss or update count.
+
+The limited larger-model continuation reached parity without demonstrating a higher plateau. It therefore leaves
+capacity as an open hypothesis rather than ruling it out.
 
 ## Rating calibration and evaluation scope
 

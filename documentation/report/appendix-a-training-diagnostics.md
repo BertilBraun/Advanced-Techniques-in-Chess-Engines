@@ -14,37 +14,28 @@ dashed line marks the small-to-medium transition at 240,000 optimizer steps. Fro
 total loss decreases from approximately 2.98 to 2.95 while WDL loss remains near 0.80. The learning rate declines
 from approximately 0.10 to 0.0266. Labels identify the final values.
 
-![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput-paper.svg)
-
-Figure A.2: Training volume and throughput on a common optimizer-step axis: completed games per quantum,
-cumulative net materialized positions, live replay occupancy, and training samples per second. The run completed
-3,249,647 games and materialized 209.15 million net positions, with 16 million rows retained at selection.
-Median trainer throughput was 16,977 samples/s across 480 small-model quanta and 11,194 across 337 medium-model
-quanta under their respective schedules and concurrent workloads.
+The exact counters underlying Chapter 7 are 3,249,647 completed games and approximately 209.15 million net
+materialized positions, with 16 million live rows at selection. Median trainer throughput was 16,977 samples/s
+over 480 small-model quanta and 11,194 over 337 medium-model quanta. Figure 12 in Chapter 7 shows these trajectories.
+Node rental was $0.72/hour, totaling $43.20 for the 2.5-day run.
 
 ![Next-policy and remaining-game-length losses on separate scales](figures/appendix-auxiliary-losses.svg)
 
-Figure A.3: Next-policy and remaining-game-length losses on separate scales. Faint traces show recorded values;
+Figure A.2: Next-policy and remaining-game-length losses on separate scales. Faint traces show recorded values;
 solid curves show 11-quantum moving averages. The dashed line marks the small-to-medium transition, as in the
 remaining optimizer-step plots.
 
 ![Mean pre-clipping gradient norm with the configured clipping threshold](figures/appendix-gradient-norm.svg)
 
-Figure A.4: Mean pre-clipping gradient norm in each 500-step training block. The dotted line is the configured
+Figure A.3: Mean pre-clipping gradient norm in each 500-step training block. The dotted line is the configured
 norm limit of 1.0. The mean rises above that limit during medium-model training; the optimizer clips individual
 steps before applying them.
 
 ![Policy-only and 64-search training ladders over the final 2.5-day window](figures/appendix-policy-search-progress.svg)
 
-Figure A.5: Policy-only and 64-search training-ladder ratings over the final 2.5-day window. Faint traces show
+Figure A.4: Policy-only and 64-search training-ladder ratings over the final 2.5-day window. Faint traces show
 individual evaluations and solid curves average eleven evaluations. Both improve over training; Table 1 reports
 the separate final matches.
-
-![Trainer throughput, search visit budget, and active model on a shared training axis](figures/appendix-training-stages.svg)
-
-Figure A.6: Trainer throughput, self-play search budget, and active network. The small-to-medium transition
-coincides with lower trainer throughput. The plotted training sequence increases search from 300 to 600 visits;
-the configured 800-visit stage lies beyond the selected checkpoint.
 
 Replay occupancy, sampled-position age, and resignation calibration are shown with their corresponding methods
 in Section 4.2 (Figures 5 and 6).

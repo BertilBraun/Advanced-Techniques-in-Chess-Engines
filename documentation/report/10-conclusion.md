@@ -19,5 +19,6 @@ by self-play.
 
 Further scaling remains open. The larger model recovered its parent's strength without surpassing it during the
 available continuation, while distillation retained substantial strength in a much smaller network without matching
-the teacher. Evaluating additional capacity or training duration requires the same combined accounting used here:
-reliable self-play data, optimizer progress, and measured strength per unit of compute.
+the teacher. Repeated plateaus make longer training under unchanged settings an unlikely solution. Larger models, deeper
+self-play search, lower reuse, and broader replay are the next hypotheses to test against measured strength per
+unit of compute.

@@ -64,13 +64,19 @@ record.
 
 ## Expanded chess recipe settings
 
-The architecture in Chapter 7 uses a key-size-128 chess from-to policy head and a
+The final recipe ran on one node with eight RTX 4070 SUPER GPUs and 80 logical CPUs. Its network ladder contains
+12×128, 14×160, and 19×176 residual CNNs with capped scaled post-activation branches and global-pooling context
+in every second block. The reported checkpoint uses the 14×160 stage.
+
+The architecture uses a key-size-128 chess from-to policy head and a
 two-channel WDL head with a 48-unit hidden layer. The training-only next-searched-policy and remaining-game-length
 heads have loss weights 0.15 and 0.1. Primary policy and value losses each have weight 1.0. Terminal outcome
 targets are discounted by 0.998 per ply; the search-root-value blend rises from zero to 0.1 over its configured
 schedule, while search backup uses a separate 0.99 per-ply discount.
 At a capped game's final position, a searched scalar value `v` is converted to a soft WDL target with
 `r = 1 - |v|`: win, draw, and loss receive `max(v, 0) + r/3`, `r/3`, and `max(-v, 0) + r/3`, respectively.
+Capped games omit the remaining-game-length loss. Batch-normalization folding, recalibration, ONNX export, and
+TensorRT refitting operate on a deployment copy, leaving the trainable model unfused.
 
 Each 500-step training quantum uses eight ranks processing 256 positions each, for a global batch of 2,048.
 Nesterov SGD uses momentum 0.9, weight decay 0.0001, and gradient clipping at norm 1.0. The learning rate warms
@@ -95,6 +101,21 @@ The successor network trains on a captured replay snapshot for an average of 1.5
 active-model quantum, with its own catch-up learning-rate clock. The configured match gate requires the successor
 to score at least 0.48 in two consecutive paired evaluations. The fully expanded config [10] specifies the
 stage-specific ladder-plateau thresholds and window.
+
+## Self-play schedules and promotion
+
+Half the actors pause during each training quantum. The search schedule rises from 300 to 800 visits per move;
+the reported checkpoint lies in the 600-visit stage. Games start approximately equally often from random legal
+openings of up to eight plies and from eligible restart states, falling back to a random opening when no restart
+is available. Game caps increase from 150 to 250 plies, and greedy move selection starts later as training matures.
+Twenty percent of games are designated as no-resignation continuations to calibrate the resignation threshold
+against a 2.5% upper-bound target for mistakenly resigning a win or draw.
+
+Each admitted replay position funds four training presentations. Sampling assigns 30% uniform probability and
+otherwise prioritizes bounded policy surprise. Candidate training begins when smoothed 64-search ladder gains
+fall below 15 Elo/hour for the small stage or 4 Elo/hour for the medium stage. Promotion uses the paired-match
+gate specified above. Training monitors run every 20 minutes using 50 paired openings, a three-rung adaptive
+Stockfish 13 bracket, and both 64-search and policy-only play.
 
 ## Result identity and provenance
 

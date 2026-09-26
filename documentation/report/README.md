@@ -13,7 +13,8 @@ work is presented as the throughput foundation for self-play learning rather tha
 > directions, and the reader path.
 
 The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength,
-selected-checkpoint training volume, and cost fields remain centralized in [Final-run results](07-final-run-results.md).
+selected-checkpoint training volume, and cost are presented in [training progress](06-final-chess-recipe.md) and
+[playing strength](07-final-run-results.md).
 Wider node throughput remains open; total project spend is intentionally not a report claim.
 
 ## Reader path
@@ -25,8 +26,8 @@ Wider node throughput remains open; total project spend is intentionally not a r
    [networks and training](04c-networks-and-training.md)
 5. [Systems optimization](05-systems-optimization.md)
 6. [Three failures that changed the method](05a-three-failures.md)
-7. [Final chess recipe](06-final-chess-recipe.md)
-8. [Final-run results](07-final-run-results.md) — completed teacher, search, parallelism, and distillation results
+7. [Training progress](06-final-chess-recipe.md) — training trajectory, volume, and model transition
+8. [Playing strength](07-final-run-results.md) — search, parallelism, and distillation results
 9. [Limitations](08-limitations.md) and [conclusion](10-conclusion.md)
 10. [Publication references](references-publication.md) and [working citation plan](bibliography.md)
 11. Appendices: [training diagnostics](appendix-a-training-diagnostics.md),

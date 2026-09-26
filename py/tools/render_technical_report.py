@@ -119,8 +119,12 @@ CITATION = re.compile(r'(?<!\[)\[(1[0-2]|[1-9])\](?!\])')
 PLAIN_CAPTION = re.compile(r'^Figure\s+[0-9A-D.]+\s*(?:[.:—-])?\s*')
 TABLE_CAPTIONS = {
     ('02-methodology-and-evidence.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
-    ('appendix-c-supporting-comparisons.md', 1): 'Actor overlap and training supply',
-    ('appendix-c-supporting-comparisons.md', 2): 'Parallel-search strength and wall time',
+    ('05-systems-optimization.md', 1): 'Actor overlap: optimizer throughput and concurrent search',
+    ('06-final-chess-recipe.md', 1): 'Final training run',
+    ('07-final-run-results.md', 1): 'Parallel search at 1,000 visits against 20,000-node Stockfish',
+    ('07-final-run-results.md', 2): 'Distilled student strength at two training durations',
+    ('appendix-c-supporting-comparisons.md', 1): 'CNN width: measured throughput versus arithmetic prediction',
+    ('appendix-c-supporting-comparisons.md', 2): 'Depth and width: throughput ratios across batch sizes',
     ('appendix-d-reproducibility.md', 1): 'Chess input planes in tensor order (zero-based indices)',
 }
 MARKDOWN = MarkdownIt('commonmark').enable('table')
@@ -431,8 +435,11 @@ class FigurePlacementEdit:
 def advance_main_figures(latex: str) -> str:
     edits: list[FigurePlacementEdit] = []
     previous_insertion = 0
-    for figure in re.finditer(r'\\begin\{figure\*\}\[t\].*?\\end\{figure\*\}\n', latex, re.DOTALL):
-        if any(name in figure.group() for name in ('fig:learning-loop}', 'fig:chess-network-architecture}')):
+    for figure in re.finditer(r'\\begin\{(?P<kind>figure|table)\*\}\[!?t\].*?\\end\{(?P=kind)\*\}\n', latex, re.DOTALL):
+        if any(
+            name in figure.group()
+            for name in ('fig:learning-loop}', 'fig:chess-network-architecture}', 'tab:02-methodology-and-evidence-1}')
+        ):
             previous_insertion = figure.end()
             continue
         # Two-column top floats must enter the queue before their reference page is composed.
@@ -451,7 +458,7 @@ def advance_main_figures(latex: str) -> str:
         edits.append(FigurePlacementEdit(figure.start(), figure.end(), ''))
         edits.append(FigurePlacementEdit(insertion, insertion, figure.group()))
         previous_insertion = insertion
-    for edit in sorted(edits, key=lambda item: (item.start, item.end), reverse=True):
+    for _, edit in sorted(enumerate(edits), key=lambda item: (item[1].start, item[1].end, item[0]), reverse=True):
         latex = latex[: edit.start] + edit.replacement + latex[edit.end :]
     return latex
 

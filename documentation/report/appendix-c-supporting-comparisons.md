@@ -3,20 +3,55 @@
 The following controls provide the numerical comparisons supporting the search and systems decisions in
 Chapters 4 and 5. Each comparison retains its own workload and measurement scale.
 
-## Actor overlap and training supply
+## Architecture shape and inference throughput
 
-The eight-GPU overlap sweep measures optimizer throughput and concurrent search as the number of active actors
-increases. Complete-quantum time includes both the training block and the remaining wait for self-play data.
+The width sweep used 12-block global-pooling CNNs with a dense policy head, BF16, batch 512, and one RTX 4070
+SUPER. Each width was benchmarked in a separate process against an interleaved width-128 reference.
+Table C1 contrasts measured throughput with the inverse-width-squared estimate implied by convolutional
+arithmetic. Ratios below are normalized to the unrounded width-128 rate of 103,490 positions/s.
 
-| Active actors | Trainer samples/s | Concurrent searches/s | Complete quantum (s) |
-| ---: | ---: | ---: | ---: |
-| 8 | 21,492 | 506,000 | 117.1 |
-| 16 | 17,139 | 606,000 | 112.9 |
-| 32 | 9,210 | 742,000 | 111.2 |
+| Depth × width | Positions/s (k) | Measured ratio | Arithmetic ratio |
+| --- | ---: | ---: | ---: |
+| 12×96 | 133 | 1.284 | 1.778 |
+| 12×112 | 95.9 | 0.926 | 1.306 |
+| 12×120 | 93.4 | 0.903 | 1.138 |
+| 12×128 | 103 | 1.000 | 1.000 |
+| 12×136 | 59.7 | 0.577 | 0.886 |
+| 12×144 | 63.8 | 0.617 | 0.790 |
+| 12×152 | 53.8 | 0.520 | 0.709 |
+| 12×160 | 61.8 | 0.597 | 0.640 |
+| 12×176 | 52.4 | 0.507 | 0.529 |
+| 12×192 | 41.5 | 0.401 | 0.444 |
+| 12×224 | 35.5 | 0.343 | 0.327 |
+| 12×256 | 31.1 | 0.301 | 0.250 |
 
-Pausing all actors yielded 25,275 training samples/s with no concurrent game production. Half-active operation
-retained most of the complete-cycle benefit while reducing contention during training. Its balance depends on
-visit budget, model size, and available hardware capacity.
+The 112- and 120-channel models perform less arithmetic than the 128-channel model but serve fewer positions
+per second. The sharp loss at 136 channels likewise exceeds the arithmetic prediction. Width alone is therefore
+an unreliable proxy for inference cost.
+
+Table C2 extends the comparison to depth and serving batch size. Ratios are relative to the specified reference
+at the same batch size. The width sweep is backed by per-process measurements; the depth/batch comparisons are
+transcribed benchmark summaries. Dashes indicate settings not measured.
+
+| Model | Reference | Batch 512 | Batch 320 | Batch 64 |
+| --- | --- | ---: | ---: | ---: |
+| 20×128 | 14×152 | 1.36 | 1.20 | 0.730 |
+| 10×176 | 14×152 | 1.35 | 1.24 | 1.34 |
+| 13×160 | 14×152 | 1.23 | 1.13 | 1.10 |
+| 14×160 | 14×152 | -- | 1.05 | 1.01 |
+| 15×160 | 14×152 | -- | 0.980 | 0.930 |
+| 16×160 | 14×152 | -- | 0.918 | 0.960 |
+| 14×176 | 14×152 | -- | 0.888 | 0.956 |
+| 11×224 | 18×176 | 1.10 | 1.24 | 1.66 |
+| 34×128 | 18×176 | 1.06 | 1.16 | 0.556 |
+| 19×176 | 18×176 | -- | 0.948 | 0.970 |
+| 20×176 | 18×176 | -- | 0.899 | 0.912 |
+| 22×160 | 18×176 | -- | 0.995 | 0.838 |
+| 4×224 | 12×128 | 0.978 | 1.09 | 2.36 |
+| 6×176 | 12×128 | 0.977 | 1.01 | 1.74 |
+
+The 20×128 network is faster than 14×152 at batch 512 but slower at batch 64. Such reversals motivate measuring
+candidate models at both self-play and interactive batch sizes rather than extrapolating from parameter count.
 
 ## Replay-reuse controls
 
@@ -26,22 +61,6 @@ Its long-run effect is coupled to replay capacity, optimization, and inference c
 Reuse also changes the wall-clock pace of evaluation, publication, search-budget schedules, and replay growth,
 which advance at quantum boundaries. The configured credit per admitted row therefore describes the training
 schedule rather than the exact exposure of every distinct replay position.
-
-## Parallel-search operating point
-
-At 1,000 searches per move against the same 20,000-node Stockfish opponent, parallel leaves substantially shortened
-the recorded match wall time while reducing measured playing strength. The two timing sources give ranges, not
-statistical intervals.
-
-| Parallel leaves | Benchmark Elo | Match wall time (min) | Elo relative to serial |
-| ---: | ---: | ---: | ---: |
-| 1 | 2,823 | 18.1–18.5 | 0 |
-| 4 | 2,804 | 3.4–3.8 | −19 |
-| 16 | 2,778 | 1.3–1.8 | −45 |
-
-At 100 searches, sixteen parallel leaves reduced the central strength estimate by approximately 235 Elo,
-compared with 45 Elo at 1,000 searches. The tested points support budget-dependent parallelism but are insufficient
-to determine a general schedule. The final strength curve uses the operating settings reported in Chapter 8.
 
 ## Negative search and reuse controls
 
@@ -72,8 +91,12 @@ In these workloads, the measured reuse was insufficient to offset the cost of de
 8,790 positions/s against an arrival rate of 1,365 accepted positions/s.
 
 **Training.** An eight-GPU benchmark with global batch 2,048, bfloat16 autocast, and concurrent self-play
-processed 6,252 training samples/s. The actor-overlap sweep in Table C1 is a separate workload; its trainer
+processed 6,252 training samples/s. The actor-overlap sweep in Table 2 is a separate workload; its trainer
 and concurrent-search rates should be compared within that sweep.
+
+The unrounded overlap measurements for 8, 16, and 32 actors were 21,492, 17,139, and 9,210 training samples/s,
+with estimated complete-cycle times of 117.1, 112.9, and 111.2 seconds. With no active actors, training reached
+25,275 samples/s. Chapter 5 presents the comparison alongside the scheduling decision.
 
 The 1.86x TensorRT INT8 versus TorchScript search comparison used a production-shaped 400-visit actor workload,
 with different checkpoint weights, so the comparison includes both backend and model changes. The

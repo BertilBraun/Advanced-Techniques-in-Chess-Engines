@@ -1,63 +1,57 @@
-# 7. Integrated chess recipe
+# 7. Training progress under limited compute
 
-The final recipe combines progressive network sizing, fully searched self-play, targeted restarts, and prioritized
-replay with quantization-aware training for INT8 deployment. It ran on one node with eight NVIDIA GeForce
-RTX 4070 SUPER GPUs and 80 logical CPUs. This chapter specifies how the retained methods operate together;
-[Appendix D](appendix-d-reproducibility.md) provides the numerical settings, and the fully expanded
-`chess-final-config.yaml` [10] is the reproduction entry point.
+The final training run produced a 6.32-million-parameter chess model in 2.5 days on one node with eight
+RTX 4070 SUPER GPUs and 80 logical CPUs. This chapter examines the progression in strength and the training volume
+made possible by the integrated system. The complete recipe is specified in [Appendix D](appendix-d-reproducibility.md);
+`chess-final-config.yaml` [10] remains the entry point for reproduction.
 
-## Network and learner
+## Progress across training campaigns
 
-The configured network ladder contains 12×128, 14×160, and 19×176 residual CNNs, where the notation gives residual
-blocks and channels. All stages use capped scaled post-activation branches, global-pooling context in every
-second block, a from-to policy head, and a compact WDL head. The next-policy and remaining-game-length auxiliary
-heads contribute during training and are excluded from inference.
+Figure 11 compares the 64-search training ladders across five chess campaigns. The final recipe reached a higher
+plateau within a shorter training window than the preceding baseline. Its training-ladder rating rose from about
+800 to 2,370, with a peak near 2,410.
 
-The primary objectives fit searched policies and WDL outcomes. Outcome targets use per-ply discounting and a
-scheduled search-root-value blend. Capped games receive a searched-root-value target instead of a terminal
-outcome and contribute no remaining-game-length loss. Appendix D specifies the weights and discount factors.
+![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
-Training runs in 500-step blocks across eight GPUs, using Nesterov SGD and bfloat16 with a global batch of 2,048.
-Quantization-aware training begins with the first updates. Batch normalization remains separate in the trainable
-model; folding it into convolutions, recalibrating, exporting to ONNX, and refitting TensorRT all happen on a
-deployment copy. This separates the optimizer's model from the compiled representation used by self-play.
-Appendix D gives the learning-rate and calibration settings.
+Figure 11: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
+the preceding baseline at 3 days. Appendix B specifies the windows and the common-estimator plateau comparison.
 
-## Game supply and replay
+On a common rating estimator, the final recipe improved the preceding baseline's plateau by about 74 Elo.
+This summarizes the change in the complete recipe rather than attributing the gain to any single component.
+The larger progression across the plotted campaigns reflects successive changes to architecture, data generation,
+and training efficiency.
 
-Thirty-two actors run self-play, four per GPU, with 512 games interleaved in each process. Half the actors on
-each GPU pause during a training quantum; the remainder continue searching to replenish replay. This is the
-half-active scheduling policy evaluated in Chapter 5.
+## Training volume and model transition
 
-The search schedule increases the fixed budget from 300 to 800 visits per move; the reported checkpoint was
-reached during the 600-visit stage. Adaptive allocation and learned stopping were not retained. Appendix D
-specifies the search constants and native inference batch settings.
+Table 3 summarizes the scale of the final run. Using a conservative mean of 100 searched plies per game and
+roughly 600 simulations per move gives an estimated 195 billion search simulations.
 
-Games begin approximately equally often from up to eight random legal opening plies and from recent restart
-states. The archive favours recent, undecided positions with promising unexplored alternatives; when no suitable
-restart is available, the game uses a random opening. Game caps grow from 150 to 250 plies, and greedy move selection begins
-later as training matures. Resignation is calibrated against no-resignation games with a 2.5% upper-bound target
-on mistakenly resigning a draw or win; 20% of games are designated as such safety continuations at creation.
+| Quantity | Final training |
+| --- | ---: |
+| Duration | 2.5 days |
+| Model parameters | 6.32 million |
+| Completed games | 3.25 million |
+| Materialized positions | 209 million |
+| Training presentations | 837 million |
+| Optimizer steps | 409 thousand |
+| Live replay at selection | 16.0 million positions |
+| Node rental cost | $43.2 |
 
-Replay capacity grows through ten stages from 600,000 to 20 million live rows. Each admitted position funds four
-training presentations. A 30% uniform sampling component maintains broad coverage, while the remaining
-probability prioritizes bounded policy surprise. Training credit is issued after completed-game positions have
-been admitted to the persistent replay store.
+Figure 12 relates this volume to replay growth and the transition from the 12×128 to the 14×160 model.
+The smaller network supported faster early training; median trainer throughput fell from about 17.0 thousand to
+11.2 thousand samples/s across the two stages. Search increased from 300 to 600 visits per move over the plotted
+run. The configured 800-visit stage lies beyond the selected checkpoint.
 
-## Sizing and promotion
+![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput-paper.svg)
 
-When the active model's smoothed 64-search Elo gain falls below the stage threshold, its successor begins training
-on the same replay. The thresholds are 15 Elo/hour for the small stage and 4 Elo/hour for the medium stage.
-The candidate receives extra catch-up training, then takes over after scoring at least 0.48 in two consecutive
-paired matches against the active model. Appendix D gives the catch-up schedule.
+Figure 12: Training volume and throughput on a common optimizer-step axis. Panels show completed games per
+training block, cumulative materialized positions, live replay occupancy, and trainer throughput. Replay capacity
+increases in steps, while the small-to-medium transition coincides with lower trainer throughput.
 
-A separate capacity study grew the trained 14×160 network into 19×176 while preserving its function, then
-recovered deployment fidelity through QAT. The limited continuation reached parity but did not establish a
-higher plateau; the reported checkpoint is therefore the 14×160 model.
+The expanding replay window retained a broader history of self-play while the learner received approximately four
+presentations per admitted position. Throughput, search budget, and replay growth therefore changed together as
+training progressed. Loss, learning-rate, and gradient diagnostics are provided in Appendix A.
 
-## Measuring progress during training
-
-Training progress was evaluated every 20 minutes using 50 paired openings and a 64-search ladder against a
-three-rung adaptive bracket of fixed-node Stockfish 13 opponents. A policy-only ladder used the same openings and
-opponent framework. These monitors informed candidate timing; the final evaluation used the separate matches
-reported in Chapters 2 and 8.
+The reported checkpoint was selected near the strongest region of the training ladder. A function-preserving
+19×176 continuation recovered parity but did not establish a higher plateau. Chapter 8 evaluates the selected
+model at larger search budgets and compares it with the distilled student.

@@ -149,7 +149,7 @@ capacity to absorb the available experience. The small-to-medium transition work
 
 Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
 matches against the active model. Section 6.3 explains why matches replaced training loss as the promotion criterion;
-Chapter 7 states the retained thresholds.
+Appendix D states the retained thresholds.
 
 An independently initialized larger candidate needed substantial catch-up. Function-preserving growth instead
 initializes the larger model to compute the same predictions as the medium model. It avoids relearning that

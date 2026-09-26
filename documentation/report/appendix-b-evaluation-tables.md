@@ -1,7 +1,7 @@
 # Appendix B. Evaluation detail
 
 This appendix specifies the match protocol, rating calculation, cross-campaign adjustment, and student controls
-underlying the results in Chapters 2 and 8.
+underlying the results in Chapters 2, 7, and 8.
 
 ## Fixed-node match protocol
 
@@ -37,7 +37,11 @@ interval. The raw endpoint differences are 106.8 Elo against that baseline and 3
 Because the original estimators differ, the adjusted plateau comparison above is used for quantitative reporting.
 Points beyond the plotted windows belong to subsequent experiments or the unreliable late interval.
 
-## Distilled student controls
+## Parallel-search and student controls
+
+The parallel-search comparison in Chapter 8 used 1,000 visits against 20,000-node Stockfish. Before rounding,
+the ratings for one, four, and sixteen parallel leaves were 2,823, 2,804, and 2,778 Elo, respectively.
+Reported rating differences use these unrounded values. Match-time ranges span the two recorded timing sources.
 
 Both students had 470,295 parameters and trained on the same frozen 20-million-row replay snapshot without QAT,
 separate from the teacher checkpoint's 16-million-row live window. They were evaluated with TorchScript and four

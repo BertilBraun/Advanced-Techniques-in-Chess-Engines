@@ -64,4 +64,4 @@ deployment artifact passing inference-fidelity checks.
 Promotion now requires a score of at least 0.48 in two consecutive paired matches against the active deployment
 artifact. A failing score resets the sequence; failed or cancelled matches do not count. This separates the
 optimization objective from the replacement decision: training loss guides candidate fitting, while direct play
-determines whether it can replace the active model. Chapter 7 specifies candidate timing and catch-up training.
+determines whether it can replace the active model. Appendix D specifies candidate timing and catch-up training.
