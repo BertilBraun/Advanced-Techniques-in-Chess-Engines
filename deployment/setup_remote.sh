@@ -12,6 +12,30 @@ uv_version="${ENGINE_UV_VERSION:-0.11.14}"
 open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
 install_ccache="${ENGINE_INSTALL_CCACHE:-1}"
 enable_tensorrt="${ENGINE_ENABLE_TENSORRT:-0}"
+uv_extras="${ENGINE_UV_EXTRAS:-}"
+
+# Vast.ai containers see the host's nproc but are throttled to a cgroup quota, often a quarter of it,
+# and a bare `--parallel` lets make start unbounded jobs; each libtorch unit needs gigabytes of RAM.
+effective_cpu_count() {
+    local quota period
+    if [[ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us && -r /sys/fs/cgroup/cpu/cpu.cfs_period_us ]]; then
+        quota="$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)"
+        period="$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)"
+        if [[ "${quota}" -gt 0 ]]; then
+            echo $(( quota / period > 0 ? quota / period : 1 ))
+            return
+        fi
+    fi
+    if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+        read -r quota period < /sys/fs/cgroup/cpu.max
+        if [[ "${quota}" != max ]]; then
+            echo $(( quota / period > 0 ? quota / period : 1 ))
+            return
+        fi
+    fi
+    nproc
+}
+build_parallel_level="${ENGINE_BUILD_PARALLEL_LEVEL:-$(effective_cpu_count)}"
 
 if [[ $# -eq 0 ]]; then
     echo "Usage: setup_remote.sh COMMAND [ARGUMENT ...]" >&2
@@ -88,6 +112,9 @@ sync_arguments=(sync --locked --project "${repository_directory}")
 if [[ "${enable_tensorrt}" == 1 ]]; then
     sync_arguments+=(--extra tensorrt)
 fi
+for extra in ${uv_extras}; do
+    sync_arguments+=(--extra "${extra}")
+done
 UV_PROJECT_ENVIRONMENT="${virtual_environment}" "${virtual_environment_uv}" "${sync_arguments[@]}"
 
 python_nvidia_library_path="$(
@@ -107,7 +134,8 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_TENSORRT="$([[ "${enable_tensorrt}" == 1 ]] && printf ON || printf OFF)" \
     -DPython3_EXECUTABLE="${virtual_environment_python}"
-cmake --build "${repository_directory}/cpp/build" --parallel
+echo "Building with ${build_parallel_level} parallel jobs."
+cmake --build "${repository_directory}/cpp/build" --parallel "${build_parallel_level}"
 
 ENGINE_EVALUATION_DIRECTORY="${repository_directory}/engines" \
     "${repository_directory}/deployment/install_evaluation_engines.sh"
