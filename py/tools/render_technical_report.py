@@ -156,6 +156,10 @@ def inline_tex(tokens: list[Token], *, bibliography: bool = False) -> str:
                 parts.append('}')
             case 'link_open':
                 address = token.attrGet('href')
+                if address in APPENDIX_FILES:
+                    links.append(address)
+                    parts.append(r'\hyperref[app:' + address[len('appendix-')].upper() + ']{')
+                    continue
                 if address in SOURCE_FILES:
                     links.append(address)
                     label = 'research' if address == '04a-search.md' else Path(address).stem

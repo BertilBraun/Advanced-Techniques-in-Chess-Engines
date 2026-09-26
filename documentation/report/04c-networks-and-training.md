@@ -18,15 +18,13 @@ All three policy families were implemented against the chess move interface, who
 The **dense head** flattened a small spatial projection into 1,880 logits. Dense heads trained successful models,
 but on a small trunk their projection could dominate the parameter count. Variants changed projection width,
 spatial reduction, and final-map rank. A rank-96 variant reduced head size from roughly 484,000 to 207,000
-parameters. It was recorded as matching its immediate baseline, although the original comparison results have not
-been recovered.
+parameters.
 
 The **move-plane head** represented sliding directions, knight moves, and promotions as spatial move types. It
 could preserve board structure, but its experiments did not show an advantage over the dense control. In a short
 supervised comparison, the repaired plane head reached 2.1828 held-out policy cross-entropy after about 2,500
 steps versus 2.0824 for the dense control, while its curve was still improving faster. An online plane-head trial
-was retired after slower learning and weaker play; its result artifact and exact representation have not been
-recovered.
+was retired after slower learning and weaker play.
 
 The two implementations differed: one gathered 1,880 canonical logits from 76 planes (56 sliding directions,
 eight knight moves, and 12 promotions); the other exposed all 4,864 plane-square cells and normalized only legal
@@ -47,7 +45,8 @@ a serving penalty that was smaller at the large batches used for self-play.
 
 The selected model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks,
 repetition, the eight most recent moves, material counts, and the fifty-move counter. Rule-sensitive planes keep
-positions with different legal or draw states distinguishable. File reflection is the only augmentation; it also
+positions with different legal or draw states distinguishable. [Appendix D](appendix-d-reproducibility.md), Table D1
+lists all 52 planes and their encodings. File reflection is the only augmentation; it also
 mirrors action targets and exchanges kingside and queenside castling planes. Some earlier component comparisons
 used a 29-plane input, so their absolute scores are not input-matched to the final model.
 

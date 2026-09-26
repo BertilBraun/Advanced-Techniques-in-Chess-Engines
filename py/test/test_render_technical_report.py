@@ -102,6 +102,15 @@ def test_roadmap_has_clickable_internal_section_links() -> None:
     assert inline_tex(paragraph.children or []) == r'\hyperref[sec:03-system-and-methods]{Chapter 3}'
 
 
+@pytest.mark.parametrize(
+    ('filename', 'letter'),
+    [('appendix-c-supporting-comparisons.md', 'C'), ('appendix-d-reproducibility.md', 'D')],
+)
+def test_appendix_links_target_the_pdf_appendix(filename: str, letter: str) -> None:
+    paragraph = MarkdownIt('commonmark').parse(f'[Appendix {letter}]({filename})')[1]
+    assert inline_tex(paragraph.children or []) == rf'\hyperref[app:{letter}]{{Appendix {letter}}}'
+
+
 def test_investigations_use_numeric_section_hierarchy() -> None:
     search = Path('04a-search.md')
     assert r'\section{Research investigations}' in section_tex(

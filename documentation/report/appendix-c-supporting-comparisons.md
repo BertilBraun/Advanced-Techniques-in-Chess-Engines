@@ -61,6 +61,21 @@ These are workload-specific negative findings, not general limits on graph searc
 
 ## Throughput comparison boundaries
 
+**Host submission.** The controlled 32-process self-play benchmark increased aggregate search throughput from
+512,679 to 617,782 searches/s. On the same node restricted to 24 CPU cores, it increased from 215,265 to
+496,036 searches/s. These are rates across the actor workload, including search and inference.
+
+**Neural inference.** The matched runtime benchmark measured 75,889 positions/s with TensorRT FP16 and
+40,716 with TorchScript BF16. These count positions evaluated by the network, not aggregate self-play searches.
+
+**Replay delivery.** Compacting 5,000 producer shards into 25 containers increased loader throughput on
+2.5 million rows from 3,943 to 32,579 samples/s. In a separate live interval, materialization appended
+8,790 positions/s against an arrival rate of 1,365 accepted positions/s.
+
+**Training.** An eight-GPU benchmark with global batch 2,048, bfloat16 autocast, and concurrent self-play
+processed 6,252 training samples/s. The actor-overlap sweep in Table C1 is a separate workload; its trainer
+and concurrent-search rates should be compared within that sweep.
+
 The 1.86x TensorRT INT8 versus TorchScript search comparison used a production-shaped 400-visit actor workload,
 but different checkpoint weights; it is a backend-and-checkpoint result, not an isolated precision effect. The
 23.3% replay-admission gain compared separate live 400- and 600-visit stages that also differed in checkpoint
