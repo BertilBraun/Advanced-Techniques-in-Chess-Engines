@@ -76,7 +76,51 @@ policy-and-value fine-tuning does not. Consistent with the plan's warning, the v
 teacher's WDL, a different quantity from the discounted outcomes the search and its FPU were tuned against, which
 fits a searched loss with an unchanged raw policy.
 
-PHASE_B_NEXT
+### Follow-up: policy-only distillation with the value held to checkpoint 1026
+
+To remove the value-head explanation, a second run replaced every batch's WDL target with a frozen copy of
+checkpoint 1026's own WDL prediction (`--value-anchor-checkpoint`), so the policy learned from the teacher while
+the value stayed where the search was tuned. Same data and optimiser, **10,000 steps** (10.2M samples, about 5
+passes), 47 minutes.
+
+Checkpoint 1026 started **0.2364** nats above the teacher's entropy on held-out positions; the run ended at
+**0.1169**, closing 51% of the gap (the pilot closed 49% in 3,000 steps). Held-out improvement stopped near step
+8,000 and training loss finished 0.10 below held-out, so further passes over this data would mostly memorise it.
+
+| vs Stockfish 13 | Anchored student | Pilot student | Checkpoint 1026 | Teacher |
+|---|---|---|---|---|
+| Policy only, 2,000 nodes | **0.325** (17/31/52) [0.245, 0.405] | 0.405 | 0.395 | 0.855 |
+| 64 searches, 10,000 nodes | **0.42** (27/30/43) [0.335, 0.515] | 0.38 | 0.485 | 0.885 |
+
+Holding the value recovered part of the pilot's searched loss, but neither student is stronger than checkpoint
+1026, and neither raw policy is. **Halving the cross-entropy gap to the teacher produced no measurable gain in
+playing strength.**
+
+## Reading
+
+- **Ruled out: the search and the harness.** A stronger evaluator in the unchanged search, served through the
+  same pipeline and verified against real Lc0, plays about 365 Elo above checkpoint 1026 at 64 searches and about
+  275 above it at 1,000.
+- **Ruled out: joint or policy-only fine-tuning of checkpoint 1026 on 2M search-free teacher positions, at up to
+  10,000 steps, as a way to close that gap.** Held-out imitation improved steadily and play did not.
+- **Open, in the order they can be tested:**
+  1. *The metric does not measure what matters.* Mean cross-entropy over all legal moves on teacher-generated
+     positions can halve without the top move changing where games are decided. Top-move agreement with the
+     teacher on positions reached in the actual matches is the direct check and needs no new training.
+  2. *Distribution shift.* Training positions come from the teacher's raw-policy games; match positions come
+     from this engine's search against Stockfish. Held-out rows share the training distribution, so they cannot
+     show this; labelling a few hundred thousand match-reached positions with the teacher can.
+  3. *Representation.* The teacher is a 20M-parameter attention network; the student is a 6.3M convolutional
+     one encoding eight recent moves rather than eight board states. A student trained from scratch on the same
+     data separates "cannot represent" from "cannot adapt from 1026".
+  4. *Too little data or too short a schedule.* The half of the gap that remains may be where the strength is.
+
+## What this cost
+
+One RTX 3070 node, roughly 3 hours including provisioning, the lc0 build, the gate, two distillation runs and
+fifteen matches. Evidence: `.codex-diagnostics/lc0-teacher-diagnostic-20260926/evidence-final.tgz`
+(`6d82ffb0c25478820bea4c66ecee764bf95c1690718eb565fdd499cdfc60a48f`), 15 match result files, training logs and the
+node scripts. The dataset (2.1 GB) and the student weights were not fetched.
 
 ## Provenance
 
@@ -106,7 +150,7 @@ from the same selection; its file hash differs because it embeds the builder's s
 | Wrapped TorchScript sha256 | `6d1e701e4cb540f9ebcde85e283438d0f34f551e4b5c60315423f858bf66f88f` |
 | Policy map sha256 | `94f57edad4bbb9008ec430e1175067f622db84c6e62297e7db334850952ff238` — all 1,880 actions mapped, all 1,858 Lc0 indices covered |
 
-It is the most recent network on the list in the requested 10-20M range; every newer network is 140 MB or more.
+It is the only network on the best-networks list in the requested 10-20M range; every other listed network is 140 MB or larger.
 
 ### Baseline
 
