@@ -45,10 +45,10 @@ their outcomes and positions are often clearer, and the value objective was alre
 recipe thus spent search on moves whose positions were discarded as primary training rows without showing that the
 extra completed games compensated for the lost policy-target density.
 
-The cheap moves were not free. With a quarter of moves searched to 600 visits and the rest to 150, the cheap moves
-still consumed 42.9% of nominal search work. Nor were they isolated from training: they selected played moves,
+With a quarter of moves searched to 600 visits and the rest to 150, cheap moves consumed 42.9% of nominal search
+work despite being excluded as primary targets. They still selected played moves,
 affected terminal outcomes and retained trees, could supervise a preceding row's next-policy target, and influenced
-which positions entered the restart archive. “Not stored as a primary policy row” was never the same as “irrelevant.”
+which positions entered the restart archive.
 
 The mixed workload also interacted badly with batching. Once the cheap searches finished, only the full-search
 minority remained. In a 512-game test this tail left about 128 active trees and filled only 86 of 320 available batch

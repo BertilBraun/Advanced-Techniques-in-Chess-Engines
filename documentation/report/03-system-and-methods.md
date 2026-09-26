@@ -211,10 +211,10 @@ The searched policy *π* and outcome target *z* supervise the predicted move pro
 with weights 0.15 and 0.1. Their gradients meet in the shared backbone, so a feature useful for predicting outcomes
 can also improve the representation from which move preferences are learned.
 
-The outcome target is softened for positions far from the end of a game, where later mistakes can separate the
-position's promise from its eventual result. A small contribution from the position's searched value is also blended
-in during training. These targets give the learner both the game's longer-term outcome and some local search
-information. The auxiliary losses add next-policy and remaining-length supervision when those labels exist.
+Outcome discounting softens targets for positions far from the end of a game. It was introduced, alongside search
+discounting, to favour earlier conversion of winning positions; Section 4.2 discusses the motivation and unresolved
+benefit. A small contribution from the position's searched value is also blended into the training target.
+The auxiliary losses add next-policy and remaining-length supervision when those labels exist.
 An unfinished game cannot reveal its true remaining length, so that auxiliary loss is omitted rather than trained
 towards a fabricated zero.
 

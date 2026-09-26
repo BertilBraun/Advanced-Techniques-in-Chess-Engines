@@ -14,13 +14,13 @@ than encoded as letter grades.
 | --- | --- | --- |
 | [Adaptive budget negative result](../analysis/adaptive-search-budget-negative-result-20260901.md) | [Search allocation](04a-search.md#three-attempts-to-allocate-search-adaptively) | Primary online-learning, proxy, and throughput evidence |
 | [Adaptive-search conclusion](../analysis/adaptive-search-conclusion-20260904.md) | [Search allocation](04a-search.md#three-attempts-to-allocate-search-adaptively) | Primary online-learning, throughput, and mechanics evidence |
-| [Chess conversion investigation](../analysis/chess-conversion-investigation-20260826.md) | [Game termination](04b-data-and-replay.md#ending-games-without-corrupting-their-labels) | Primary observational and proxy evidence |
+| [Chess conversion investigation](../analysis/chess-conversion-investigation-20260826.md) | [Game termination](04b-data-and-replay.md#outcome-targets-at-the-ply-cap) | Primary observational and proxy evidence |
 | [Elo scale and reporting](../analysis/chess-elo-scale-and-reporting-20260911.md) | [Playing strength](02-methodology-and-evidence.md#final-playing-strength) | Primary strength evidence and reporting rationale |
 | [Chess search findings](../analysis/chess-search-findings-20260827.md) | [Fixed-budget search](04a-search.md#the-fixed-budget-baseline) | Primary strength, proxy, and throughput evidence |
 | [Compute-poor reference recipes](../analysis/reference-recipes-for-a-compute-poor-run.md) | [Data curriculum](04b-data-and-replay.md), [Network and training](04c-networks-and-training.md) | Primary design rationale with external-transfer limits |
 | [Controlled initialization bisect](../analysis/v35-v42-executable-bisect-20260913.md) | [Optimization controls](04c-networks-and-training.md#bootstrap-and-optimization-controls) | Primary mechanics and proxy evidence |
 | [Initialization regression audit](../analysis/v35-v42-regression-audit-20260913.md) | [Optimization controls](04c-networks-and-training.md#bootstrap-and-optimization-controls) | Primary mechanics and proxy evidence |
-| [Late-game training-data comparison](../analysis/v8-training-data-comparison-20260826.md) | [Game termination](04b-data-and-replay.md#ending-games-without-corrupting-their-labels) | Primary proxy evidence |
+| [Late-game training-data comparison](../analysis/v8-training-data-comparison-20260826.md) | [Game termination](04b-data-and-replay.md#outcome-targets-at-the-ply-cap) | Primary proxy evidence |
 
 ## Benchmark records 1–20
 
@@ -57,11 +57,11 @@ than encoded as letter grades.
 | [TensorRT INT8](../benchmarks/chess-tensorrt-int8-rtx4070s-20260912/README.md) | [Inference runtime](05-systems-optimization.md#inference-runtimes-and-precision) | Primary proxy and throughput |
 | [Previous-baseline terminal evaluation](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) | [Training outcome](07-final-run-results.md#training-progress) | Primary strength baseline |
 | [Training throughput](../benchmarks/chess-training-throughput-rtx3060-20260812/README.md) | [Training supply](05-systems-optimization.md#replay-materialization-and-training-supply) | Primary throughput |
-| [Previous-baseline training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) | [Replay memory and pacing](04b-data-and-replay.md#replay-is-both-memory-and-clock) | Primary observational online-learning and throughput evidence |
+| [Previous-baseline training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) | [Replay memory and pacing](04b-data-and-replay.md#replay-capacity-and-reuse) | Primary observational online-learning and throughput evidence |
 | [CNN inference throughput](../benchmarks/cnn-inference-throughput-rtx4070s-20260827/README.md) | [Inference runtime](05-systems-optimization.md#inference-runtimes-and-precision) | Primary throughput |
 | [Superseded replay-credit runtime](../benchmarks/credit-runtime-stage6-20260724/README.md) | [Data integrity](05-systems-optimization.md#replay-materialization-and-training-supply) | Supporting superseded mechanics and throughput |
 | [Replay-credit runtime](../benchmarks/credit-runtime-stage7-20260724/README.md) | [Data integrity](05-systems-optimization.md#replay-materialization-and-training-supply) | Supporting mechanics and throughput |
-| [Cut-game value target](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md) | [Game termination](04b-data-and-replay.md#ending-games-without-corrupting-their-labels) | Primary proxy and mechanics |
+| [Cut-game value target](../benchmarks/cut-game-value-target-rtx4070super-20260825/README.md) | [Game termination](04b-data-and-replay.md#outcome-targets-at-the-ply-cap) | Primary proxy and mechanics |
 | [DDP model throughput](../benchmarks/ddp-model-throughput-20260720/README.md) | [Training supply](05-systems-optimization.md#replay-materialization-and-training-supply) | Supporting throughput |
 | [DDP production training](../benchmarks/ddp-production-training-20260720/README.md) | [Training supply](05-systems-optimization.md#replay-materialization-and-training-supply) | Primary throughput and mechanics |
 | [Deep-search strength match](../benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) | [Evaluation](03-system-and-methods.md#evaluation) | Primary strength |
@@ -89,7 +89,7 @@ than encoded as letter grades.
 | [Parallel-search sweep](../benchmarks/parallel-searches-sweep-rtx4070s-20260906/README.md) | [Parallel search](04a-search.md#parallel-leaves-buying-latency-with-search-quality) | Primary, qualified strength and throughput evidence |
 | [Progressive-sizing throughput](../benchmarks/progressive-sizing-throughput-rtx4070super-20260823/README.md) | [Progressive model sizing](04c-networks-and-training.md#progressive-model-sizing) | Primary throughput |
 | [Replay loader](../benchmarks/replay-loader-20260724/README.md) | [Data integrity](05-systems-optimization.md#replay-materialization-and-training-supply) | Supporting throughput and mechanics |
-| [Resignation canary](../benchmarks/resignation-audit-canary-20260723/README.md) | [Game termination](04b-data-and-replay.md#ending-games-without-corrupting-their-labels) | Supporting mechanics only |
+| [Resignation canary](../benchmarks/resignation-audit-canary-20260723/README.md) | [Resignation calibration](04b-data-and-replay.md#resignation-calibration) | Supporting mechanics only |
 | [Search throughput](../benchmarks/search-throughput-rtx4070-20260821/README.md) | [Parallel search](04a-search.md#parallel-leaves-buying-latency-with-search-quality) | Supporting throughput |
 | [Initial C++ self-play baseline](../benchmarks/self-play-cpp-baseline-4x8x3x96-20260720T071550Z/README.md) | [Native search](05-systems-optimization.md#native-ownership-of-the-search-loop) | Supporting historical throughput |
 | [Corrected C++ self-play baseline](../benchmarks/self-play-cpp-baseline-4x8x3x96-20260720T073130Z/README.md) | [Native search](05-systems-optimization.md#native-ownership-of-the-search-loop) | Supporting corrected throughput |
@@ -107,7 +107,7 @@ than encoded as letter grades.
 | [Search CPU study](../benchmarks/self-play-search-cpu-i7-11370h-20260824/README.md) | [Batch submission](05-systems-optimization.md#batching-and-host-side-submission) | Primary throughput; stand-in CPU caveat |
 | [Submission 8x4070S](../benchmarks/self-play-submission-8xrtx4070super-20260824/README.md) | [Batch submission](05-systems-optimization.md#batching-and-host-side-submission) | Primary throughput |
 | [Self-play throughput 4x3060](../benchmarks/self-play-throughput-4xrtx3060-20260809/README.md) | [Batch submission](05-systems-optimization.md#batching-and-host-side-submission) | Supporting historical throughput |
-| [Self-play pause trade-off](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md) | [Training overlap](04b-data-and-replay.md#overlap-without-full-asynchrony) | Primary throughput and observational online-learning evidence; regime-specific |
+| [Self-play pause trade-off](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md) | [Training overlap](04b-data-and-replay.md#actor-trainer-overlap) | Primary throughput and observational online-learning evidence; regime-specific |
 | [Supervised testbed](../benchmarks/supervised-testbed-rtx4070-20260821/README.md) | [Policy representations](04c-networks-and-training.md#three-policy-representations) | Supporting, inconclusive proxy evidence |
 | [INT8 architecture screen](../benchmarks/tensorrt-int8-architecture-screen-rtx4070s-20260912/README.md) | [Inference runtime](05-systems-optimization.md#inference-runtimes-and-precision) | Primary proxy and throughput |
 | [INT8 replay screen](../benchmarks/tensorrt-int8-replay-screen-rtx4070s-20260912/README.md) | [Quantization architecture](04c-networks-and-training.md#quantization-as-an-architectural-constraint), [Inference runtime](05-systems-optimization.md#inference-runtimes-and-precision) | Primary proxy, throughput, and mechanics |

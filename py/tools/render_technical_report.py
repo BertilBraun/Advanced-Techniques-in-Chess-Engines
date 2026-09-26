@@ -219,6 +219,8 @@ def figure_tex(image: Token, caption: Token, source: Path, build_directory: Path
         environment, placement, width, height = 'figure*', 't', '0.87', '0.36'
     elif source.name == '03-system-and-methods.md':
         environment, placement, width, height = 'figure*', 't', '0.98', '0.43'
+    elif Path(address).stem in {'appendix-replay-age', 'appendix-resignation'}:
+        environment, placement, width, height = 'figure*', 't', '0.86', '0.58'
     else:
         environment, placement, width, height = 'figure*', '!t', '0.98', '0.43'
     return (

@@ -21,7 +21,7 @@ The optimal fraction can change with visit budget, model size, and hardware cont
 
 ## Replay-reuse controls
 
-Short controls at reuse ratios four, 6.25, and eight remained matched at their shared evaluation boundaries
+Short controls at reuse ratios 4, 6.25, and 8 remained matched at their shared evaluation boundaries
 despite different update rates. They lasted about 90 minutes, and their full raw curves are no longer preserved.
 The completed campaign also changed replay capacity, optimizer, objective weighting, and inference. The selected
 ratio of four is therefore a freshness choice, not an isolated final-strength estimate. Configured presentation

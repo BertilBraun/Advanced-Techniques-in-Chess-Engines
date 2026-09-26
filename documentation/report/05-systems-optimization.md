@@ -1,12 +1,12 @@
 # 5. From inference speed to learning speed
 
 The model could learn only as fast as self-play supplied new games. Making one neural-network call faster helped,
-but a game still had to finish, its positions had to enter replay, and the trainer had to consume them. Figure 7
+but a game still had to finish, its positions had to enter replay, and the trainer had to consume them. Figure 9
 follows that path from local speed to useful training data.
 
 ![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
 
-Figure 7: Search speed passes through game completion, replay admission, and optimizer work before it can affect
+Figure 9: Search speed passes through game completion, replay admission, and optimizer work before it can affect
 playing strength. Each boundary has its own throughput measure.
 
 ## Native ownership of the search loop

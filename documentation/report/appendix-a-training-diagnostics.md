@@ -51,15 +51,5 @@ Figure A.6: Aligned panels show trainer throughput, the self-play search budget,
 The small-to-medium switch is accompanied by lower trainer throughput. Search rises from 300 to 600 visits
 on this selected-checkpoint trajectory; the configuration's later 800-visit stage lies beyond it.
 
-![Replay occupancy versus capacity and elapsed age of sampled positions](figures/appendix-replay-age.svg)
-
-Figure A.7: Replay fills each expanded capacity, while the mean elapsed age of sampled positions grows to roughly
-two hours. The age panel uses time since position creation, so it remains comparable across the model switch.
-
-![Resignation threshold, rolling false-nonloss audit, and estimated saved plies](figures/appendix-resignation.svg)
-
-Figure A.8: Resignation adapts its threshold as training progresses. The middle panel shows the rolling observed
-false-nonloss rate and its one-sided 95% upper bound while the logged resignation gate is enabled; the dotted
-line marks the 2.5% calibration target, with observed excursions retained. The bottom panel estimates saved plies
-from continued audit games. Faint raw traces and eleven-quantum averages show variation without cumulative counts
-obscuring the useful changes.
+Replay occupancy, sampled-position age, and resignation calibration are shown with their corresponding methods
+in Section 4.2 (Figures 5 and 6).
