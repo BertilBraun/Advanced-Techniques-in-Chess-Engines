@@ -14,7 +14,13 @@ from src.distillation.dataset import (
     write_dataset,
 )
 from src.distillation.lc0_teacher import Lc0TeacherNetwork, sampling_temperature_at
-from src.distillation.stockfish_moves import ScoredMove, sample_scored_move
+from src.distillation.stockfish_moves import (
+    ScoredMove,
+    UciCandidate,
+    expected_score,
+    parse_multipv_line,
+    sample_scored_move,
+)
 from src.games.chess.contract import (
     CHESS_BINARY_CHANNEL_COUNT,
     CHESS_CHANNEL_COUNT,
@@ -198,3 +204,39 @@ def test_clearly_worse_stockfish_moves_are_practically_never_played() -> None:
     chosen = [sample_scored_move(STOCKFISH_CANDIDATES, 0.05, generator) for _ in range(2000)]
     # A move 0.30 worse weighs e^-6 of the best: about 0.2% of choices, never a routine event.
     assert chosen.count(12) / len(chosen) < 0.01
+
+
+@pytest.mark.parametrize(
+    ('line', 'expected'),
+    [
+        (
+            'info depth 9 seldepth 12 multipv 2 score cp -35 nodes 1000 nps 900000 pv e7e5 g1f3',
+            (2, UciCandidate('e7e5', 'cp', -35)),
+        ),
+        (
+            'info depth 8 multipv 1 score cp 20 lowerbound nodes 700 pv d2d4',
+            (1, UciCandidate('d2d4', 'cp', 20)),
+        ),
+        ('info depth 12 multipv 3 score mate -2 nodes 1000 pv h7h8q', (3, UciCandidate('h7h8q', 'mate', -2))),
+        ('info depth 5 currmove e2e4 currmovenumber 1', None),
+        ('bestmove e2e4 ponder e7e5', None),
+    ],
+)
+def test_multipv_lines_yield_their_index_move_and_score(line: str, expected: object) -> None:
+    assert parse_multipv_line(line) == expected
+
+
+START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+
+def test_a_level_score_is_an_even_expected_score() -> None:
+    assert expected_score(UciCandidate('e2e4', 'cp', 0), START_FEN) == pytest.approx(0.5, abs=0.01)
+
+
+def test_a_centipawn_advantage_raises_the_expected_score() -> None:
+    assert expected_score(UciCandidate('e2e4', 'cp', 150), START_FEN) > 0.6
+
+
+@pytest.mark.parametrize(('mate', 'expected'), [(3, 1.0), (-3, 0.0)])
+def test_mate_scores_are_certain_results(mate: int, expected: float) -> None:
+    assert expected_score(UciCandidate('e2e4', 'mate', mate), START_FEN) == pytest.approx(expected)
