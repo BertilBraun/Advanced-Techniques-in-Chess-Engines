@@ -1,148 +1,120 @@
-# 5. Systems optimization
+# 5. From inference speed to learning speed
 
-## Native search and direct inference
+Under a fixed compute budget, inference throughput matters through the training data it makes affordable.
+Search, game completion, replay delivery, and optimization jointly determine that supply (Figure \ref{fig:throughput-to-learning}).
+This chapter examines the bottlenecks at those stages and the scheduling required to share GPUs between actors
+and the learner. Relative gains are reported within each controlled benchmark;
+Appendix \ref{app:C} collects the absolute rates and settings.
 
-The largest early gain came from moving rules, search-tree ownership, and inference coordination into C++. A naive
-Python PUCT implementation remains only as an order-of-magnitude reference in the
-[Python MCTS baseline](../benchmarks/naive-python-mcts-rtx3060-20260816/README.md). Production workers submit tensors
-directly to a native batched inference runtime, avoiding Python message serialization and result processing in the
-inner loop.
+![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
 
-The throughput history is preserved in
-[the consolidated history](../benchmarks/throughput-history-chess-20260821/README.md) and the early
-[direct-inference study](../benchmarks/self-play-direct-inference-rtx3060-20260722/README.md). Because those records
-span different GPUs, revisions, and workloads, this report treats them as an engineering chronology rather than one
-clean speedup factor.
+Figure: Search speed passes through game completion, replay admission, and optimizer work before it can affect
+playing strength. Each boundary has its own throughput measure.
 
-## Batching and submission cost
+## Native ownership of the search loop
 
-High GPU utilization requires enough concurrent roots, but the host must prepare and submit them cheaply. The project
-tested games per process, inference workers, batch caps, outstanding requests, timeouts, memory format, and search
-parallelism. Submission profiling found that assembling input batches and replaying CUDA graphs could dominate once
-network kernels became fast. Changes that reduced submission work improved node throughput even when raw model
-forward speed was unchanged.
+Per-position Python dispatch made board updates, legal-move generation, encoding, and inference submission a
+host-side bottleneck. The native execution boundary described in Section \ref{sec:03-system-and-methods-why-the-search-loop-stays-in-c} removes that per-position dispatch.
 
-The principal evidence is:
+Each actor interleaves 512 games through a preallocated inference pipeline and retains search subtrees across
+moves. The retained topology uses four actors per GPU, one inference worker per actor, batches of up to 320
+positions, and two outstanding batches. This provides independent work to overlap tree traversal with
+neural evaluation without introducing a Python boundary at each leaf.
 
-- [self-play submission optimization](../benchmarks/self-play-submission-8xrtx4070super-20260824/README.md);
-- [multi-worker CUDA graph replay](../benchmarks/self-play-graph-multiworker-8xrtx4070super-20260824/README.md);
-- [CPU search profile](../benchmarks/self-play-search-cpu-i7-11370h-20260824/README.md);
-- [self-play/training pause trade-off](../benchmarks/selfplay-pause-tradeoff-rtx4070s-20260902/README.md).
+## Batching and host-side submission
 
-The final topology runs four self-play processes per GPU with 512 parallel games per process, inference batches up to
-320, and two outstanding batches. Half of the processes are paused during a training quantum, reflecting a measured
-trade between fresh-data production and trainer contention.
+Batching amortizes GPU launch costs, but sustained utilization also requires timely host-side preparation.
+Preallocated staging buffers, asynchronous copies, and completion events overlap encoding and submission with
+GPU execution. CUDA graph replay reduces the remaining launch overhead.
 
-Performance must be reported as a ladder rather than one headline rate: model forwards, exclusive-search
-simulations, completed games, admitted replay positions, generations/optimizer steps, and finally strength per
-wall-clock hour. V39 is the clearest warning. INT8 improved exclusive search far more than admitted replay because
-game length, completion gating, trainer overlap, and replay reuse intervened
-([decomposition](../benchmarks/v39-selfplay-throughput-rtx4070s-20260913/README.md)). Later matched controls measured
-the backend for [12x128](../benchmarks/v76-v35-small-prefold-backend-20260918/README.md) and
-[14x160](../benchmarks/v76-v35-medium-prefold-backend-20260918/README.md). None of these **T** results alone proves
-an Elo gain.
+In a controlled 32-process self-play workload, the optimized path increased search throughput by 20.5% while
+reducing aggregate actor CPU consumption from 52.6 to 19.8 cores. Average
+inference batch size rose from 141 to 222 and the number of model calls fell by 24%. On the same node restricted to
+24 CPU cores, throughput more than doubled because reducing submission overhead allowed
+the previously starved GPUs to remain busy. The larger gain under the CPU quota identifies host submission as a
+substantial constraint on GPU utilization.
 
-## Training throughput and replay I/O
+Full batches were necessary but insufficient for saturation. Reducing TensorRT actors from four to two per GPU
+lowered search throughput by 39% despite full individual batches, because fewer actors reduced overlap between
+CPU preparation and GPU inference. Additional inference threads instead duplicated CUDA contexts and fragmented
+batches. The measurements supported process-level concurrency with one inference thread per actor.
 
-Persistent DDP ranks avoid repeated process and model startup. The trainer reads vectorized batches from a
-memory-mapped columnar store, prefetches batches, and uses one rank per GPU. Early DDP, batch-size, precision, and
-contention measurements are in the
-[training-throughput benchmark](../benchmarks/chess-training-throughput-rtx3060-20260812/README.md).
+Per-tree parallelism can supplement batching when too few independent games remain active. Unlike inter-game
+concurrency, it changes leaf selection through virtual reservations and can reduce search quality. Its
+strength-throughput tradeoff is examined in Chapter \ref{sec:04-research-investigations}.
 
-Replay ingestion evolved after a dispatcher could become CPU-bound on a large completed-game inbox. The current
-materialization design partitions work before expensive conversion, bounds scans and staging, quarantines individual
-bad games, and makes systemic rejection rates fatal. This is primarily a reliability optimization: a run that
-quietly stops feeding the trainer has zero useful throughput regardless of GPU utilization.
+## Inference runtimes and precision
 
-The credit ledger is a scientific accounting boundary as well as scheduling infrastructure. It funds optimizer
-quanta from admitted materialized positions, so rejected games, stalled ingestion, or a changed replay ratio cannot
-silently appear as ordinary training. Credit-runtime and replay-loader benchmarks establish recovery, accounting,
-and sustained loading (**M/T**), not chess strength.
+With host submission sustained, runtime and precision determine the cost of evaluating each batch. A TensorRT FP16 engine
+delivered 1.86x the inference throughput of a TorchScript BF16 control in a matched benchmark.
+Quantization-aware INT8 added a further 1.31x over TensorRT FP16 on the tested quantization-oriented network.
+Production-topology tests found INT8 gains of 14.4% for the smaller network and 39.1% for the medium network.
 
-## TorchScript, TensorRT, and precision
+As Section \ref{sec:04c-networks-and-training} explains, the INT8 speedup required training the network to tolerate quantization. Most trunk
+convolutions run in INT8, while the start block, heads, and linear layers remain at higher precision. Export records
+the quantization and dequantization operations explicitly in ONNX so TensorRT can compile the intended arithmetic.
+Rather than rebuild the complete engine after every update, publication refits a prepared template with the new
+weights [8]. Chapter \ref{sec:05a-three-failures} examines a failure in this step that made output comparisons essential.
 
-TorchScript provided the original trimmed inference artifact and remains the bootstrap/fallback path. TensorRT FP16
-then demonstrated a production-compatible speed path with acceptable reference fidelity. Naive post-training INT8
-did not meet policy fidelity requirements, which shifted the work toward quantization-aware training and architecture
-changes. The completed feasibility evidence is in
-[TensorRT FP16/INT8](../benchmarks/chess-tensorrt-int8-rtx4070s-20260912/README.md),
-[architecture screening](../benchmarks/tensorrt-int8-architecture-screen-rtx4070s-20260912/README.md), and
-[native backend measurements](../benchmarks/tensorrt-native-backend-rtx4070s-20260912/README.md).
+The alternative `torch.compile` path accelerated eager batch-64 inference by roughly 27--33%, but
+fused TorchScript remained faster. In the tested eight-GPU training workload, compilation reduced throughput by
+about 18% relative to eager execution, while bfloat16 autocast improved it by 9.2%. Compilation was not retained
+for production inference or training on this workload.
 
-The rejected alternatives matter. Full-trunk post-training INT8 was fast but catastrophically changed policy and
-value outputs. Calibration sweeps, partial early-block quantization, SmoothQuant, weight-only variants, and FP8 did
-not pass the joint speed/fidelity gate. These are local implemented negative results in the
-[salvage investigation](../benchmarks/tensorrt-int8-salvage-rtx4070s-20260912/README.md), not universal claims about
-those methods. `torch.compile` improved an eager diagnostic but did not beat the then-production TorchScript path.
+Similar parameter counts did not imply similar inference cost. Width and depth changed kernel efficiency,
+TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN
+shapes, but no analytic parameter-count rule predicted the fastest network. Progressive model sizes were therefore
+benchmarked at their actual serving batch and precision rather than selected from FLOPs alone.
+The width and depth sweeps in Appendix \ref{app:C}, Table \ref{tab:appendix-c-supporting-comparisons-1} and Table \ref{tab:appendix-c-supporting-comparisons-2},
+quantify this mismatch: narrower networks were not consistently faster, and changing batch size could reverse
+the ranking of deep-narrow and shallow-wide designs.
 
-The final networks use activation caps and scaled post-activation residual branches to make quantization tractable.
-Only the backbone convolutions are quantized; policy/value heads, linear layers, and the start block remain outside
-INT8. Training remains bfloat16. A QAT model is recalibrated each generation, exported to explicit Q/DQ ONNX, and
-refit into model- and batch-specific TensorRT engines.
+## Replay materialization and training supply
 
-## The pre-fold serving design
+Replay delivery must sustain both trajectory ingestion and training-batch retrieval. Parallel materializers
+convert completed trajectories into a circular memory-mapped store, avoiding repeated trajectory decoding in the
+training path. Direct column access and pinned-memory prefetching reduce batch preparation and transfer costs.
 
-BatchNorm folding changes the trainable representation and can introduce a difficult transition. The settled design
-keeps the authoritative training model pre-fold for a long horizon and creates a deployment copy for serving. This
-allows INT8 self-play from the first trained generation without forcing the optimizer through an early irreversible
-fold. The frozen-replay schedule screens established that QAT could learn stably and that fold timing and deployment
-learning rate materially affected short-run fitting.
+A loader benchmark on 2.5 million rows became 8.26x faster after compacting 5,000 small producer shards into
+25 containers, putting delivery capacity 44% above the measured trainer demand. In a live interval,
+materialization could append positions more than six times as fast as self-play supplied them. The replay pipeline
+therefore had enough headroom to keep up with game production.
 
-The final config sets the training fold boundary far beyond the expected early serving phase, uses per-generation
-recalibration, and warms deployment state separately. These values describe the run; the final online effect belongs
-in Chapter 7.
+The configured reuse ratio couples optimizer progress to newly admitted positions, so loader capacity beyond
+trainer demand does not by itself increase training volume. Persistent distributed trainer processes avoid startup and model
+construction costs between blocks. The retained global batch of 2,048 uses bfloat16 autocast across eight GPUs.
+Larger batches improved hardware throughput in the benchmark but also changed the number of optimizer updates
+per training position, so batch size was selected as part of the learning recipe rather than for throughput alone.
 
-## TensorRT refit failure and fidelity redesign
+## Overlapping self-play and training
 
-During progressive growth, a 14x160 candidate appeared hundreds of Elo weaker despite better float training loss.
-The immediate symptom was a stale refit template, but deeper controlled tests found the actual cause: TensorRT had
-optimized around equal Q/DQ scales in the template source and produced invalid results when refitting distinct
-scales at high optimization levels. Refitting reported success.
+Self-play and training compete for GPU capacity but have different resource profiles. Search includes CPU
+traversal and transfer intervals that allow useful overlap with optimizer work. Scheduling must therefore balance
+the slower training block against the reduction in subsequent waiting for new games.
 
-The fix makes template scales pairwise distinct before building and uses a safer default optimization level. The
-investigation also replaced random unmasked fidelity probes with real chess positions and legal-action masking;
-illegal logits and near-ties had made the old top-1 metric misleading. The full correction, including superseded
-intermediate hypotheses, is in
-[INT8 template staleness](../benchmarks/int8-template-staleness-rtx4070super-20260921/README.md).
+The overlap sweep compared keeping 8, 16, or all 32 actors active during training.
+Moving from half to all actors active nearly doubled the trainer's work time for only a small reduction in the
+complete cycle. The retained half-active policy balances ongoing game production against optimizer throughput;
+Table \ref{tab:05-systems-optimization-1} gives both sides of this tradeoff. Cycle times are estimated from measured training duration and search
+throughput. With all actors paused, training alone reached 25.3 thousand samples/s.
 
-This episode motivates a general rule: inference artifacts must be evaluated as semantic models, not accepted because
-conversion APIs return success or because an unrepresentative aggregate error is small.
+| Actors | Train (k/s) | Search (k/s) | Estimated cycle time (s) |
+| ---: | ---: | ---: | ---: |
+| 8 | 21.5 | 506 | 117 |
+| 16 | 17.1 | 606 | 113 |
+| 32 | 9.21 | 742 | 111 |
 
-Refit and rebuild must remain distinct. A template fixes graph structure and tactic choices; recurring refit updates
-named weights and quantization constants cheaply. A rebuild is slower and can be periodic insurance, but rebuilding
-on a cadence is not the fix for invalid equal-scale optimization. Templates are specific to model geometry, QAT
-phase, and batch shape; the final configuration separates self-play and evaluation artifacts.
+The useful overlap fraction depends on search cost. As visit budgets and model size rise, self-play becomes more
+expensive relative to training; actor settings measured at the beginning cannot simply be extrapolated to later
+stages.
 
-## Model shape and memory format
+## Throughput allocation within the learning loop
 
-CNN width did not scale smoothly with parameter count or arithmetic. Production-card sweeps found sharp
-shape-dependent efficiency, including widths that were slower despite fewer operations. Channels-last format and
-cuDNN autotuning recovered meaningful throughput for relevant stages but did not explain every discontinuity.
-Progressive rungs therefore require direct measurement at their actual batch sizes. See the
-[width controls](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md) and
-[CNN inference benchmark](../benchmarks/cnn-inference-throughput-rtx4070s-20260827/README.md).
+The resulting system allocates throughput across data generation and optimization rather than maximizing either
+in isolation. Native search and batched inference increase game supply, replay materialization prevents delivery
+from limiting training, and actor overlap replenishes replay during optimizer updates.
 
-## Evaluation and interactive serving
-
-Evaluation and public play reuse the native engine but operate in different latency regimes. Ladder evaluation
-amortizes inference across many games; browser/UCI play needs bounded response time and result processing for one
-position. Local protocol smokes, CUDA result-processing controls, and integrated interactive measurements establish
-deployability and CPU/result-path costs (**M/T**), not training efficacy. Saturated ladder throughput must not be
-reported as single-game latency.
-
-## Hardware and transfer limits
-
-Node comparisons informed rental choice, but a GPU model name is not a transferable performance result. CPU quota,
-PCIe/NUMA topology, host contention, driver, power, batch shape, and simultaneous tenants matter. Cross-era
-throughput history is chronology only; controlled claims stay attached to one hardware/runtime/workload identity.
-The relevant controls are the [four-node comparison](../benchmarks/node-comparison-vast-4nodes-20260821/README.md)
-and [same-GPU host comparison](../benchmarks/node-comparison-8xrtx4070super-20260824/README.md).
-
-## What was not retained
-
-- Fully asynchronous training was not implemented as a separate algorithm. The runtime overlaps self-play,
-  materialization, evaluation, and blocking training quanta, but the learner still has explicit quantum boundaries.
-- An inference cache was audited and rejected because exact repeated inputs were too rare.
-- Monte Carlo graph search was implemented on a branch and rejected for this chess workload.
-- `torch.compile` was useful in selected trainer studies but is disabled in the final configuration; TensorRT is the
-  serving compiler.
+Additional search capacity can support more games at a fixed budget or deeper searches per position. Those uses
+alter data diversity and target quality differently, while replay reuse controls their rate of consumption.
+The systems improvements therefore expand the feasible training regime; the recipe determines how that capacity
+is spent. Chapter \ref{sec:06-final-chess-recipe} evaluates the resulting progress in playing strength over wall-clock time.

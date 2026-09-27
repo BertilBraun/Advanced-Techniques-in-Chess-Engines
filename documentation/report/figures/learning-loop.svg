@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 90 1200 610" role="img" aria-labelledby="title description">
+  <title id="title">The chess self-play learning loop</title>
+  <desc id="description">Python coordinates native C++ self-play, replay, distributed training, TensorRT inference, and paired Stockfish evaluation. The published model returns to self-play.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Inter, Arial, sans-serif; fill: #182b3d; }
+      .card-title { font-size: 22px; font-weight: 700; }
+      .body { font-size: 18px; }
+      .small { font-size: 18px; fill: #344c58; }
+      .label { font-size: 18px; font-weight: 600; fill: #33485e; }
+      .feedback-label { font-size: 18px; font-weight: 600; fill: #a85b25; }
+      .path { fill: none; stroke: #33485e; stroke-width: 3; }
+      .arrowhead { fill: #33485e; }
+      .feedback { fill: none; stroke: #c27030; stroke-width: 3; stroke-dasharray: 8 6; }
+      .feedback-arrowhead { fill: #c27030; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
+  <rect x="355" y="108" width="490" height="82" rx="12" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
+  <text x="600" y="142" text-anchor="middle" class="card-title">Python orchestration</text>
+  <text x="600" y="168" text-anchor="middle" class="body">configuration · publication · evaluation</text>
+
+  <rect x="50" y="240" width="320" height="180" rx="14" fill="#ebe5f5" stroke="#745a9c" stroke-width="3"/>
+  <text x="75" y="278" class="card-title">C++ self-play and MCTS</text>
+  <text x="75" y="307" class="body">many interleaved chess games</text>
+  <text x="75" y="334" class="body">restart states and tree search</text>
+  <text x="75" y="361" class="body">visit policy and game result</text>
+  <text x="75" y="397" class="small">No Python in the search hot path</text>
+
+  <rect x="440" y="260" width="320" height="140" rx="14" fill="#e0efe4" stroke="#4d8d62" stroke-width="3"/>
+  <text x="465" y="299" class="card-title">Replay and curriculum</text>
+  <text x="465" y="329" class="body">admit searched positions</text>
+  <text x="465" y="356" class="body">sample policy-surprising rows</text>
+  <text x="465" y="384" class="small">Policy and outcome targets</text>
+
+  <rect x="830" y="240" width="320" height="180" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
+  <text x="855" y="278" class="card-title">Distributed training</text>
+  <text x="855" y="307" class="body">eight GPU ranks</text>
+  <text x="855" y="334" class="body">policy and value objectives</text>
+  <text x="855" y="361" class="body">checkpoint at generation boundary</text>
+  <text x="855" y="397" class="small">GPUs shared with self-play</text>
+
+  <path d="M 370 330 H 435" class="path"/>
+  <path d="M 429 323 L 440 330 L 429 337 Z" class="arrowhead"/>
+  <path d="M 760 330 H 825" class="path"/>
+  <path d="M 819 323 L 830 330 L 819 337 Z" class="arrowhead"/>
+  <text x="405" y="313" text-anchor="middle" class="label">games</text>
+  <text x="795" y="313" text-anchor="middle" class="label">batches</text>
+
+  <rect x="50" y="520" width="320" height="130" rx="14" fill="#f8ebcb" stroke="#a57935" stroke-width="3"/>
+  <text x="75" y="559" class="card-title">TensorRT leaf inference</text>
+  <text x="75" y="589" class="body">batch neural evaluations</text>
+  <text x="75" y="617" class="small">legal policy priors and WDL values</text>
+  <path d="M 150 420 V 515" class="path"/>
+  <path d="M 143 509 L 150 520 L 157 509 Z" class="arrowhead"/>
+  <path d="M 275 520 V 425" class="path"/>
+  <path d="M 268 431 L 275 420 L 282 431 Z" class="arrowhead"/>
+  <text x="80" y="472" class="label">leaves</text>
+  <text x="290" y="472" class="label">outputs</text>
+
+  <rect x="830" y="520" width="320" height="130" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
+  <text x="855" y="559" class="card-title">Published model</text>
+  <text x="855" y="589" class="body">QAT → ONNX → TensorRT engine</text>
+  <text x="855" y="619" class="small">Feeds the next self-play games</text>
+  <path d="M 990 420 V 515" class="path"/>
+  <path d="M 983 509 L 990 520 L 997 509 Z" class="arrowhead"/>
+  <path d="M 1150 585 H 1175 V 213 H 210 V 235" class="path"/>
+  <path d="M 203 229 L 210 240 L 217 229 Z" class="arrowhead"/>
+  <text x="1037" y="198" class="label">model refresh</text>
+
+  <rect x="440" y="520" width="320" height="130" rx="14" fill="#f2e6d9" stroke="#a87853" stroke-width="3"/>
+  <text x="465" y="559" class="card-title">Paired evaluation</text>
+  <text x="465" y="589" class="body">native search versus Stockfish</text>
+  <text x="465" y="617" class="small">strength and uncertainty by protocol</text>
+  <path d="M 830 585 H 765" class="path"/>
+  <path d="M 771 578 L 760 585 L 771 592 Z" class="arrowhead"/>
+  <path d="M 600 650 V 675 H 20 V 150 H 350" class="feedback"/>
+  <path d="M 344 143 L 355 150 L 344 157 Z" class="feedback-arrowhead"/>
+  <text x="423" y="666" class="feedback-label">Elo feedback</text>
+
+</svg>

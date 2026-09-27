@@ -11,6 +11,7 @@ resolved configuration that actually ran.
 
 ## Result summaries
 
-- [Final chess run](final-chess-run.md) — active training lineage; terminal measurements pending.
+- [Final chess run](final-chess-run.md) — training and teacher matrix complete; three late result directories,
+  longer-student outcome, and final figures remain in the publication gate.
 - [v34 generation 1465](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) — previous
   completed public benchmark.

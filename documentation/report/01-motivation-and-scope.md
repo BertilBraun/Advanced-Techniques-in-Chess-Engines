@@ -1,61 +1,41 @@
-# 1. Motivation and scope
+# 1. How far can efficient self-play go?
 
-## Research question
+An AlphaZero-style chess player [1] improves by searching its own games, learning from the resulting positions, and
+repeating that cycle with a stronger network. Search creates targets; replay decides which targets persist; training
+absorbs them; and evaluation must distinguish progress from noise. Under a limited budget, improving any one step
+matters only if the complete loop produces stronger play within the available time.
 
-AlphaZero is conceptually simple but operationally expensive: the learner improves only as quickly as self-play can
-generate useful targets, the network can absorb them, and evaluation can resolve small changes in strength. This
-project asks what can be achieved when those activities share one rented node of consumer GPUs and are judged by
-strength per wall-clock hour rather than by unconstrained scale.
+This study asks how strong that loop can become on a single eight-GPU node when the system is engineered for
+efficiency. Over **2.5 days** of training from random weights on searched self-play games, the run produced a
+6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
+and **3,251 benchmark Elo at 100,000 searches per move**—estimated at under five seconds of thinking time—against the project's fixed-node Stockfish 13 ladder.
+Table \ref{tab:02-methodology-and-evidence-1} gives the match results; Chapter \ref{sec:07-final-run-results} follows the model's improvement across search budgets.
 
-The goal was not to reproduce DeepMind's compute budget or to approach modern unrestricted chess engines. It was to
-build the complete loop from scratch, make it fast enough to study, identify which techniques survive controlled
-measurement in this regime, and train a clearly superhuman chess model at modest rental cost. The project includes
-game rules, encoding, neural inference, Monte Carlo tree search, self-play, replay, distributed training, evaluation,
-deployment, and evidence preservation.
+The result depends on the whole learning loop. The network's representation affects both what it can learn and how
+quickly it can supply search. Native search, batched inference, and TensorRT make enough searched games available
+for training; replay and training must then turn those games into stronger play. Several plausible optimizations
+improved a local metric without improving that complete loop.
 
-## Scope
+## Scope and contributions
 
-Chess is the report's primary subject and the final campaign. The same native and Python runtimes also support Go on
-7x7 and 9x9 boards. The early [Go 7x7 baseline](../benchmarks/go-7x7-training-baseline-2xrtx3060-20260810/README.md)
-helped validate the shared runtime, external-engine evaluation, replay credit, and multi-GPU training. It did not
-receive a comparable terminal campaign, so this report does not imply a final Go result.
+Chess is the subject of the study. The runtime also supports Go, and KataGo's fast and full searches inspired one
+of the approaches tested here [2]. We briefly considered 7×7 and 9×9 Go as cheaper settings for tuning chess
+hyperparameters. In those exploratory games, we observed a strong first-player advantage, short trajectories, and
+a value target that learned quickly. Useful Go tuning appeared unlikely to transfer directly to chess, so we kept
+chess as the focus.
 
-The work has three intertwined outputs:
+We examine the choices that shaped the final recipe: search allocation, graph search and caching, policy
+representation, model sizing, replay and restart states, resignation, auxiliary targets, and quantized inference.
+The report also traces the throughput needed to supply searched games and studies three failures with transferable
+lessons about self-play targets, deployment fidelity, and model promotion.
 
-- a playable chess engine and a reproducible training system;
-- an empirical ledger of useful, neutral, failed, and unattempted techniques;
-- a final compute-constrained training recipe whose readable entry point is
-  [`py/configs/production/chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml).
+A live chess demonstration is also available [12].
 
-## Why the negative results matter
+## Roadmap
 
-The project repeatedly found that a locally successful proxy did not guarantee stronger play. Predicted adaptive
-budgets improved policy-fidelity-per-search but lost Elo. Learned early stopping reduced search but barely shortened
-the critical path because self-play overlapped training. Attention could look competitive until the policy head and
-hardware throughput were separated from the trunk. Early INT8 attempts could be fast yet serve numerically invalid
-policies. These are not side notes: they explain the final recipe as much as the retained features do.
-
-The report therefore treats an implementation, a proxy improvement, a throughput improvement, and an Elo improvement
-as four different claims. A technique is called “retained” only when it appears in the final configuration; a
-technique can still be scientifically informative when it was rejected.
-
-## Project phases
-
-The history is easier to understand as phases rather than as a sequence of version numbers:
-
-1. **Platform construction.** Python orchestration was progressively replaced by a native C++ game/search runtime,
-   direct batched inference, columnar replay, and persistent distributed training.
-2. **Baseline and recovery.** A four-day chess run established a yardstick. Subsequent runtime work regressed learning
-   efficiency, leading to forensic comparisons of encoding, search semantics, schedules, and training data.
-3. **Search and architecture research.** The project measured attention trunks, policy heads, progressive sizing,
-   search parallelism, adaptive budgets, learned stopping, and target construction.
-4. **Compression and inference research.** The v34 model was evaluated, distilled, and used to investigate TensorRT,
-   FP16, INT8, quantization-aware training, folding, and refitting.
-5. **Final recipe development.** Frozen-replay screens and online runs converged on progressive CNNs, a from-to policy
-   head, SGD, pre-fold INT8 serving, growing replay, targeted data selection, and fixed-budget search.
-6. **Final run and publication.** The final run is active at the time of this draft. Terminal evaluation and archived
-   statistics will complete [Chapter 7](07-final-run-results.md).
-
-The older [platform rework ledger](../architecture/platform-rework.md) and
-[Python runtime rework](../architecture/python-runtime-rework.md) preserve the detailed engineering chronology. They
-are evidence, not a substitute for the current recipe.
+Chapter \ref{sec:02-methodology-and-evidence} presents the chess evaluation.
+Chapter \ref{sec:03-system-and-methods} explains the AlphaZero learning principle and the system that implements it.
+Chapter \ref{sec:04-research-investigations} examines search, replay, and network design, followed by throughput engineering in
+Chapter \ref{sec:05-systems-optimization}. The three failure studies in Chapter \ref{sec:05a-three-failures}
+lead into training progress in Chapter \ref{sec:06-final-chess-recipe} and playing strength in
+Chapter \ref{sec:07-final-run-results}. Appendix \ref{app:D} specifies the final recipe.

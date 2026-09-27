@@ -1,231 +1,194 @@
 # Final chess run
 
-> **Status: complete.** The run stopped cleanly on 2026-09-23, its evidence is fetched and checksum verified, and
-> the publication gate below is met. Fields that remain marked as not retained are genuinely unavailable: they were
-> not captured before the node was destroyed, and they must not be reconstructed by estimation.
+> **Status: training and evaluation complete; result evidence captured.** The selected teacher, all ten headline-matrix
+> rows, the parallel-search sweep, and both student experiments are checksum-covered by the local evidence bundles.
 
-The final run uses the recipe written in full in
-[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). Development and operational
-continuations used the V89–V93 lineage, but the readable final configuration is the stable reproduction entry point.
-The published result will also retain the exact source revision, resolved configuration, configuration hash, and
-archive manifest from the completed run so later edits to the living recipe cannot change the historical experiment.
+The editable recipe is
+[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml), which specifies staged plateau
+thresholds of 15 and 4 Elo/hour. The
+[campaign YAML](../../py/configs/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml)
+records the same intended thresholds. Exact result reproduction uses the frozen resolved configurations and hashes
+rather than a future revision of either editable YAML.
+The compact evidence index is
+[`documentation/evidence/final-chess-20260923`](../evidence/final-chess-20260923/README.md); it records the archive
+hashes, model hashes, protocol, capture status, and machine-readable result table without putting the large archives
+in Git.
 
-## Publication gate
+## Result in one view
 
-| Requirement | State |
-| --- | --- |
-| Run stopped cleanly, archive fetched and verified | met, 2026-09-23 |
-| Terminal checkpoint and inference artifacts hashed | met, see Run identity |
-| Training-volume and wall-clock statistics derived | partly met, see Training volume |
-| Selected evaluations complete under a frozen protocol | met, see Terminal strength |
-| Plots generated from archived inputs | met, nine figures in [`documentation/report/figures/`](../report/figures/) with a source manifest |
-| Every number traceable to committed compact evidence | met for the tables below |
+The reported checkpoint is a **14-block, 160-channel scaled-post-activation convolutional network** with global
+context conditioning and a chess from-to attention policy head. It has **6,315,378 parameters** and was evaluated
+through its pre-fold **INT8 QAT TensorRT** deployment artifact for searched play. Policy-only evaluation used the
+matching float TorchScript export because it does not invoke the native search service.
 
-## Run identity
+| Search budget per move | Headline benchmark Elo | 95% CI | Gain over previous budget |
+| ---: | ---: | ---: | ---: |
+| Policy only | **1,658** | [1,608, 1,710] | -- |
+| 100 | **2,456** | [2,400, 2,512] | +798 |
+| 1,000 | **2,925** | [2,875, 2,977] | +469 |
+| 10,000 | **3,114** | [3,065, 3,163] | +189 |
+| 100,000 | **3,251** | [3,206, 3,297] | +137 |
 
-| Field | Final value | Evidence |
-| --- | --- | --- |
-| Run directory and lineage root | `vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau` | Run manifests |
-| Segment producing the selected checkpoint | `vast-chess-8gpu-v97-revert-promotion` | `run_manifest.json` |
-| Source revision | `f9f8cee4c59403befdf55d34d3d7dffc3671a97a` | V97 run manifest |
-| Resolved configuration SHA-256 | `498e7687f68eb48da87212a2a6e43b5fc84b903983c23c9ab1af7cd46a60d243` | V97 approval record |
-| Effective training lineage | V89 → V91 → V92 → V93 → V94 → V95 → V97 → V99, continuous learning state in one run directory | Run manifests, checkpoint history |
-| Excluded from the lineage | V90 (INT8 collapse, reverted to checkpoint 480) and V96 (19x176 promoted on a training-loss comparison, −270 Elo, reverted to checkpoint 990) | Progressive state backups, replay prune record |
-| Canonical readable recipe | [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) — living recipe, since revised | Repository |
-| Selected checkpoint generation | **1026** | `final-model/checkpoint_1026.json` |
-| Checkpoint SHA-256 | `c92a363b041a18d0ef93b852ac1c6d58716ae9a22b4e62d543de297c4ec5f904` | `final-model/SHA256SUMS` |
-| Optimizer SHA-256 | `34c468e1f07ffa7f0db5d4306337248a5ef9a9b6cf6a07e266e3b4fda60eb25e` | `final-model/SHA256SUMS` |
-| Inference artifact and SHA-256 | `model_1026.int8.onnx`, `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` | `final-model/SHA256SUMS` |
-| QAT state SHA-256 (pre-fold, 408,500 steps) | `c41c955f8d306844201b9cb1ffae7916963cb1f1c96a0c69c4c2f779227cfda9` | `final-model/SHA256SUMS` |
-| Hardware | 8x NVIDIA GeForce RTX 4070 SUPER, Vast.ai offer 48571853, driver 595.71.05, 80 logical CPUs, 251 GiB RAM | Provisioning note, archived manifests |
-| Locked runtime | PyTorch 2.12.1+cu126, CUDA 12.6, cuDNN 9.10.2, `uv.lock` `a09c3c9697dbe690c874bac20ee8690a3904dd6b8bc8e6b5478c27d61ddd03aa` | Archived manifests |
-| Effective training time | 2.5 days on the stitched evaluation axis (60 h); 3.32 days of raw per-run boundary seconds before excising V90 and V96 | `ladder-elo-export.json`, manifests |
-| Training-node cost | **$43.20** (60 h x $0.72/h) | Frozen node price and stitched duration |
+This is protocol-specific benchmark Elo calibrated against
+[Marco Meloni's fixed-node Stockfish 13 curve](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+which links Stockfish through Fruit 2.2.1 to the historical SSDF scale. It is not a FIDE rating and is not directly
+comparable with CCRL, online-server, or unrestricted contemporary-engine ratings. The curve also mixes search
+parallelism, as documented below; it should not be interpreted as a controlled single-variable scaling law.
 
-Evidence archives, all checksum verified against the node before it was destroyed, under
-`.codex-diagnostics/final-2026-09-23/`:
+## Selected model and evidence
 
-| Archive | SHA-256 | Contents |
-| --- | --- | --- |
-| `evidence-small.tgz` | `4fb8a5941e002d6d8f3186b998ae4a38f3eddd885ef81da3092558c9f556460c` | selected checkpoint, evaluation results, distilled student |
-| `evidence-tensorboard.tgz` | `72936c566026c3065cc07c9ce5d234a89dcb4cefd0efd035cea0db9e44e1c910` | every TensorBoard run V77–V99 |
-| `evidence-logs.tgz` | `7af5705a92a7bfbaabe5016e9830c68a8b80cd9feaa8d1a84985435c705f8f82` | run-control logs, registry, approvals |
-| `evidence-provenance.tgz` | `06a6e071fa41c840407e498b130e868e3aa68620d942450625d6aefe8474ffd7` | run-outcome, resolved configurations, manifests |
-| `evidence-tail.tgz` | `06e8807fc9ba5b9e0b7250d1b895f1580ceeaa88d0e92cadacec6d0ee0365779` | all 22 evaluation result directories, both distilled students, float export |
-| `evidence-plateau-probe.tgz` | `eb6d94acbad6b76e8cc8ff6ebe44f4dab94f5adecd50dd75674e8009242e41e6` | 400-search and 64-search probe at generations 900/960/1020 |
-| `evidence-v100.tgz` | `bde0adb1605f8c37fa96590ab331aa208c781c0d2cd875012d71e2a1f2912306` | V100 ceiling-candidate run |
-| `evidence-v101.tgz` | `e6faa44f56d8a462be6fd6b7ba5dac9632ec526e3c88b73b1ee4f1a01ff55e41` | V101 capacity run |
-
-Neither the replay store nor the superseded checkpoint set was retained; both were deliberately left on the node.
-
-## Training volume
-
-| Metric | Final value | Definition |
-| --- | ---: | --- |
-| Optimizer steps | **513,000** | Generation 1026 x 500 steps per quantum |
-| Training presentations | **1,050,624,000** | 513,000 steps x global batch 2,048 |
-| Optimizer steps on the selected stage | **408,500** | The 14x160's own counter in the checkpoint QAT state |
-| Materialized positions | **≥ 261,016,277** at generation 990 | Credit ledger at the V97 rewind point; not re-recorded at 1026 |
-| Replay capacity | 20,000,000 rows, staged 0.6M → 20M | Configuration |
-| Configured replay reuse | 4 | Configuration |
-| Completed self-play games | not retained | Counted only in the run directory, which was left on the node |
-| Final replay occupancy | not retained | The replay store was deliberately not fetched |
-| Time in each model stage | 12x128 to generation 481, 14x160 from 481, 19x176 from 1081 (after the selected checkpoint) | Progressive state, benchmark record |
-| Time in each search-budget stage | 300/400/500/600 visits by generation 0/10/50/90; 800 from 1000 | Configuration |
-
-The generation-1026 ledger was not separately archived, so materialized positions are quoted at the nearest recorded
-point rather than interpolated. Games and occupancy are unavailable by choice, not by loss: the 33 GB replay store
-and the superseded checkpoints were left behind to keep the evidence pull small.
-
-## Selected model
+The stitched multi-rung ladder was strongest in a window around generations 1020--1080. **Generation 1026** was
+selected because it was the last checkpoint in that window retained with the complete training, optimizer, QAT,
+ONNX, and TensorRT artifact set. A later, larger model reached parity but did not establish a stronger plateau during
+its limited continuation.
 
 | Field | Final value |
 | --- | --- |
-| Progressive stage and architecture | Second of three: 14x160 scaled-post-activation convolutional, global pooling every second block, `chess_from_to_attention_v1` policy head with key size 128, 2 value channels and a 48-unit value projection |
-| Trainable parameter count | **6,315,378** (6,319,887 including 4,509 QAT `_amax` scalars) |
-| Inference parameter count | **6,261,007** |
-| Training precision | bfloat16 |
-| Self-play inference backend and precision | TensorRT INT8 QAT, pre-fold deployment copy, recalibrated every generation |
+| Checkpoint | Generation 1026 |
+| Architecture | 14 residual blocks, 160 channels, global pooling every second block |
+| Policy head | Chess from-to attention, key size 128 |
+| Parameters | 6,315,378 |
+| Completed optimizer steps in checkpoint QAT state | 408,500 |
+| Training presentations at configured global batch 2,048 | 836,608,000 |
+| Training precision | bfloat16 with pre-fold INT8 QAT |
+| Searched evaluation deployment | TensorRT INT8, batch 64 |
+| Policy-only evaluation deployment | Float TorchScript, SHA-256 `1cb9fe4b23c91e4162097c7425b397516bb28dd2560cbb066ec8422548961816` |
+| Model SHA-256 | `c92a363b041a18d0ef93b852ac1c6d58716ae9a22b4e62d543de297c4ec5f904` |
+| INT8 ONNX SHA-256 | `d634abacae3c874eac6ded89f6af861eb81b509da638b5ad710587b1a08be658` |
+| TensorRT engine SHA-256 | `357652b119b4e4570127587bf0a04757ece6c01dd03abe3a0a905254249d84a5` |
 
-The selected checkpoint is not the terminal one. Generation 1026 is the last fully retained checkpoint inside the
-1020–1080 window where the stitched ladder peaks; the run continued to 1192 under V99's promoted 19x176, which
-measured 36–42 Elo below its 14x160 parent and then stayed flat. The terminal state is preserved in the archives.
+The checkpoint manifest and archive-level hashes are listed in the
+[evidence index](../evidence/final-chess-20260923/README.md#selected-checkpoint).
+The matching INT8 ONNX is also preserved in the public
+[Hugging Face repository at immutable revision `dc8fcccc`](https://huggingface.co/BertilBraun/alphazero-chess/blob/dc8fccccb67ab5ec9e36267a165a9700b7dbf55f/production/final-generation-1026/model.int8.onnx).
+Its LFS SHA-256 matches the frozen evidence. The current
+[model repository](https://huggingface.co/BertilBraun/alphazero-chess) identifies generation 1026 as the final
+checkpoint, publishes matching `latest` aliases and checksum index, and declares the MIT license. The project owner
+has confirmed that the live site uses the updated deployment artifact.
 
-## Terminal strength
+## Training trajectory and excluded work
 
-The exact opponent nodes, opening count, paired-game count, search parallelism, hardware, and confidence interval
-must accompany every row. Search counts and elapsed time are not interchangeable; a time-based headline must also
-state the measured serving topology and latency distribution.
+The report-scoped stitched ladder contains **180 observations through exactly 2.5 effective days**, rising from
+798 to **2,372.2** at the cutoff and peaking at **2,407.6**. Later observations belong to experiments that did not
+improve the accepted result and are retained only in the untrimmed source evidence. The comparison trims the previous
+four-day baseline at exactly 3.0 days, before its noisy terminal interval, where it ends at 2,265.4 Elo. Those plotted
+endpoints differ by 106.8 Elo, but they must not be used as the cross-campaign strength estimate: the historical curve
+used a single-rung fit while the final curve used a three-rung bracketed fit.
 
-Protocol, identical for every row: Stockfish 13 (`ec56cd6a…`, bmi2 build) at fixed nodes, 1 thread, 1024 MiB hash;
-50 opening pairs from `chess-stockfish-8moves-v3-openings-v33.json` (`490425ed…`) played from both colours for 100
-games; maximum 300 plies; model served through TensorRT INT8 on 8x RTX 4070 SUPER. Anchors are the fixed-node
-Stockfish curve recorded in [the Elo reporting note](../analysis/chess-elo-scale-and-reporting-20260911.md).
+The estimator-matched retrospective compares plateau windows on the three-rung estimator. It places the previous
+baseline at 2,283.9 Elo and the final recipe at 2,358.0 Elo, a gain of **74.1 Elo**, with an approximately **±15 Elo
+transfer/sensitivity allowance**. That allowance is not a game-level confidence interval. The defensible public
+summary is therefore **about +74 Elo under a matched estimator**, not the endpoint difference or either curve's
+single highest observation.
 
-The reported figure per budget is the rung scoring nearest 0.500, which is the least draw-distorted and least
-model-dependent. Both rungs are listed so the bracket is visible.
+![64-search ladder Elo across five chess training campaigns](../showcase/chess-ladder-progress.svg)
 
-| Model search per move | Parallel | Opponent (anchor) | Games | W/D/L | Score | Benchmark Elo (95% CI) |
-| ---: | ---: | --- | ---: | --- | ---: | ---: |
-| Policy only | 1 | 1,000 nodes (1700) | 100 | 32/24/44 | **0.440** | **1658** (1597–1717) |
-| Policy only | 1 | 2,000 nodes (1890) | 100 | 16/22/62 | 0.270 | 1717 (1645–1778) |
-| 100 | 1 | 5,000 nodes (2220) | 100 | 51/28/21 | 0.650 | 2328 (2271–2391) |
-| 100 | 1 | 10,000 nodes (2470) | 100 | 39/18/43 | **0.480** | **2456** (2393–2518) |
-| 1,000 | 1 | 20,000 nodes (2700) | 100 | 47/40/13 | 0.670 | 2823 (2772–2880) |
-| 1,000 | 1 | 50,000 nodes (2960) | 100 | 21/48/31 | **0.450** | **2925** (2875–2974) |
-| 10,000 | 4 | 50,000 nodes (2960) | 100 | 45/40/15 | 0.650 | 3068 (3016–3124) |
-| 10,000 | 4 | 100,000 nodes (3100) | 100 | 30/44/26 | **0.520** | **3114** (3063–3166) |
-| 100,000 | 16 | 100,000 nodes (3100) | 100 | 51/38/11 | 0.700 | 3247 (3195–3306) |
-| 100,000 | 16 | 200,000 nodes (3230) | 100 | 25/56/19 | **0.530** | **3251** (3206–3297) |
+The [trimmed publication input](../evidence/final-chess-20260923/ladder-elo-report-trimmed.json) is derived from the
+checksum-covered source export. It records the two cutoffs and their reasons alongside descriptive series labels.
 
-Headline curve, one figure per decade of search: **1658 → 2456 → 2925 → 3114 → 3251**, gains of +798, +469, +189
-and +137. The top is anchored by two independent opponents agreeing within **4 Elo**, which is the evidence that the
-anchor curve transfers to this engine rather than fanning out.
+Two failed branches are excluded from that curve but remain part of the provenance:
 
-Search parallelism is not free and must be held fixed across a compute curve. Measured at 1,000 searches against
-20,000 nodes: parallel 1 scores 0.670 (2823, 18.1 min), parallel 4 scores 0.645 (2804, 3.4 min), parallel 16 scores
-0.610 (2778, 1.3 min). The cost of 16-way parallelism is 235 Elo at 100 searches, 45 at 1,000, and negligible above.
+- An early INT8 collapse produced one 1,722-Elo observation before training reverted to the last valid checkpoint.
+- A from-scratch 19-block, 176-channel candidate was promoted using an invalid training-loss comparison, lost about
+  270 Elo, and was reverted after eight ladder observations. The replay buffer was pruned by 4,040,112 rows so the
+  failed candidate's games could not contaminate the resumed lineage.
 
-Easy-rung bias, the gap between the harder and easier rung at the same budget, is 128 / 102 / 46 / 4 Elo at
-100 / 1,000 / 10,000 / 100,000 searches. It is a low-budget phenomenon driven by draws against weak opposition; the
-100,000-search headline is not meaningfully biased.
+The time rebasing removes those branches from the accepted-lineage x-axis; it does **not** pretend the discarded
+compute did not happen. The delivered ladder export retains raw timestamps alongside stitched time so both views can
+be reproduced.
 
-### Distilled student
+The selected checkpoint lies at 60 hours of accepted-lineage time. At the recorded `$0.72/h` node price this is
+**$43.20**. That number is a deliberately narrow training-cost measure. It excludes discarded branches, later model
+growth, distillation, terminal evaluation, and any rental idle time, so it must not be reported as total project or
+total rental spend.
 
-A 6x64 convolutional network with a from-to attention head, **470,295 parameters, 13.4x smaller than the selected
-model**, trained on the 20M-row replay buffer in float bf16 with no QAT and served through TorchScript, which is not
-the teacher's inference path. Weights are distinguished by `inference_model_sha256`, because every evaluation
-records the same `run_directory`.
+## Terminal evaluation protocol
 
-| Student | Searches | Opponent (anchor) | W/D/L | Score | Benchmark Elo (95% CI) |
-| --- | ---: | --- | --- | ---: | ---: |
-| 36,621 steps (`0a72e733…`) | 10,000 | 10,000 nodes (2470) | 55/24/21 | 0.670 | 2593 (2533–2666) |
-| 36,621 steps (`0a72e733…`) | 10,000 | 20,000 nodes (2700) | 31/33/36 | **0.475** | **2683** (2637–2731) |
-| 110,000 steps (`ec9eaf25…`) | 10,000 | 20,000 nodes (2700) | 35/29/36 | **0.495** | **2697** (2640–2753) |
-| 110,000 steps (`ec9eaf25…`) | 100,000 | 20,000 nodes (2700) | 59/28/13 | 0.730 | **2873** (2819–2935) |
+Each row used **100 games from 50 paired openings**, with every opening played from both colours. The opponent was
+Stockfish 13 with one thread and 1,024 MiB hash at a fixed node budget from the established anchor curve. For each
+model budget, the headline is the rung whose score is closest to 0.500; this minimizes extrapolation and draw-driven
+distortion. Both rungs are retained below.
 
-**2683 Elo at 13.4x fewer parameters, 86% of the teacher's 3114 at the same budget**: shrinking the network 13x
-costs roughly what cutting search 10x costs. Tripling the training bought +14 Elo, inside the confidence intervals.
-The 100,000-search figure is a **lower bound**: at 0.730 the student beat its rung decisively and the bracketing
-50,000-node rung was deliberately skipped, so unlike the teacher's 100k headline it has no second opponent.
+| Model searches | Parallel searches | Opponent nodes (anchor Elo) | W/D/L | Score | Model Elo (95% CI) | Evidence status |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Policy only | -- | 1,000 (1,700) | 32/24/44 | **0.440** | **1,658 [1,608, 1,710]** | Checksum-covered |
+| Policy only | -- | 2,000 (1,890) | 16/22/62 | 0.270 | 1,717 [1,638, 1,790] | Checksum-covered |
+| 100 | 1 | 5,000 (2,220) | 51/28/21 | 0.650 | 2,328 [2,276, 2,384] | Checksum-covered |
+| 100 | 1 | 10,000 (2,470) | 39/18/43 | **0.480** | **2,456 [2,400, 2,512]** | Checksum-covered |
+| 1,000 | 1 | 20,000 (2,700) | 47/40/13 | 0.670 | 2,823 [2,774, 2,873] | Checksum-covered |
+| 1,000 | 1 | 50,000 (2,960) | 21/48/31 | **0.450** | **2,925 [2,875, 2,977]** | Checksum-covered |
+| 10,000 | 4 | 50,000 (2,960) | 45/40/15 | 0.650 | 3,068 [3,023, 3,120] | Checksum-covered |
+| 10,000 | 4 | 100,000 (3,100) | 30/44/26 | **0.520** | **3,114 [3,065, 3,163]** | Checksum-covered |
+| 100,000 | 16 | 100,000 (3,100) | 51/38/11 | 0.700 | 3,247 [3,192, 3,305] | Checksum-covered |
+| 100,000 | 16 | 200,000 (3,230) | 25/56/19 | **0.530** | **3,251 [3,206, 3,297]** | Checksum-covered |
 
-The project reports protocol-specific benchmark Elo calibrated from fixed-node Stockfish 13 results. It is not a
-FIDE rating and is not directly comparable with CCRL, online-server, or current unrestricted-engine ratings. The
-existing reporting policy is documented in
-[What the v34 Elo numbers mean](../analysis/chess-elo-scale-and-reporting-20260911.md); the final evaluation must
-either reuse that calibration exactly or document a revised scale.
+The two 100,000-search estimates agree within four Elo despite using independent opponent anchors. That agreement is
+evidence that the anchor curve remains locally consistent at the top of the measured range; it is not a general
+validation outside these two rungs.
 
-## Headline cross-lineage figure
+### Opponent-rung disagreement
 
-The root README and technical report should share one publication-quality plot of 64-search ladder Elo over
-effective training time for the major chess lineages:
+The harder opponent rung estimates a higher model rating at every budget, but the difference falls from **128 Elo**
+at 100 searches to **102**, **46**, and **4 Elo** at 1,000, 10,000, and 100,000 searches. In an ideal transitive Elo
+model the two rungs would agree. Draw behavior against the easier opponent, calibration error, matchup effects, and
+sampling noise are possible contributors, but the project did not isolate them. Selecting the rung whose score is
+closest to 0.5 reduces extrapolation; the disagreement is not material to the 100,000-search headline.
 
-- v9;
-- v29;
-- v34;
-- the v46/v48-era successor; the archive audit must resolve the exact lineage label before publication;
-- the final V89–V93 continuation, presented as one continuous learning lineage with visible resume markers.
+### Parallel-search trade-off
 
-Use `evaluation/ladder_elo_64` wherever that budget-specific series exists. Older logs that expose only
-`evaluation/ladder_elo` require a configuration and evaluator audit proving that 64 searches was the primary budget;
-do not infer equivalence from the tag name or the shape of the curve. Preserve raw observations in a committed table
-and show a documented smoothing line only as an overlay. The x-axis must be effective elapsed training time derived
-from the recorded boundary seconds, with downtime excluded consistently. V89–V93 offsets must come from manifests
-and event metadata, not visual alignment, and their boundaries must remain visible.
+At 1,000 searches against the same 20,000-node opponent, one, four, and sixteen parallel searches scored 0.670,
+0.645, and 0.610, corresponding to 2,823, 2,804, and 2,778 Elo. Thus four-way parallelism cost **19 Elo** and
+sixteen-way parallelism cost **45 Elo** in this sweep.
 
-The caption should report the exact start-to-final improvement only after the final point is frozen. Approximate
-live impressions such as a 350–450 Elo gain are hypotheses for the final audit, not publishable measurements. A
-companion optimizer-step view is useful if schedule efficiency needs explanation, but it must not replace the
-wall-clock comparison that demonstrates engineering progress.
+The operational recap and archived result manifests record slightly different wall times for the same sweep:
+**18.1–18.5 minutes** with one parallel search, **3.4–3.8** with four, and **1.3–1.8** with sixteen. These are ranges
+between two recorded timers, not statistical confidence intervals or repeated-run variability. Their paired
+speedup ratios are approximately **4.8–5.3x** for four-way and **10.1–13.9x** for sixteen-way parallelism. A separate
+100-search comparison found a much larger **235-Elo** penalty for sixteen-way parallelism. The
+budget dependence is important, but these two budgets do not determine a universal “safe parallelism” curve; the
+measured result is a strength/latency trade-off at specific operating points.
 
-## Required figures
+## Distilled student: separate, not part of the teacher result
 
-Rendered into [`documentation/report/figures/`](../report/figures/) by
-[`py/tools/render_report_figures.py`](../../py/tools/render_report_figures.py) from the archived TensorBoard bundle,
-with a per-figure source manifest beside them. The chapter's
-[figure section](../report/07-final-run-results.md#figures) lists them and states which requirements the archive
-cannot satisfy.
+Both students use the same 6-block, 64-channel convolutional architecture with a key-size-64 from-to attention head:
+**470,295 parameters**, or **13.4x fewer parameters** than the teacher. They trained on the same frozen 20-million-row
+replay snapshot in bfloat16 without QAT and were evaluated through TorchScript with four parallel searches.
 
-| Requirement | State |
-| --- | --- |
-| Headline cross-lineage 64-search ladder-Elo figure | `01-cross-lineage-ladder-elo` |
-| Final-run benchmark Elo and match score versus effective training time | `04-final-lineage-ladder` |
-| Policy, WDL, auxiliary and total training losses | `02-training-losses` |
-| Learning rate, gradient norm, clipped-step fraction | `03-optimization`; the clipped-step fraction was never logged |
-| Optimizer steps, self-play games, fresh positions versus effective time | `05-training-volume` |
-| Self-play, inference, replay-materialization and trainer throughput | `06-throughput`; only trainer throughput was logged as a scalar, with the visit budget as the governing setting |
-| Replay age, capacity and sampling distributions | `07-replay`; occupancy and mean generation age only |
-| Progressive-model candidate start and promotion events | `08-promotion` |
-| Search-budget, backend, resume and other lineage transitions | resume boundaries are marked on every lineage figure and the visit budget is in `06-throughput`; backend selection was logged as text, not scalars |
+| Training | Student searches | Opponent nodes | W/D/L | Score | Model Elo (95% CI) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 36,621 steps / 7.500 epochs | 10,000 | 10,000 | 55/24/21 | 0.670 | 2,593 [2,533, 2,666] |
+| 36,621 steps / 7.500 epochs | 10,000 | 20,000 | 31/33/36 | **0.475** | **2,683 [2,637, 2,731]** |
+| 110,000 steps / 22.528 epochs | 10,000 | 20,000 | 35/29/36 | **0.495** | **2,697 [2,640, 2,753]** |
+| 110,000 steps / 22.528 epochs | 100,000 | 20,000 | 59/28/13 | 0.730 | 2,873 [2,819, 2,935] |
 
-Every generated figure names its source archive and the tags it was built from in the manifest. Resume gaps and
-effective training time are represented explicitly: the lineage figures use a stitched evaluation axis and mark each
-segment boundary rather than silently joining on wall-clock timestamps.
+Tripling the training moved the matched 10,000-search estimate by only **14 Elo**, far inside the overlapping
+confidence intervals. The longer run ended with policy loss 1.8613 on the training split and 1.8815 on held-out data;
+the roughly 0.020 gap had been flat since about step 60,000. This supports rapid capacity saturation for this student
+and dataset, not a claim of catastrophic memorisation.
 
-## Relation to v34
+The 100,000-search student point is **unbracketed**: it beat the 20,000-node opponent decisively, while the planned
+50,000-node match was deliberately skipped and recorded by a `SKIPPED` marker. It is therefore a lower anchor-based
+estimate rather than a headline comparable in robustness to the teacher's two-rung 100,000-search result. Elo is an
+interval scale, so the student and teacher ratings must not be compared as a percentage or ratio.
 
-This page supersedes v34 generation 1465 as the latest completed public result. Its terminal evidence remains in the
-[v34 benchmark](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) and its trajectory in
-the [v34 dynamics report](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).
+## Publication work still open
 
-The two are **not measured by the same estimator** and must not be overlaid without saying so. v34's
-`evaluation/ladder_elo` is a single-rung fit and the run logs no `ladder_elo_single_rung*` series at all; this run
-logs `ladder_elo` as a three-rung bracketed fit. Converted onto the same estimator using the 35 boundaries where
-this run recorded both on the 5,000-node rung, the plateau comparison is:
+The verified result, headline ladder figure, and selected-checkpoint training counters are ready for the root README
+and report. The full report and release still need:
 
-| comparison | v34 | this run | gap |
-| --- | ---: | ---: | ---: |
-| single-rung against single-rung | 2281.2 | 2388.6 | +101.8 |
-| naive cross-estimator | 2286.8 | 2358.0 | +71.2 |
-| **both on the three-rung estimator** | **2283.9** | **2358.0** | **+74.1 ± ~15** |
+- reconcile any self-play/search-rate and rejection totals beyond the selected-checkpoint
+  [coordinator extraction](../evidence/final-chess-20260923/README.md#training-volume-extraction);
+- distinguish accepted-lineage cost from discarded-work, evaluation, distillation, and total rental spend;
+- assess whether auxiliary-loss, replay-age, quantization-fidelity, and transition figures add evidence beyond the
+  completed [loss](../report/figures/final-training-loss-and-rate.svg) and
+  [volume/throughput](../report/figures/final-training-volume-and-throughput.svg) figures;
+- package any presently local run archives or exact evaluation inputs needed for independent result reproduction.
 
-The often-quoted ~+100 is the single-rung artifact: over its plateau this run's single-rung fit ran 30.6 Elo hot
-against its own bracketed fit, because it was pinned on the 10,000-node rung scoring 0.3–0.4, while on the same rung
-earlier in the run the offset was −6.9. v34's apparent end-of-run rise to 2388 is the same mechanic and is **not a
-strength gain**: one match scored 0.725 against Stockfish at 5,000 nodes, +3.4σ against the preceding 44 points,
-crossing the 0.70 advance threshold, after which the last five points are single-rung fits on the 2470 anchor rather
-than 2220. Two controls that never changed rung — the policy-only ladder and fixed-dataset accuracy — show no step.
+## Cross-campaign figure
 
-Decomposed by budget with identical evaluation search settings, roughly **+30 Elo of the +74 is a better network**
-and **+44 appears only once the tree runs**: at 1 search the two sit at 1689.0 against 1719.3, at 64 searches at
-2283.9 against 2358.0.
+The report figure compares the available 64-search ladder series over effective training time for five descriptively
+labelled campaigns: the early baseline, first major architecture revision, previous four-day baseline, quantized
+successor, and final recipe. Internal identifiers remain only in the provenance data. Curves use the project's established
+bias-corrected 0.95 exponential moving average. The root README can reuse this SVG when the remaining publication
+gate closes. The figure shows descriptive trajectories; the **+74.1 Elo** comparison above comes from the separate
+matched-estimator plateau audit and must remain the quantitative cross-campaign headline.

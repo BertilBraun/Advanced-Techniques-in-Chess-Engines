@@ -40,6 +40,7 @@ from test_helpers.chess_configuration import (
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
+FINAL_CHESS_CONFIG_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'chess-final-config.yaml'
 V35_CODE_V42_GENERATION_ZERO_AB_PATH = (
     REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-v35-code-v42-g0-ab.yaml'
 )
@@ -210,6 +211,24 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
     assert start_position.maximum_random_opening_plies == 8
     assert configuration.evaluation.dataset.path == previous_configuration.evaluation.dataset.path
     assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
+
+
+def test_final_chess_config_has_staged_start_and_candidate_match_evaluation() -> None:
+    configuration = load_chess_experiment_configuration(FINAL_CHESS_CONFIG_PATH)
+    progressive = configuration.training.progressive_model_sizing
+
+    assert progressive.candidate_start.kind == 'staged_elo_plateau'
+    assert tuple(stage.minimum_worthwhile_gain_per_hour for stage in progressive.candidate_start.stages) == (
+        15.0,
+        4.0,
+    )
+    gate = progressive.promotion.candidate_match_gate
+    assert gate.minimum_score == 0.48
+    assert gate.consecutive_evaluations == 2
+    assert any(
+        definition.kind == 'progressive_candidate' and definition.definition_id == gate.definition_id
+        for definition in configuration.evaluation.definitions
+    )
 
 
 def test_v38_uses_no_warmup_and_twenty_minute_evaluations() -> None:

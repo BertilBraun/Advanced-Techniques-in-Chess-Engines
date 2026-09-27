@@ -1,120 +1,45 @@
-# 2. Methodology and evidence
+# 2. Evaluating the chess system
 
-## Units of evidence
+We measure thinking effort in search visits rather than seconds. For a given model and search configuration, this
+budget is hardware-independent: faster hardware finishes sooner instead of receiving more search. Fixed budgets
+also keep background load from changing the amount of search performed. We report approximate thinking time
+separately to give these budgets a practical scale.
 
-The repository deliberately separates evidence by purpose:
+The most direct test of the system is whether its final model wins games. We played it against Stockfish 13 at fixed
+search limits, starting from 50 openings and playing each once with each colour. The model played without search and
+at four progressively larger search budgets. For each budget, we tested two Stockfish limits rather than trusting a
+single opponent.
 
-- a **configuration** states what should run;
-- a **resolved configuration and hash** state what a particular run was asked to run;
-- a **run archive** records what actually happened;
-- a **benchmark report** interprets one bounded measurement;
-- an **analysis** combines several measurements or audits a mechanism;
-- a **plan** records intent and is not evidence that an experiment happened.
+| Model searches | Parallel | Stockfish nodes | W/D/L | Score | Benchmark Elo (95% CI) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| Policy only | -- | 1,000 | 32/24/44 | 0.440 | **1,658 [1,608, 1,710]** |
+| Policy only | -- | 2,000 | 16/22/62 | 0.270 | 1,717 [1,638, 1,790] |
+| 100 | 1 | 5,000 | 51/28/21 | 0.650 | 2,328 [2,276, 2,384] |
+| 100 | 1 | 10,000 | 39/18/43 | 0.480 | **2,456 [2,400, 2,512]** |
+| 1,000 | 1 | 20,000 | 47/40/13 | 0.670 | 2,823 [2,774, 2,873] |
+| 1,000 | 1 | 50,000 | 21/48/31 | 0.450 | **2,925 [2,875, 2,977]** |
+| 10,000 | 4 | 50,000 | 45/40/15 | 0.650 | 3,068 [3,023, 3,120] |
+| 10,000 | 4 | 100,000 | 30/44/26 | 0.520 | **3,114 [3,065, 3,163]** |
+| 100,000 | 16 | 100,000 | 51/38/11 | 0.700 | 3,247 [3,192, 3,305] |
+| 100,000 | 16 | 200,000 | 25/56/19 | 0.530 | **3,251 [3,206, 3,297]** |
 
-The benchmark index is [`documentation/benchmarks/README.md`](../benchmarks/README.md), and frozen run/node records
-are indexed under [`documentation/evidence/`](../evidence/README.md). Historical plans remain useful for rejected
-designs but must not be cited as completed measurements unless they point to preserved results.
+## Final playing strength
 
-## Claim states
+Table \ref{tab:02-methodology-and-evidence-1} gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
+The bold rating for each model budget comes from the opponent against which it scored closest to 50%, where the
+rating estimate needs the least extrapolation.
 
-This report uses the following vocabulary.
+At the deepest budget, the model scored 3,251 benchmark Elo against the harder opponent and 3,247 against the other:
+the two measurements agree closely. The ratings use a published calibration of Stockfish's fixed node limits [9].
+Chapter \ref{sec:07-final-run-results} examines how strength changes with search; Appendix \ref{app:B} gives the rating calculation and interval method.
 
-| State | Meaning |
-| --- | --- |
-| Retained | Implemented and present in the final recipe |
-| Implemented, rejected | Built and measured, then removed or disabled |
-| Measured, inconclusive | Evidence exists but does not support a stable decision |
-| Audited, declined | Investigated far enough to reject before production adoption |
-| Infrastructure only | Supporting machinery was built, but the research claim was not established |
-| Proposed, not attempted | Appears in a backlog or plan only |
-| Superseded | Once authoritative, replaced by a later design or result |
+## Reading the component experiments
 
-These states prevent a common error in long experimental projects: confusing the existence of code or a design
-document with empirical support.
+The rest of the paper asks why the system reached that result. A faster inference engine can supply more search,
+but that only helps training if the system finishes more games and admits useful positions to replay. A lower loss
+on stored positions can indicate a better fit, but the real test is whether the next model plays better. We follow
+each proposed improvement as far through this chain as the experiment measured.
 
-## Comparison hierarchy
-
-Evidence strength increases through four levels:
-
-1. static reasoning or literature transfer;
-2. isolated throughput, fidelity, or frozen-replay measurement;
-3. controlled online comparison, preferably forked from byte-identical model and replay state;
-4. terminal match evidence with fixed opponents, balanced openings, complete artifacts, and uncertainty intervals.
-
-The adaptive-stopping campaign showed why shared-state forks matter: independent runs had much greater ladder noise
-than arms resumed from the same checkpoint and replay state. See the
-[adaptive-search conclusion](../analysis/adaptive-search-conclusion-20260904.md). Frozen-replay studies are excellent
-for optimizer, architecture, and quantization diagnosis, but they do not by themselves establish self-play Elo.
-
-## Evidence dimensions
-
-A single “strong/weak” label is too imprecise for this project. Conclusions are classified by the observation they
-actually contain:
-
-| Grade | Observation | Valid use |
-| --- | --- | --- |
-| **S — strength** | Paired games or a calibrated ladder under a frozen protocol | Strength claim for that checkpoint, search, and opponent |
-| **O — online learning** | Self-play learning slope, preferably from a shared-state fork | Learning-system comparison within the measured regime |
-| **P — proxy** | Frozen replay, held-out loss, target fidelity, policy agreement, or fixed-batch fit | Candidate selection or mechanism diagnosis, not Elo |
-| **T — throughput** | Forward, search, actor, trainer, or admitted-replay rate | Performance claim under the recorded workload, not learning quality |
-| **M — mechanics** | Unit/integration test, smoke, persistence audit, or telemetry | Correctness and operation, not efficacy |
-| **R — rationale** | Literature transfer, design analysis, or an unexecuted plan | Motivation only |
-
-A technique can have several grades. Progressive sizing has **T** evidence for the small-model premise and **M**
-evidence for durable promotion, but no isolated **O/S** comparison of the exact final ladder against a fixed model.
-QAT has **P/T/M** evidence; the final run determines whether the resulting extra data production converted to
-learning and strength.
-
-The [experiment ledger](../experiments/README.md) records technique status, the
-[benchmark coverage ledger](../experiments/benchmark-coverage.md) accounts for benchmark artifacts, and the
-[report coverage matrix](coverage-matrix.md) records where every analysis and benchmark family enters this report.
-
-## Corrections and supersession
-
-The repository preserves intermediate interpretations when they explain how a diagnosis changed. This report uses
-the latest controlled conclusion and states the correction. Examples include FP32 attention measurements that did
-not represent production BF16, a parallel-search sweep whose batch regime did not exercise the intended cap, and
-the initial “template staleness” explanation superseded by the TensorRT equal-scale refit defect.
-
-Where raw evidence was not preserved—most notably an early low-rank dense policy-head bake-off—the report may
-describe the historical direction but must not promote exact numbers to the same status as a tracked benchmark.
-
-## Strength measurement
-
-Chess strength is measured through paired-opening matches against Stockfish at fixed node limits. Reported absolute
-ratings use the project's historical SSDF-derived Stockfish-node calibration. They are **benchmark Elo**, not FIDE,
-online-server, CCRL, or universally portable engine ratings. Every published strength row should retain:
-
-- checkpoint and inference-backend identity;
-- searches per move and search parallelism;
-- opponent version, node limit, threads, and hash;
-- opening source and number of paired openings;
-- W/D/L, score, sample count, confidence interval, and rating conversion;
-- hardware and, when latency is claimed, concurrency and batching assumptions.
-
-The interpretation and acceptable language are defined in
-[the Elo-scale note](../analysis/chess-elo-scale-and-reporting-20260911.md). The v34 terminal protocol provides the
-clearest completed example in the [generation-1465 benchmark](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
-
-## Throughput and fidelity
-
-Throughput is workload-specific. Batch size, concurrent roots, model state, process topology, CUDA graph capture,
-precision, and GPU contention can change a result. A saturated many-game measurement is not single-game response
-latency. Architecture comparisons should separate raw forward throughput from search throughput because different
-policies can cause different numbers of network evaluations.
-
-Inference speed is never sufficient on its own. TensorRT artifacts are checked against a reference model, and the
-INT8 investigation ultimately showed why probes must use real positions and legal-action masking. The
-[template-staleness investigation](../benchmarks/int8-template-staleness-rtx4070super-20260921/README.md) records both
-the failed metric and the corrected diagnosis.
-
-## Evidence rules for the final run
-
-The readable, living recipe and the frozen scientific identity serve different purposes. The living entry point is
-[`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). The final result must additionally
-freeze the exact source revision, resolved configuration and SHA-256, run manifest, hardware/runtime inventory,
-selected checkpoint, inference artifacts, archive digest, and evaluation artifacts. If the living configuration is
-updated later, the reported experiment must remain reproducible from its frozen identity.
-
-All pending terminal measurements are listed once in [Chapter 7](07-final-run-results.md). Other chapters describe
-methods and prior evidence without guessing the outcome.
+For online comparisons, we matched starting weights, replay, evaluation, and hardware where possible. Smaller
+frozen-data tests helped screen ideas before expensive self-play runs. Because the final recipe combines many
+changes, we attribute a separate strength gain to a component only when a comparison actually measured one.

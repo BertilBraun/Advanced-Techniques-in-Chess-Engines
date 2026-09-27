@@ -1,97 +1,196 @@
-# 4C. Network and training investigations
+# 4.3. Choosing what the network predicts
 
-This chapter separates trunk, head, context, initialization, optimizer, auxiliary, and compression evidence. Their
-status summary is [Network and training experiments](../experiments/networks-and-training.md).
+![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
-## CNN versus attention
+Figure: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
+head scores square pairs before gathering canonical actions and masking illegal moves.
 
-The first attention results were not clean architecture comparisons. Generation-zero BatchNorm export made the
-attention prior nearly uniform while the CNN control was accidentally extremely sharp. Some throughput comparisons
-also used FP32 although production used BF16. These records remain evidence of the failure mode, not evidence that
-attention is inherently unsuitable.
+Network architecture constrains both prediction quality and the volume of search affordable during training.
+We compared policy representations, convolutional and attention trunks, global context, and value heads, then
+examined model growth and quantization. The policy head was a major source of parameter cost in small networks;
+Figure \ref{fig:policy-representations} summarizes the three representations evaluated.
 
-The later viability study calibrated bootstrap priors, used a fixed teacher dataset, paired held-out cross-entropy,
-and measured production-card throughput separately. A bare attention trunk did not beat the CNN at a matched head.
-The best attention cell improved the proxy, but most of its advantage came from the from-to policy head and it paid a
-large throughput cost. The project retained the CNN. This is **P/T**, not a terminal online trunk ablation.
+## Three policy representations
 
-Packed-QKV and SDPA-backend work improved or clarified the attention implementation but became superseded when the
-attention family was not selected. Hybrid CNN/transformer trunks remained proposals.
+All three policy families were implemented against the chess move interface, whose selected encoding contains
+1,880 canonical actions. Controlled fitting experiments compare held-out policy cross-entropy in nats.
 
-## Policy, context, and value heads
+The **dense head** flattened a small spatial projection into 1,880 logits. Dense heads trained successful models,
+but on a small trunk their projection could dominate the parameter count. Variants changed projection width,
+spatial reduction, and final-map rank. A rank-96 variant reduced head size from roughly 484,000 to 207,000
+parameters.
 
-The from-to head replaced a large dense projection with structured origin/destination scoring. On the unchanged
-12x128 CNN it captured most of the held-out-policy improvement for a small forward-throughput cost and became the
-final head. An earlier low-rank dense-head bake-off was not preserved as a tracked benchmark; its exact numbers
-should not appear as equivalent evidence.
+The **move-plane head** represented sliding directions, knight moves, and promotions as spatial move types. It
+could preserve board structure, but its experiments did not show an advantage over the dense control. In a short
+supervised comparison, the repaired plane head reached 2.1828 held-out policy cross-entropy after about 2,500
+steps versus 2.0824 for the dense control, while its curve was still improving faster. An online plane-head trial
+was retired after slower learning and weaker play.
 
-Global-pooling context every second block is retained and externally motivated but lacks a one-variable chess
-ablation. The policy and value heads share the convolutional trunk; a partially split late trunk was discussed but
-not tested. A 32-channel value head received a short matched frozen-replay probe and did not justify its added cost,
-so the final value head stays at two channels.
+The two implementations differed: one gathered 1,880 canonical logits from 76 planes (56 sliding directions,
+eight knight moves, and 12 promotions); the other exposed all 4,864 plane-square cells and normalized only legal
+moves. Both express the same basic idea: predict move types at board locations rather than score a flat action list.
 
-## Quantization-friendly residual blocks
+The retained **from-to head** uses query-key dot products over the 64 trunk squares, with a fixed gather into the
+canonical action space and separate promotion offsets. This retains spatial structure without a large dense
+projection. On the controlled 128-channel convolutional trunk, the head used 50,048 parameters rather than 483,680 for the dense
+alternative. Section \ref{sec:03-system-and-methods-chess-representation-and-outputs} and Appendix \ref{app:D} specify its representation and action mapping.
 
-Ordinary post-training INT8 could not preserve the network outputs. The successful architecture uses scaled
-post-activation residual branches and caps activations at 6, making QAT ranges bounded. Frozen-replay screens show
-that the block learns under fake quantization and can serve a faithful pre-fold INT8 graph. This is a joint
-architecture/deployment result, not evidence that the residual block is stronger in float chess.
+Holding that trunk fixed, the from-to head improved the held-out policy gap by 0.0298 nats (paired 95% interval
+0.0285--0.0311 over held-out positions, not training seeds). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
+the missing fourth cell prevents fully separating the two effects. Forward throughput fell by approximately 1.9%
+at batch 512 and 9% at batch 64. The from-to head therefore improved policy fit and reduced parameter count, with
+a serving penalty that was smaller at the large batches used for self-play.
 
-## Progressive sizing
+## Board input and rule state
 
-The throughput premise is measured: small early models can generate substantially more search on the production
-GPU. The mechanism is also durable: active and candidate trainers consume the same replay-batch identity; candidate
-start is triggered by searched-Elo gain per hour; loss EMAs govern promotion; private candidate checkpoints survive
-restart; publication is ordered and idempotent.
+The selected model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks,
+repetition, the eight most recent moves, material counts, and the fifty-move counter. Rule-sensitive planes keep
+positions with different legal or draw states distinguishable. Appendix \ref{app:D}, Table \ref{tab:appendix-d-reproducibility-1}
+lists all 52 planes and their encodings. File reflection is the only augmentation; it also
+mirrors action targets and exchanges kingside and queenside castling planes. Some earlier component comparisons
+used a 29-plane input, so their absolute scores are not input-matched to the final model.
 
-The exact 12x128 → 14x160 → 19x176 ladder has no fixed-model counterfactual. Its causal strength-per-dollar gain is
-unresolved even if the final model is strong. Evidence is **T/M**, with final-run **O/S** for the assembled bundle.
+## Convolution, attention, and global context
 
-## Bootstrap calibration and deterministic initialization
+The trunk comparison evaluated whether attention improved board-wide feature learning enough to justify its
+serving cost. Both designs shared their trunk across policy, value, and auxiliary heads. Because dense primary and
+auxiliary policy heads could dominate a small model's parameters, head choice had to be controlled alongside the trunk.
 
-Generation zero creates the first self-play targets, so its output distribution is part of the algorithm. The final
-bootstrap path measures policy shape on 516 real encoded probes, selects among candidate initializations under policy
-and WDL constraints, and calibrates policy scale toward a top-three-mass target. It may sharpen or dampen a model;
-it is not an architecture-specific constant.
+The attention alternative treated the 64 squares as tokens, with learned row and column embeddings,
+pre-normalized self-attention, and GELU feed-forward blocks. No-bias, relative-offset, and input-dependent
+Smolgen-style attention biases were implemented. These biases respectively add no positional preference, depend on
+the offset between squares, or depend on the board itself. The preserved comparison covers the first and third.
 
-The adaptive-search postmortem found that the configured random seed did not reach network construction. Nominally
-identical independent runs therefore began from different tensors. That defect was fixed, and the v35–v42 work moved
-toward exact initialization, checkpoint, replay, and inference-artifact comparisons. The
-[regression audit](../analysis/v35-v42-regression-audit-20260913.md) and
-[executable bisect](../analysis/v35-v42-executable-bisect-20260913.md) are methodological evidence: uncontrolled
-short-run rankings should not be treated causally.
+With bootstrap policy shape, head, runtime, and precision controlled, the convolutional trunk beat bare attention
+by 0.0060 nats on held-out teacher data. Replacing the attention model's dense head with from-to and reallocating
+capacity to the trunk improved the held-out gap by 0.1573 nats; this was not an isolated head replacement.
+The best Smolgen attention cell achieved slightly better held-out fit than the convolutional comparison, by
+0.0090 nats. Convolution nevertheless remained the preferred operating choice because attention served more
+slowly and consumed more memory at the relevant batch sizes. Appendix \ref{app:C} gives the serving comparison.
 
-## Auxiliary objectives
+Local convolution receives global context every second residual block: board-wide means and maxima from one
+quarter of the channels are projected back as biases on local features. Squeeze-excitation was another implemented
+context mechanism, using board-wide information to rescale channels. Global pooling appeared to learn faster,
+with no clear final-strength difference; this remains a qualitative observation because the comparison results
+are unavailable. The pooled features give local convolutions access to the whole board, following the KataGo
+precedent [2]. Those context operations remain in floating point when the main convolutions are quantized.
 
-The final model trains next-policy at weight 0.15 and normalized remaining game length at weight 0.1. Both heads are
-removed from inference. Fixed-batch overfit and replay audits establish gradients, eligibility, symmetry, and
-censoring. No long matched online ablation isolates either head. Other proposed heads—future action, uncertainty,
-root Q, material, survival, king safety, control maps, and search correction—were not final experiments.
+## Value and training-only heads
 
-## AdamW, SGD, and learning-rate evidence
+The outcome head predicts win, draw, and loss rather than a single scalar. Search converts this distribution to an
+expected value when necessary, while training and diagnostics retain the draw probability. A compact
+two-channel spatial reduction and 48-unit hidden layer was retained. A matched 32-channel probe added 97,020
+parameters and reduced measured training throughput by 1.31%, while improving total loss by only 0.00309 in one
+short seed and slightly worsening WDL loss. This justified keeping the smaller head. The earlier scalar-to-WDL
+transition has no preserved isolated strength comparison.
 
-AdamW produced the verified v34 result and is therefore superseded, not disproven. Frozen-v34-replay screens showed
-that Nesterov SGD could train the QAT network and ranked candidate warmups, fold boundaries, and deployment rates.
-Delayed folding helped the historical pre-fold schedule; within the tested short horizon, higher post-fold target
-rates improved proxy fitting without instability.
+Training also predicts the next move's searched policy and normalized remaining game length, with loss weights
+0.15 and 0.1. The next-policy target uses the following state's own side-to-move action space,
+legality mask, and symmetry transformation. Both heads train the shared representation without making inference
+more expensive, because deployment removes them. Other auxiliaries were set aside while debugging potential
+interference, not because they were shown harmful. The retained pair has not received a long matched self-play
+ablation.
 
-The final schedule is not the screen winner copied literally. It keeps the authoritative training model pre-fold
-until one million optimizer steps and the deployment copy inherits the main linear learning rate. The screens are
-**P/M** mechanism and selection evidence. Final online strength belongs to the assembled run.
+## Bootstrap and optimization controls
 
-Gradient clipping was frequent in several frozen screens but did not prevent learning. This is a diagnostic to plot,
-not proof that the clipping threshold is optimal. EMA/SWA, gradient accumulation, and dynamic loss balancing remained
-proposals.
+Initialization shapes the first search priors and, through them, the first self-play targets. In an initial
+architecture comparison, the attention policy put only about 0.11 probability mass on its top three moves while
+the convolutional control was effectively one-hot. Neither extreme represented chess knowledge, but each induced
+different data. The retained bootstrap uses architecture-appropriate initialization, deterministic construction,
+a small final policy projection, and calibration on 516 encoded positions toward a common policy concentration.
+Those positions set numerical scale without supplying supervised chess targets.
 
-## Distillation and compression
+The retained optimizer is Nesterov SGD. Frozen-replay tests helped choose warm-up and learning-rate settings before
+committing to self-play runs. AdamW had also trained successful models; the choice of SGD does not mean AdamW failed.
+Gradient clipping limits unusually large updates. The final run completed 408,500 optimizer steps, with the learning
+rate, losses, and gradient norms shown in Appendix \ref{app:A}.
 
-The teacher-imitation probe varied student size, data volume, auxiliary imitation, and search depth. It quantified
-how deeper search widened the teacher/student gap but inherited dataset sampling defects and did not produce a final
-training stage.
+## Quantization as an architectural constraint
 
-The later v34 replay-compression study published a 0.47M-parameter student and evaluated equal searches, approximate
-equal serving time, and equal network compute. The answer depended on the constraint: the student was much smaller
-and faster but did not match the teacher. Compression is therefore measured and useful, yet inconclusive as a
-replacement for direct final-model training
-([probe](../benchmarks/chess-distillation-probe-rtx3060-20260827/README.md),
-[v34 compression](../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md)).
+INT8 deployment required changes to the residual architecture as well as quantization-aware training (QAT).
+The experiments compared prediction fidelity and compiled throughput: an architecture that tolerates rounding
+but introduces expensive precision conversions may still be unsuitable for self-play.
+
+Post-training quantization of the ordinary residual tower accelerated inference but severely distorted predictions. Activation ranges
+grew from about 0.78 near the input to roughly 40--43 late in the network; depending on calibration, full-trunk INT8
+preserved only 13.3--25.9% policy top-one agreement. Weight-only quantization was faithful but slower than TensorRT
+FP16. Quantization therefore became a network-design problem rather than a final export switch.
+
+A scaled pre-activation block bounded residual activation ranges,
+but its normalization, clipping, scaling, and repeated precision conversions fragmented the compiled TensorRT graph.
+It expanded an 83-layer FP16 graph to 330 layers
+and an INT8 graph to 470 layers, with many reformats, yet still failed fidelity. The retained scaled post-activation
+block instead keeps the conventional sequence of convolution, normalization, capped activation, convolution,
+normalization, scaled residual addition, and capped activation. Activations are capped at six, and residual branches
+are scaled by the inverse square root of depth. The scale can be folded into the second convolution at export, which
+preserves more efficient compiler tactics.
+
+Batch-normalization folding changed the quantization behaviour as well as the compiled graph. The final run keeps
+the trainable model unfused and performs folding and recalibration on a deployment copy. Separate fitting
+experiments also evaluated continued training in the folded topology.
+
+The scaled post-activation block learned normally under quantization-aware training. After continuation in the folded deployment topology,
+a production-sized smoke test reached roughly 135,000 INT8 positions per second, compared with 60,000 for
+TorchScript BF16 and 99,000 for TensorRT FP16. These are model-core rates, not end-to-end self-play rates. Folding
+only after training damaged agreement, and global context and the heads remain outside the INT8 trunk. The result is
+evidence for an architecture compatible with efficient INT8 inference, rather than a playing-strength advantage
+over the ordinary floating-point residual block.
+
+## Progressive model sizing
+
+![Small-to-medium promotion is supported while the larger-model transition remains unresolved](figures/progressive-model-sizing.svg)
+
+Figure: A small model reduces early self-play cost, and a medium candidate trains on the same replay before
+paired-match promotion. The larger candidate may avoid catch-up with function-preserving growth, but the limited
+continuation did not demonstrate a strength gain; the reported checkpoint remains medium-sized.
+
+Following KataGo [2], progressive sizing uses a small network for early self-play while a larger candidate trains
+on the same replay before promotion. The throughput advantage is most useful while the smaller network has enough
+capacity to absorb the available experience. The small-to-medium transition worked repeatedly in this project.
+
+Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
+matches against the active model. Section \ref{sec:05a-three-failures-promotion-from-incomparable-training-losses} explains why matches replaced training loss as the promotion criterion;
+Appendix \ref{app:D} states the retained thresholds.
+
+An independently initialized larger candidate needed substantial catch-up. Function-preserving growth instead
+initializes the larger model to compute the same predictions as the medium model. It avoids relearning that
+function, but might also bias optimization toward the smaller model's existing representation. The
+limited grown-model continuation reached parity without a clear strength gain. The reported model therefore remains
+medium-sized; choosing between catch-up and growth needs a matched-compute comparison.
+
+## Distillation and compact models
+
+Distillation evaluated the tradeoff between reduced inference cost and approximation of a stronger teacher.
+We tested two sources of supervision: the larger teacher's direct predictions and the targets
+already collected in replay. In the first, students learned the teacher's legal-move probabilities and WDL
+predictions from games played without search. Increasing this dataset from one million to six million positions
+mattered more than a small capacity sweep.
+The strongest 1.33-million-parameter student trailed its teacher by 176.1 Elo at 25 searches each and by 38.4 Elo
+when it received the measured shallow equal-compute allowance of 58 searches. At 250 searches each the gap widened
+to 257.6 Elo. Deeper search amplified the better prior rather than washing out approximation error. Fixed-ply
+sampling gave the dataset only one side-to-move parity, and the teacher had a known conversion weakness, so these
+absolute gaps do not transfer to the final model.
+
+Replay-target compression instead trained on sparse MCTS visits, outcomes, root values, and replay metadata from a
+frozen ten-million-row window. The selected 474,069-parameter student was 13.20 times smaller than its teacher. It
+trailed by 291.3 Elo at 64 searches each and by 166.2 Elo when its measured saturated serving advantage allowed 186
+searches against 64. It reached statistical parity only at an equal-multiply-accumulate allowance of 850 searches,
+which counted neural arithmetic but omitted tree work and inference overhead. The smaller model's theoretical
+compute advantage was therefore much larger than the extra search it could actually perform in the same time.
+
+A final compression study trained a 470,295-parameter student on a separate frozen 20-million-row replay
+snapshot for 110,000 optimizer steps, roughly 23 epochs. Chapter \ref{sec:07-final-run-results} presents
+these final student results alongside the full model.
+
+The resulting compact models reduced inference cost, but their realized search advantage was substantially smaller
+than their parameter or arithmetic ratios. The teacher's strength advantage also increased with search depth in
+the measured comparisons. Distillation was separate from the primary self-play training run.
+
+## Decision
+
+The retained network combines the rule-aware 52-plane input, a shared convolutional trunk, periodic global
+context, the from-to policy head, a compact WDL head, and training-only next-policy and remaining-length objectives.
+Scaled post-activation blocks make the trunk compatible with quantization-aware deployment. Progressive sizing
+successfully exploited a small model before handing off to the medium model, while the value of the larger stage
+remains unresolved. Component tests support parts of this design, while final playing strength belongs to the
+assembled system.

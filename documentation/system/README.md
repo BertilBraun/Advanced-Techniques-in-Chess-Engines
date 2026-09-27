@@ -21,9 +21,9 @@ source of defaults.
 The living recipe and a published result have different stability contracts. The recipe may be updated if the
 project's settled configuration changes. A reported run must instead pin its exact Git revision, canonical resolved
 configuration and SHA-256, approval, run manifest, checkpoint hashes, engine artifacts, and hardware/runtime
-identity. Final-run measurements are still pending and are tracked in
-[`documentation/results/final-chess-run.md`](../results/final-chess-run.md); this section makes no terminal strength
-claim.
+identity. The completed final-run measurements are tracked in
+[`documentation/results/final-chess-run.md`](../results/final-chess-run.md); this section defers terminal strength
+claims to that result record.
 
 ## Authority and historical material
 

@@ -1,75 +1,65 @@
-# 6. Final chess recipe
+# 7. Training progress under limited compute
 
-## Canonical entry point
+The final training run produced a 6.32-million-parameter chess model in 2.5 days on one node with eight
+RTX 4070 SUPER GPUs and 80 logical CPUs. This chapter examines the progression in strength and the training volume
+made possible by the integrated system. The complete recipe is specified in Appendix \ref{app:D};
+`chess-final-config.yaml` [10] remains the entry point for reproduction.
 
-The reproduction entry point is
-[`py/configs/production/chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml). It is fully
-expanded and inherits from no other YAML file. Documentation should link to that file instead of copying every field,
-because the living recipe may be revised if the project resumes.
+## Progress across training campaigns
 
-The current final training run was developed iteratively across V89–V93. Those versions include operational resumes
-and fixes; they do not redefine the intended recipe as separate scientific runs. The terminal report must freeze the
-actual source revision and resolved configuration used by the reported checkpoint.
+Figure \ref{fig:chess-ladder-progress-paper} compares the 64-search training ladders across five chess campaigns. The final recipe reached higher
+playing strength within the reported training window.
 
-## Recipe summary
+![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
-| Component | Settled choice |
-| --- | --- |
-| Hardware | 8x RTX 4070 SUPER, shared by training, self-play, and evaluation |
-| Trainer | 8-rank NCCL DDP; global batch 2,048; bfloat16 |
-| Optimizer | SGD, momentum 0.9, Nesterov, weight decay 0.0001, gradient norm cap 1.0 |
-| Learning rate | 1,000-step warmup to 0.1; linear 0.1 to 0.01 over generations 0–1,000 |
-| Quantization | TensorRT INT8 QAT, pre-fold deployment copy, per-generation recalibration |
-| Model ladder | 12x128 → 14x160 → 19x176 convolutional networks |
-| Context/head | Global pooling every second residual block; from-to attention policy head |
-| Candidate timing | Searched-Elo plateau thresholds; loss-based promotion after catch-up |
-| Replay | Staged 0.6M → 20M positions; reuse 4; eight materializers |
-| Sampling | 30% uniform plus capped policy-surprise weighting |
-| Search | 300 → 400 → 500 → 600 → 800 visits; reduced-parent FPU; forced playouts |
-| Starts | 50% shallow random openings; 50% recent restart states |
-| Resignation | Calibrated after generation 70, with 20% continuation games |
-| Objectives | Policy 1.0, value 1.0, root-value blend, discounted value targets |
-| Auxiliary targets | Next policy at 0.15; remaining game length at 0.1 |
+Figure: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
+the preceding baseline at 3 days.
 
-This table is explanatory, not executable. The YAML remains authoritative.
+![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput-paper.svg)
 
-## Progressive stages
+Figure: Training volume and throughput on a common optimizer-step axis. Panels show completed games per
+training block, search visits per move, live replay occupancy, and trainer throughput. Replay capacity
+increases in steps, while the small-to-medium transition coincides with lower trainer throughput.
 
-All stages share the same semantic heads and objective, making loss comparison meaningful during catch-up:
+The larger progression across the plotted campaigns reflects successive changes to architecture, data generation,
+and training efficiency.
 
-1. **12 blocks × 128 channels.** The high-throughput bootstrap and early-data stage.
-2. **14 blocks × 160 channels.** The medium stage used once early Elo gain per hour no longer justifies staying small.
-3. **19 blocks × 176 channels.** The maximum configured stage, started under a lower plateau threshold.
+## Training volume and model transition
 
-Each block family uses scaled post-activation with an activation cap of 6. The branch scale decreases with depth.
-The from-to policy key size is 128 in every stage, and the value head shape remains fixed.
+Table \ref{tab:06-final-chess-recipe-1} summarizes the scale of the final run.
 
-## Data curriculum
+| Quantity | Final training |
+| --- | ---: |
+| Duration | 2.5 days |
+| Model parameters | 6.32 million |
+| Completed games | 3.25 million |
+| Mean game length | ~104 plies |
+| Estimated search simulations | ~100 billion |
+| Materialized positions | 209 million |
+| Training presentations | 837 million |
+| Optimizer steps | 409 thousand |
+| Live replay at selection | 16.0 million positions |
+| Node rental cost | $43.2 |
 
-The recipe increases three resources over time:
+We estimate approximately 100 billion search simulations, using 209 million materialized positions and an assumed
+average of 500 fresh simulations per position, allowing for subtree reuse and the lower initial visit budgets.
+The multiplier is an accounting assumption, not an independently measured average: 209,153,744 × 500 gives
+104,576,872,000 simulations before rounding.
 
-- search visits increase as the policy becomes capable of using deeper search;
-- replay capacity grows from 600,000 to 20 million positions, limiting early stale-data dilution while preserving
-  broader later experience;
-- the network grows only when the current stage's measured improvement per hour falls below its threshold.
+Figure \ref{fig:final-training-volume-and-throughput-paper} relates this volume to replay growth and the transition from the 12×128 to the 14×160 model.
+The smaller network supported faster early training; median trainer throughput fell from about 17.0 thousand to
+11.2 thousand samples/s across the two stages. Search increased from 300 to 600 visits per move over the plotted
+run. The configured 800-visit stage lies beyond the selected checkpoint.
 
-Meanwhile, game length caps increase from 150 to 250 plies, greedy move selection is delayed later in mature games,
-and a root-value blend rises from zero to 0.1. These schedules are part of the data curriculum, not incidental knobs.
+![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
 
-## Search and diversity
+Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
+50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
+The horizontal axis lists search budgets categorically.
 
-Every self-play position uses the generation's fixed visit cap; the rejected learned adaptive systems are absent.
-Forced playouts broaden root exploration, while reduced-parent-value FPU discourages an unexplored move without
-treating it as maximally bad. Dirichlet noise and temperature provide early exploration, with lower temperature after
-the configured greedy threshold.
+The expanding replay window retained a broader history of self-play while the learner received approximately four
+presentations per admitted position. Throughput, search budget, and replay growth therefore changed together as
+training progressed. Loss, learning-rate, and gradient diagnostics are provided in Appendix \ref{app:A}.
 
-Random openings cover up to eight legal plies. Restart states must pass value, branch-mass, age, and remaining-length
-filters, and selection retains a uniform component. This combination seeks variety without turning the entire start
-distribution into a narrow hard-position curriculum.
-
-## What the recipe does not prove
-
-Presence in the final configuration does not mean every component has an isolated Elo estimate. Progressive sizing,
-the from-to head, inference backends, and several search decisions have focused evidence. Restart states, the two
-retained auxiliary heads, and interactions among replay growth, surprise weighting, and resignation are principally
-supported as an assembled recipe. The final run evaluates the bundle.
+The reported checkpoint was selected near the strongest region of the training ladder. A function-preserving
+19×176 continuation recovered parity but did not establish a higher plateau.

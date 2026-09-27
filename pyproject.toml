@@ -2,6 +2,7 @@
 name = "alphazero-engine"
 version = "0.1.0"
 description = "AlphaZero-style chess and Go engine: Python supervision over a C++20 native runtime"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "torch==2.12.1",
@@ -39,6 +40,13 @@ tensorrt = [
 dev = [
     "pytest",
     "ruff",
+]
+publication = [
+    "markdown-it-py",
+    "matplotlib>=3.11.2",
+    "pypdf",
+    "reportlab",
+    "svglib",
 ]
 
 [tool.uv]

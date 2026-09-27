@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 120 1260 175" role="img" aria-labelledby="title description">
+  <title id="title">The supported and unresolved stages of progressive chess model sizing</title>
+  <desc id="description">A small active model produces early self-play quickly. A medium candidate trains on the same data and becomes active only after paired matches; this handoff worked repeatedly. A larger candidate can start independently or from function-preserving growth, but the measured continuation reached parity without a clear gain.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #172b36; }
+      .stage { fill: #f6f9f8; stroke: #255c5a; stroke-width: 3; }
+      .candidate { fill: #f9f8f3; stroke: #9b7840; stroke-width: 3; }
+      .heading { font-size: 22px; font-weight: 700; }
+      .body { font-size: 19px; }
+      .note { font-size: 19px; fill: #344c58; }
+      .good { font-size: 19px; fill: #17615b; font-weight: 700; }
+      .uncertain { font-size: 19px; fill: #805e2e; font-weight: 700; }
+      .solid { stroke: #17615b; stroke-width: 5; fill: none; }
+      .dashed { stroke: #9b7840; stroke-width: 5; stroke-dasharray: 11 8; fill: none; }
+    </style>
+  </defs>
+  <rect width="1300" height="500" fill="#fff"/>
+
+  <rect x="40" y="131" width="300" height="153" rx="8" class="stage"/>
+  <rect x="500" y="131" width="300" height="153" rx="8" class="stage"/>
+  <rect x="960" y="131" width="300" height="153" rx="8" class="candidate"/>
+
+  <text x="65" y="163" class="heading">Small active model</text>
+  <text x="65" y="197" class="body">Fast early game generation</text>
+  <text x="65" y="222" class="body">Limited eventual capacity</text>
+  <text x="65" y="263" class="good">Retained starting stage</text>
+
+  <text x="525" y="163" class="heading">Medium candidate</text>
+  <text x="525" y="197" class="body">Learns from the same replay</text>
+  <text x="525" y="222" class="body">Promoted after paired gate</text>
+  <text x="525" y="263" class="good">Handoff worked repeatedly</text>
+
+  <text x="985" y="163" class="heading">Larger candidate</text>
+  <text x="985" y="197" class="body">Independent catch-up or</text>
+  <text x="985" y="222" class="body">function-preserving growth</text>
+  <text x="985" y="263" class="uncertain">No clear gain measured</text>
+
+  <path d="M350 222 H474" class="solid"/>
+  <path d="M474 214 L488 222 L474 230 Z" fill="#17615b"/>
+  <path d="M810 222 H934" class="dashed"/>
+  <path d="M934 214 L948 222 L934 230 Z" fill="#9b7840"/>
+  <text x="420" y="197" text-anchor="middle" class="good">supported</text>
+  <text x="880" y="197" text-anchor="middle" class="uncertain">unresolved</text>
+</svg>

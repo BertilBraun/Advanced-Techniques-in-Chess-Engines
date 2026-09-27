@@ -67,28 +67,56 @@ publishes a refitted TensorRT engine. See
 ## Progressive sizing
 
 Only the active model trains initially. Candidate start is controlled by the searched Stockfish ladder and is
-stage-specific: 15 Elo/hour for 14×160 and 5 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
-decay `0.90`; five consecutive below-threshold observations are required before the immediate successor starts.
-After a promotion, the next stage begins a fresh plateau state seeded from the latest observed Elo rather than
-reusing the previous stage's latch.
+stage-specific: 15 Elo/hour for 14×160 and 4 Elo/hour for 19×176. The runtime uses a bias-corrected Elo EMA with
+decay `0.90`. It retains seven EMA samples, measures gain across the six observation intervals between the oldest
+and newest samples, and requires two consecutive complete-window gains strictly below the threshold before the
+immediate successor starts. After a promotion, the next stage begins a fresh plateau state seeded from the latest
+observed Elo rather than reusing the previous stage's latch.
 
 Once eligible, the active model and its immediate successor train sequentially on the identical replay snapshot and
-deterministic sample identity. The successor starts from its own random initialization; no weights or optimizer
-moments transfer. Its catch-up learning rate follows its own local-generation schedule from `0.1` to `0.01` through
-200 local generations.
+deterministic sample identity. The ordinary controller successor starts from its own random initialization; no
+weights or optimizer moments transfer. The active model trains one optimizer quantum per global generation. The
+successor's configured step multiplier is `1.5`, implemented as alternating one and two complete quanta from the
+global generation index.
+When two successor quanta run, both use the same global replay-source step and therefore repeat the same
+deterministic batch sequence while the successor optimizer advances. Its catch-up learning rate follows its own
+local-generation schedule from `0.1` to `0.01` through 600 local generations.
 
-Promotion is loss-based, not match-based. Paired active/candidate total-loss EMAs use decay `0.8`; after ten shared
-quanta, the candidate promotes when its EMA is no more than `1.002` times the active model's EMA. Only one checkpoint
-is published for self-play and evaluation after the entire quantum. The implemented state machine and recovery
-record are in [`training/progressive.py`](../../py/src/training/progressive.py) and
+Promotion is match-based. At each evaluation boundary an eligible successor plays the published active checkpoint.
+The candidate must score at least `0.48` in two consecutive completed paired matches; a failing score resets the
+count, while a failed or cancelled evaluation adds no observation. The former loss-EMA gate was removed because the
+candidate's extra quanta made its replay-fitting loss systematically incomparable with the active model's loss. Only
+one checkpoint is published for self-play and evaluation after the entire global quantum. The implemented state
+machine and recovery record are in
+[`training/progressive.py`](../../py/src/training/progressive.py) and
 [`training/session.py`](../../py/src/training/session.py).
+
+The standalone final YAML includes the `progressive_candidate` evaluation referenced by the gate. It is the living
+entry point for reproducing the current recipe; exact historical reproduction still requires the frozen resolved
+configuration and source revision.
+
+The completed capacity investigation also used a manual function-preserving transition from 14×160 to 19×176. New
+units were wired random-in/zero-out, appended residual blocks were initialized as identities, branch scales were
+compensated on batch-normalization affine parameters, and global-pooling channel roles were preserved. The probe
+measured a `1.34e-05` maximum policy difference and exact top-one agreement. After one float replay-window epoch,
+the grown network required ten QAT quanta to restore acceptable INT8 fidelity. This path is implemented by
+[`grow_checkpoint.py`](../../py/tools/grow_checkpoint.py),
+[`train_grown_checkpoint.py`](../../py/tools/train_grown_checkpoint.py), and
+[`quantize_grown_checkpoint.py`](../../py/tools/quantize_grown_checkpoint.py); it is not yet the controller's
+automatic initialization policy.
+
+The small-to-medium transition worked reliably across the completed runs. The medium-to-large transition did not:
+independently initialized candidates took too long to catch up, while the function-preserving continuation reached
+parity but did not improve within its limited training window. The reported checkpoint therefore remains 14×160.
+This result does not show that capacity was unimportant; it leaves training duration, post-growth optimization,
+target quality, replay composition, and usable additional capacity confounded.
 
 ## Checkpoint publication and recovery
 
 Each progressive model has a private checkpoint namespace. A complete checkpoint contains raw training weights,
 optimizer state, QAT state, a trimmed deployment artifact, hashes, network definition, and policy-prior calibration.
 The manifest is written last. `progressive-training.json` records the active model, each candidate's progress,
-candidate-start state, promotion comparison, and any pending quantum with its exact replay identity and completed
+candidate-start state, match-gate evidence, and any pending quantum with its exact replay identity and completed
 model prefix.
 
 After every required model has trained, the selected active private checkpoint is published into the ordinary

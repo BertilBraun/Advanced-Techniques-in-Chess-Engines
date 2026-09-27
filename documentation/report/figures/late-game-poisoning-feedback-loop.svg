@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title description">
+  <title id="title">Late-game target poisoning and two corrective interventions</title>
+  <desc id="description">A four-stage feedback loop connects absent searched endgame rows, weak conversion, more capped games, and preceding cheap-search bootstrap targets. A dedicated full search evaluates the actual cutoff; restored searched endgame rows close the coverage gap. Conversion recovered after concurrent changes, without isolating their contributions.</desc>
+  <defs>
+    <filter id="soft-shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#15243A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="480" fill="#FFFFFF"/>
+  <g transform="translate(0,-115)">
+
+  <g filter="url(#soft-shadow)">
+    <rect x="50" y="140" width="245" height="124" rx="12" fill="#FFF1EF" stroke="#E0A19C" stroke-width="1.5"/>
+    <rect x="335" y="140" width="245" height="124" rx="12" fill="#FFF1EF" stroke="#E0A19C" stroke-width="1.5"/>
+    <rect x="620" y="140" width="245" height="124" rx="12" fill="#FFF1EF" stroke="#E0A19C" stroke-width="1.5"/>
+    <rect x="905" y="140" width="245" height="124" rx="12" fill="#FFF1EF" stroke="#E0A19C" stroke-width="1.5"/>
+  </g>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <circle cx="78" cy="168" r="15" fill="#A8443C"/>
+    <text x="78" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">1</text>
+    <text x="78" y="210" fill="#15243A" font-size="21" font-weight="600">
+      <tspan x="78" dy="0">No searched</tspan>
+      <tspan x="78" dy="30">endgame rows</tspan>
+    </text>
+
+    <circle cx="363" cy="168" r="15" fill="#A8443C"/>
+    <text x="363" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">2</text>
+    <text x="363" y="210" fill="#15243A" font-size="21" font-weight="600">
+      <tspan x="363" dy="0">Conversion stays</tspan>
+      <tspan x="363" dy="30">weak</tspan>
+    </text>
+
+    <circle cx="648" cy="168" r="15" fill="#A8443C"/>
+    <text x="648" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">3</text>
+    <text x="648" y="210" fill="#15243A" font-size="21" font-weight="600">
+      <tspan x="648" dy="0">More games reach</tspan>
+      <tspan x="648" dy="30">the ply cap</tspan>
+    </text>
+
+    <circle cx="933" cy="168" r="15" fill="#A8443C"/>
+    <text x="933" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">4</text>
+    <text x="933" y="210" fill="#15243A" font-size="21" font-weight="600">
+      <tspan x="933" dy="0">Cutoff targets</tspan>
+      <tspan x="933" dy="30">are unreliable</tspan>
+    </text>
+  </g>
+
+  <g fill="none" stroke="#A8443C" stroke-width="2.5">
+    <path d="M 299 202 H 315"/>
+    <path d="M 584 202 H 600"/>
+    <path d="M 869 202 H 885"/>
+    <path d="M 1028 270 V 342 H 170 V 280"/>
+  </g>
+  <g fill="#A8443C">
+    <polygon points="314,195 328,202 314,209"/>
+    <polygon points="599,195 613,202 599,209"/>
+    <polygon points="884,195 898,202 884,209"/>
+    <polygon points="163,281 170,267 177,281"/>
+  </g>
+  <text x="600" y="326" text-anchor="middle" fill="#8E3934" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="600">
+    trains and reinforces the same weakness
+  </text>
+
+  <line x1="50" y1="389" x2="1150" y2="389" stroke="#D9DEE5" stroke-width="1"/>
+  <g transform="translate(0,-25)">
+  <g filter="url(#soft-shadow)">
+    <rect x="50" y="447" width="520" height="140" rx="14" fill="#EDF8F6" stroke="#86C9C2" stroke-width="1.5"/>
+    <rect x="630" y="447" width="520" height="140" rx="14" fill="#EDF8F6" stroke="#86C9C2" stroke-width="1.5"/>
+  </g>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <circle cx="87" cy="482" r="20" fill="#16786F"/>
+    <text x="87" y="489" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">1</text>
+    <text x="122" y="480" fill="#15243A" font-size="21" font-weight="600">Full search at the cut</text>
+    <text x="122" y="510" fill="#526070" font-size="19">
+      <tspan x="122" dy="0">Replace the preceding cheap-search</tspan>
+      <tspan x="122" dy="24">bootstrap at the actual cutoff.</tspan>
+    </text>
+    <line x1="122" y1="556" x2="158" y2="556" stroke="#16786F" stroke-width="3"/>
+    <polygon points="157,549 171,556 157,563" fill="#16786F"/>
+    <text x="184" y="562" fill="#11675F" font-size="19" font-weight="600">repairs target provenance</text>
+
+    <circle cx="667" cy="482" r="20" fill="#16786F"/>
+    <text x="667" y="489" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">2</text>
+    <text x="702" y="480" fill="#15243A" font-size="21" font-weight="600">Fully search the endgame</text>
+    <text x="702" y="510" fill="#526070" font-size="19">
+      <tspan x="702" dy="0">Restore searched conversion</tspan>
+      <tspan x="702" dy="24">positions to replay.</tspan>
+    </text>
+    <line x1="702" y1="556" x2="738" y2="556" stroke="#16786F" stroke-width="3"/>
+    <polygon points="737,549 751,556 737,563" fill="#16786F"/>
+    <text x="764" y="562" fill="#11675F" font-size="19" font-weight="600">closes the coverage gap</text>
+  </g>
+  </g>
+
+  </g>
+</svg>

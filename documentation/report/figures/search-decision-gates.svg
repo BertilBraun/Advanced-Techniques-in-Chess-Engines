@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 460" role="img" aria-labelledby="title description">
+  <title id="title">Why local search savings did not become faster chess learning</title>
+  <desc id="description">Four candidate search optimizations are placed at the gate where their measured benefit failed to survive: target integrity, online learning, critical-path time, or net inference throughput. Fixed visits remain the retained baseline.</desc>
+  <defs>
+    <style>
+      text { font-size: 18px; font-family: Arial, sans-serif; fill: #172b36; }
+      .gate { fill: #f2f6f5; stroke: #255c5a; stroke-width: 3; }
+      .gate-title { font-size: 21px; font-weight: 700; }
+      .body { font-size: 18px; }
+      .note { font-size: 18px; fill: #344c58; }
+      .negative { fill: #ac4d37; font-weight: 700; }
+      .positive { fill: #17615b; font-weight: 700; }
+      .rule { stroke: #255c5a; stroke-width: 3; }
+    </style>
+  </defs>
+  <rect width="1200" height="460" fill="#fff"/>
+  <g transform="translate(0,-80)">
+  <line x1="64" y1="135" x2="1135" y2="135" class="rule"/>
+  <rect x="48" y="112" width="245" height="61" rx="7" class="gate"/>
+  <rect x="332" y="112" width="245" height="61" rx="7" class="gate"/>
+  <rect x="616" y="112" width="245" height="61" rx="7" class="gate"/>
+  <rect x="900" y="112" width="245" height="61" rx="7" class="gate"/>
+  <text x="170" y="150" text-anchor="middle" class="gate-title">Target integrity</text>
+  <text x="454" y="150" text-anchor="middle" class="gate-title">Online learning</text>
+  <text x="738" y="150" text-anchor="middle" class="gate-title">Critical-path time</text>
+  <text x="1022" y="150" text-anchor="middle" class="gate-title">Net throughput</text>
+
+  <line x1="170" y1="173" x2="170" y2="225" class="rule"/>
+  <line x1="454" y1="173" x2="454" y2="225" class="rule"/>
+  <line x1="738" y1="173" x2="738" y2="225" class="rule"/>
+  <line x1="1022" y1="173" x2="1022" y2="225" class="rule"/>
+
+  <text x="48" y="260" class="negative">Fast/full searches</text>
+  <text x="48" y="289" class="body">Reduced primary-target</text>
+  <text x="48" y="316" class="body">density and underfilled</text>
+  <text x="48" y="343" class="body">batch tails.</text>
+
+  <text x="332" y="260" class="negative">Predicted allocation</text>
+  <text x="332" y="289" class="body">Improved deep-policy fidelity,</text>
+  <text x="332" y="316" class="body">yet online training trailed by</text>
+  <text x="332" y="343" class="body">roughly 60–100 ladder Elo.</text>
+
+  <text x="616" y="260" class="negative">In-search stopping</text>
+  <text x="616" y="289" class="body">About 14% fewer nominal</text>
+  <text x="616" y="316" class="body">visits yielded only about 3%</text>
+  <text x="616" y="343" class="body">faster generation cadence.</text>
+
+  <text x="900" y="260" class="negative">Graph and cache reuse</text>
+  <text x="900" y="289" class="body">Exact repeats were too sparse</text>
+  <text x="900" y="316" class="body">to repay bookkeeping under</text>
+  <text x="900" y="343" class="body">the measured workload.</text>
+
+  <line x1="48" y1="399" x2="1145" y2="399" stroke="#b9cac8" stroke-width="2"/>
+  <rect x="48" y="426" width="1097" height="84" rx="7" fill="#e7f1ef" stroke="#255c5a" stroke-width="3"/>
+  <text x="74" y="462" class="positive">Retained: staged fixed visits with batched native search</text>
+  <text x="74" y="491" class="note">A transparent budget preserved full-search targets; measured alternatives did not improve the complete loop.</text>
+  </g>
+</svg>

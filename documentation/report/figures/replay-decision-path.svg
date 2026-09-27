@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" role="img" aria-labelledby="title description">
+  <title id="title">Replay decisions from self-play to optimization</title>
+  <desc id="description">Restart-state selection changes which games are generated. Eligible searched positions are durably appended to a growing replay window. Policy-surprise sampling with uniform coverage changes which positions recur, while unit loss weights leave each selected row's contribution unchanged. A separate ledger grants four training presentations only after durable append.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #172b36; }
+      .card { fill: #f5f8f7; stroke: #365f60; stroke-width: 2.5; }
+      .head { font-size: 21px; font-weight: 700; fill: #17615b; }
+      .body { font-size: 17px; }
+      .arrow { stroke: #17615b; stroke-width: 3.5; fill: none; }
+      .credit { fill: #e7f1ef; stroke: #255c5a; stroke-width: 2.5; }
+      .credit-label { font-size: 18px; font-weight: 700; fill: #17615b; }
+      .credit-body { font-size: 17px; }
+    </style>
+  </defs>
+  <rect width="1200" height="430" fill="#fff"/>
+
+  <rect x="35" y="26" width="258" height="244" rx="7" class="card"/>
+  <rect x="326" y="26" width="258" height="244" rx="7" class="card"/>
+  <rect x="617" y="26" width="258" height="244" rx="7" class="card"/>
+  <rect x="908" y="26" width="258" height="244" rx="7" class="card"/>
+  <path d="M295 148 H309" class="arrow"/>
+  <path d="M586 148 H600" class="arrow"/>
+  <path d="M877 148 H891" class="arrow"/>
+  <polygon points="308,141 322,148 308,155" fill="#17615b"/>
+  <polygon points="599,141 613,148 599,155" fill="#17615b"/>
+  <polygon points="890,141 904,148 890,155" fill="#17615b"/>
+
+  <text x="56" y="65" class="head">Generate</text>
+  <text x="56" y="106" class="body">Choose game starts:</text>
+  <text x="56" y="145" class="body">shallow openings and</text>
+  <text x="56" y="174" class="body">branch-reserved difficult</text>
+  <text x="56" y="203" class="body">restart positions.</text>
+
+  <text x="347" y="65" class="head">Append to replay</text>
+  <text x="347" y="106" class="body">Retain eligible searched</text>
+  <text x="347" y="135" class="body">positions and targets</text>
+  <text x="347" y="174" class="body">in a growing FIFO</text>
+  <text x="347" y="203" class="body">window.</text>
+
+  <text x="638" y="65" class="head">Select</text>
+  <text x="638" y="106" class="body">Resample by policy</text>
+  <text x="638" y="135" class="body">surprise, with a</text>
+  <text x="638" y="164" class="body">uniform-coverage</text>
+  <text x="638" y="193" class="body">component.</text>
+
+  <text x="929" y="65" class="head">Weight</text>
+  <text x="929" y="106" class="body">Every selected row</text>
+  <text x="929" y="135" class="body">keeps unit loss weight;</text>
+  <text x="929" y="174" class="body">sampling frequency is</text>
+  <text x="929" y="203" class="body">the priority mechanism.</text>
+
+  <path d="M455 272 V296" class="arrow"/>
+  <polygon points="448,295 455,309 462,295" fill="#17615b"/>
+  <rect x="326" y="314" width="549" height="79" rx="7" class="credit"/>
+  <text x="349" y="347" class="credit-label">Presentation credit</text>
+  <text x="349" y="375" class="credit-body">Four training presentations per durably appended row.</text>
+</svg>

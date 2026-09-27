@@ -11,14 +11,16 @@ marked **verify** require metadata, version, and section checks during the publi
   search, optimizer, and evaluation context.
 - Silver, D., Schrittwieser, J., Simonyan, K. et al. (2017). *Mastering the Game of Go without Human Knowledge*.
   *Nature* 550, 354–359. [doi:10.1038/nature24270](https://doi.org/10.1038/nature24270). AlphaGo Zero background.
-- Wu, D. J. (2019). *Accelerating Self-Play Learning in Go*.
-  [arXiv:1902.10565](https://arxiv.org/abs/1902.10565). KataGo playout-cap randomization, forced playouts and
+- Wu, D. J. (2019; revised 2020). *Accelerating Self-Play Learning in Go*.
+  [arXiv:1902.10565v5](https://arxiv.org/abs/1902.10565v5). KataGo playout-cap randomization, forced playouts and
   target pruning, auxiliary targets, global-pooling architecture, resignation, and efficiency ablations. Cite the
   pinned post-paper methods documentation below for policy-surprise weighting.
-- Tian, Y. et al. (2019). *ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero*.
-  [arXiv:1902.04522](https://arxiv.org/abs/1902.04522). Reproduction methodology, replay, search, and scaling.
-- Lan, L.-C. et al. (2021). *Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search*.
-  [arXiv:2012.07910](https://arxiv.org/abs/2012.07910). Adaptive stopping taxonomy and comparison.
+- Tian, Y. et al. (2019; revised 2022). *ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero*.
+  [arXiv:1902.04522v5](https://arxiv.org/abs/1902.04522v5). Reproduction methodology, replay, search, and scaling;
+  published at ICML 2019.
+- Lan, L.-C., Tsai, M.-Y., Wu, T.-R., Wu, I.-C., and Hsieh, C.-J. (2021). *Learning to Stop: Dynamic Simulation
+  Monte-Carlo Tree Search*. [arXiv:2012.07910v1](https://arxiv.org/abs/2012.07910v1). Adaptive stopping taxonomy
+  and comparison; published at AAAI 2021.
 - Czech, J., Blüml, J., Kersting, K., and Steingrimsson, H. (2023; revised 2024). *Representation Matters for
   Mastering Chess: Improved Feature Representation in AlphaZero Outperforms Switching to Transformers*.
   [arXiv:2304.14918v2](https://arxiv.org/abs/2304.14918v2). Representation and chess-architecture context; do not
@@ -81,27 +83,33 @@ marked **verify** require metadata, version, and section checks during the publi
 - [Motivation and scope](01-motivation-and-scope.md): AlphaZero, AlphaGo Zero, ELF OpenGo, KataGo, and scaling laws.
 - [System and training method](03-system-and-methods.md): AlphaZero/ELF OpenGo methods, KataGo paper, and pinned
   KataGo implementation documentation.
-- [Research investigations](04-research-investigations.md): learned stopping, Gumbel search, graph search,
-  Go-Exploit, replay research, Reanalyse, and architecture papers.
+- [Search investigations](04a-search.md): KataGo's search recipe, adaptive allocation, graph search, and caching.
+- [Data and replay](04b-data-and-replay.md): replay, restart curricula, resignation, and target provenance.
+- [Network investigations](04c-networks-and-training.md): policy representation, context, quantization, and sizing.
 - [Systems optimization](05-systems-optimization.md): versioned NVIDIA TensorRT documentation plus repository
   benchmarks for all project-specific behavior.
 - [Limitations](08-limitations.md): Elo-scale analysis and the non-transferability of external ablation multipliers.
-- [Reproducibility](09-reproducibility.md): pinned implementation sources, exact run configuration, and repository
+- [Reproducibility](appendix-d-reproducibility.md): pinned implementation sources, exact run configuration, and repository
   evidence hashes.
 
 ## Evaluation calibration
 
-- Meloni, M. (2021). Stockfish and lc0 fixed-node strength comparison. The existing report uses this historical
-  SSDF-linked calibration. **Verify the exact page, table transcription, and access date** before publication. The
-  limitations in [the repository's Elo-scale analysis](../analysis/chess-elo-scale-and-reporting-20260911.md) must
-  accompany any absolute benchmark Elo claim.
+- Meloni, M. (2021, March 8; updated August 29, 2021). *Stockfish and Lc0, test at different number of nodes*.
+  [MeloniMarco.it](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
+  accessed 2026-09-24. This is the project's historical fixed-node Stockfish 13 calibration source: Meloni used
+  CuteChess and Ordo over more than 110,000 games, anchored Stockfish through Fruit 2.2.1 to the historical SSDF
+  list, and explicitly framed the human comparison as an approximation. It is a practitioner benchmark rather than
+  a peer-reviewed rating study. The limitations in
+  [the repository's Elo-scale analysis](../analysis/chess-elo-scale-and-reporting-20260911.md) must accompany every
+  absolute benchmark-Elo claim.
 
 ## Repository sources to cite as first-party evidence
 
-- [Final run result record](../results/final-chess-run.md) — pending quantitative authority.
+- [Final run result record](../results/final-chess-run.md) — quantitative authority for the selected checkpoint,
+  terminal evaluation, parallel-search sweep, distillation, and cross-campaign comparison.
 - [Final configuration](../../py/configs/production/chess-final-config.yaml) — living reproduction entry point.
-- [v34 terminal strength](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
-- [v34 training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).
+- [Previous-baseline terminal strength](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
+- [Previous-baseline training dynamics](../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md).
 - [Search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md).
 - [Adaptive-search conclusion](../analysis/adaptive-search-conclusion-20260904.md).
 - [Attention viability](../benchmarks/chess-attention-viability-rtx3060-20260827/README.md).
