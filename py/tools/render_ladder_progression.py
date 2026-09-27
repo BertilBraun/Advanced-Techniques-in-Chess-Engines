@@ -198,6 +198,8 @@ def render_figure(publication: PublicationExport, path: Path, *, paper: bool = F
     figure.savefig(
         path,
         format='svg',
+        bbox_inches='tight',
+        pad_inches=0.04,
         metadata={'Creator': 'py/tools/render_ladder_progression.py', 'Date': None},
     )
     plt.close(figure)

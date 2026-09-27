@@ -105,13 +105,15 @@ def save_figure(figure: Figure, path: Path) -> None:
     figure.savefig(
         path,
         format='svg',
+        bbox_inches='tight',
+        pad_inches=0.04,
         metadata={'Creator': 'py/tools/render_final_training_dynamics.py', 'Date': None},
     )
     preview_directory = os.environ.get('REPORT_FIGURE_PREVIEW_DIRECTORY')
     if preview_directory is not None:
         preview_path = Path(preview_directory) / path.with_suffix('.png').name
         preview_path.parent.mkdir(parents=True, exist_ok=True)
-        figure.savefig(preview_path, dpi=160)
+        figure.savefig(preview_path, dpi=160, bbox_inches='tight', pad_inches=0.04)
     plt.close(figure)
     normalized = '\n'.join(line.rstrip() for line in path.read_text(encoding='utf-8').splitlines()) + '\n'
     with path.open('w', encoding='utf-8', newline='\n') as output:

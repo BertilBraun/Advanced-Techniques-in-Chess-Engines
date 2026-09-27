@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from xml.etree import ElementTree
 
 import matplotlib.pyplot as plt
 import pytest
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from pydantic import ValidationError
 from tools import render_report_figures as renderer
@@ -86,6 +88,12 @@ def test_resignation_uses_three_separate_axes(
     assert figure.get_supxlabel() == ''
     assert len({round(axes.get_position().y0, 6) for axes in figure.axes}) == 1
     assert all(axes.title.get_fontsize() == 10 for axes in figure.axes)
+    canvas = FigureCanvasAgg(figure)
+    canvas.draw()
+    renderer_backend = canvas.get_renderer()
+    tick_bottom = min(label.get_window_extent(renderer_backend).y0 for label in figure.axes[1].get_xticklabels())
+    legend_top = figure.legends[0].get_window_extent(renderer_backend).y1
+    assert 0 < (tick_bottom - legend_top) / figure.dpi < 0.12
     assert figure.axes[1].get_ylim()[1] > 100 * max(
         sample.value
         for sample in diagnostics.samples(renderer.Metric.UPPER_BOUND)
@@ -93,3 +101,14 @@ def test_resignation_uses_three_separate_axes(
         in {point.optimizer_steps for point in diagnostics.samples(renderer.Metric.SAFE) if point.value == 1}
     )
     plt.close(figure)
+
+
+def test_saved_plot_crops_unused_canvas(tmp_path: Path) -> None:
+    figure = plt.figure(figsize=(6, 4))
+    axes = figure.add_axes((0.3, 0.3, 0.4, 0.4))
+    axes.plot([0, 1], [0, 1])
+    path = tmp_path / 'cropped.svg'
+    renderer.save_figure(figure, path)
+    view_box = [float(value) for value in ElementTree.parse(path).getroot().attrib['viewBox'].split()]
+    assert view_box[2] < 6 * 72 * 0.7
+    assert view_box[3] < 4 * 72 * 0.7

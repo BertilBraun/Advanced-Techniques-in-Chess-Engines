@@ -166,6 +166,8 @@ def render_figure(pairs: tuple[SearchConditionPair, ...], path: Path, *, paper: 
     figure.savefig(
         path,
         format='svg',
+        bbox_inches='tight',
+        pad_inches=0.04,
         metadata={'Creator': 'py/tools/render_final_search_curve.py', 'Date': None},
     )
     plt.close(figure)

@@ -238,7 +238,17 @@ def render_resignation(diagnostics: Diagnostics) -> None:
     axes[1].axhline(2.5, color=ORANGE, linestyle=':', linewidth=1.2, label='Safety limit')
     axes[1].set_ylim(0, 3.8)
     handles, labels = axes[1].get_legend_handles_labels()
-    figure.legend(handles, labels, frameon=False, fontsize=8, loc='lower center', ncol=3)
+    figure.legend(
+        handles,
+        labels,
+        frameon=False,
+        fontsize=8,
+        loc='upper center',
+        bbox_to_anchor=(0.5, -0.20),
+        bbox_transform=axes[1].transAxes,
+        borderaxespad=0,
+        ncol=3,
+    )
     line(axes[2], diagnostics.samples(Metric.SAVED_PLIES), TEAL)
     save_figure(figure, FIGURES / 'appendix-resignation.svg')
 
