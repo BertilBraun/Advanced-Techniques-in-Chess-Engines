@@ -7,8 +7,8 @@ made possible by the integrated system. The complete recipe is specified in Appe
 
 ## Progress across training campaigns
 
-Figure \ref{fig:chess-ladder-progress-paper} compares the 64-search training ladders across five chess campaigns. The final recipe reached a higher
-plateau within a shorter training window than the preceding baseline.
+Figure \ref{fig:chess-ladder-progress-paper} compares the 64-search training ladders across five chess campaigns. The final recipe reached higher
+playing strength within the reported training window.
 
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 

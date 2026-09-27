@@ -21,7 +21,8 @@ Later continuation experiments showed diminishing strength gains, with similar p
 per move. Appendix \ref{sec:appendix-c-supporting-comparisons-late-training-strength} presents the checkpoint
 comparisons and late-training ladder observations. Further training may yield incremental gains on the order of
 tens of Elo, but these trajectories do not suggest improvements of hundreds of points. Closing the roughly
-400-Elo gap to top-engine strength would likely require changes to the training recipe.
+400-Elo gap to the upper end of the historical Stockfish 13 calibration would likely require changes to the
+training recipe.
 
 Four changes are the most plausible next tests: substantially larger models to increase representational
 capacity; more search during self-play to improve targets; lower replay reuse to increase fresh-game exposure;
