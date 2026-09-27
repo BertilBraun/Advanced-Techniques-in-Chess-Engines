@@ -29,6 +29,12 @@ from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
 from src.training.configuration import AdamWOptimizerConfiguration
+from src.training.network import (
+    DisabledResidualContext,
+    PostActivationResidualBlockConfiguration,
+    ScaledPostActivationResidualBlockConfiguration,
+    ScaledPreActivationResidualBlockConfiguration,
+)
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.util.hashing import file_sha256
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
@@ -47,6 +53,8 @@ from tools.distill_train_student import (
     OptimizerKind,
     PolicyHeadKind,
     ProductionReplayInput,
+    ResidualBlockKind,
+    ResidualContextKind,
     auxiliary_head_layouts,
     close_training_dataset,
     dataset_split,
@@ -76,6 +84,9 @@ STUDENT_ARGUMENTS = Arguments(
     smolgen_generated_size=32,
     num_value_channels=2,
     value_fc_size=48,
+    residual_block_kind=ResidualBlockKind.POST_ACTIVATION,
+    activation_cap=6.0,
+    residual_context_kind=ResidualContextKind.GLOBAL_POOLING,
     optimizer_kind=OptimizerKind.ADAMW,
     floor_fraction=0.1,
     policy_bottleneck_rank=16,
@@ -560,6 +571,20 @@ def test_the_cosine_schedule_is_the_default() -> None:
     assert learning_rate_at(60, total_steps=100, peak_learning_rate=0.1, warmup_steps=20) == explicit
 
 
+@pytest.mark.parametrize(('step', 'expected'), ((20, 0.082), (60, 0.046), (100, 0.01)))
+def test_the_linear_floor_schedule_falls_linearly_to_its_floor(step: int, expected: float) -> None:
+    rate = learning_rate_at(
+        step,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=10,
+        schedule=LearningRateSchedule.LINEAR_FLOOR,
+        floor_fraction=0.1,
+    )
+
+    assert rate == pytest.approx(expected)
+
+
 @pytest.mark.parametrize('anneal_fraction', (0.1, 0.2, 0.5))
 def test_the_cosine_schedule_ignores_the_anneal_fraction(anneal_fraction: float) -> None:
     rate = learning_rate_at(
@@ -916,3 +941,58 @@ def test_student_value_head_takes_the_configured_geometry() -> None:
 
     assert architecture.num_value_channels == 32
     assert architecture.value_fc_size == 64
+
+
+@pytest.mark.parametrize(
+    ('kind', 'configuration'),
+    (
+        (ResidualBlockKind.POST_ACTIVATION, PostActivationResidualBlockConfiguration),
+        (ResidualBlockKind.SCALED_POST_ACTIVATION, ScaledPostActivationResidualBlockConfiguration),
+        (ResidualBlockKind.SCALED_PRE_ACTIVATION, ScaledPreActivationResidualBlockConfiguration),
+    ),
+)
+def test_student_residual_block_takes_the_configured_kind(kind: ResidualBlockKind, configuration: type) -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, residual_block_kind=kind))
+
+    assert isinstance(architecture.residual_block, configuration)
+
+
+def test_scaled_student_blocks_scale_each_branch_by_the_inverse_root_of_depth() -> None:
+    architecture = student_architecture(
+        replace(STUDENT_ARGUMENTS, layers=16, residual_block_kind=ResidualBlockKind.SCALED_POST_ACTIVATION)
+    )
+
+    assert architecture.residual_block.branch_scale == pytest.approx(0.25)
+
+
+def test_student_residual_context_can_be_disabled() -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, residual_context_kind=ResidualContextKind.DISABLED))
+
+    assert isinstance(architecture.residual_context, DisabledResidualContext)
+
+
+@pytest.mark.parametrize(
+    ('residual_block_kind', 'residual_context_kind'),
+    (
+        (ResidualBlockKind.POST_ACTIVATION, ResidualContextKind.DISABLED),
+        (ResidualBlockKind.SCALED_POST_ACTIVATION, ResidualContextKind.GLOBAL_POOLING),
+        (ResidualBlockKind.SCALED_PRE_ACTIVATION, ResidualContextKind.GLOBAL_POOLING),
+    ),
+)
+def test_every_student_block_variant_builds_and_runs(
+    residual_block_kind: ResidualBlockKind, residual_context_kind: ResidualContextKind
+) -> None:
+    architecture = student_architecture(
+        replace(
+            STUDENT_ARGUMENTS,
+            layers=4,
+            hidden_size=32,
+            residual_block_kind=residual_block_kind,
+            residual_context_kind=residual_context_kind,
+        )
+    )
+    model = create_model(architecture, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    dimensions = CHESS_NETWORK_DIMENSIONS
+    states = torch.zeros((2, dimensions.channels, dimensions.rows, dimensions.columns))
+
+    assert model.training_output(states).policy_logits.shape == (2, dimensions.actions)

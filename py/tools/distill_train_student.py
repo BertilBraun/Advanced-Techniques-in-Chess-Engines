@@ -35,14 +35,20 @@ from src.training.network import (
     ChessFromToAttentionPolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
     DisabledAttentionBiasConfiguration,
+    DisabledResidualContext,
     GlobalPoolingResidualContext,
     InferenceNetwork,
     Network,
     NetworkConfiguration,
     NetworkParams,
     PolicyHeadConfiguration,
+    PostActivationResidualBlockConfiguration,
     RelativeAttentionBiasConfiguration,
+    ResidualBlockConfiguration,
+    ResidualContextConfiguration,
     ResidualContextPlacement,
+    ScaledPostActivationResidualBlockConfiguration,
+    ScaledPreActivationResidualBlockConfiguration,
     SmolgenAttentionBiasConfiguration,
 )
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective, resolve_auxiliary_losses
@@ -76,6 +82,7 @@ class LearningRateSchedule(str, Enum):
     PRODUCTION_FLAT = 'production_flat'
     STAGED_DECAY = 'staged_decay'
     COSINE_FLOOR = 'cosine_floor'
+    LINEAR_FLOOR = 'linear_floor'
 
 
 class OptimizerKind(str, Enum):
@@ -91,6 +98,17 @@ class NetworkKind(str, Enum):
 class PolicyHeadKind(str, Enum):
     DENSE = 'dense'
     FROM_TO_ATTENTION = 'from_to_attention'
+
+
+class ResidualBlockKind(str, Enum):
+    POST_ACTIVATION = 'post_activation'
+    SCALED_POST_ACTIVATION = 'scaled_post_activation'
+    SCALED_PRE_ACTIVATION = 'scaled_pre_activation'
+
+
+class ResidualContextKind(str, Enum):
+    GLOBAL_POOLING = 'global_pooling'
+    DISABLED = 'disabled'
 
 
 class AttentionBiasKind(str, Enum):
@@ -129,6 +147,9 @@ class Arguments:
     smolgen_generated_size: int
     num_value_channels: int
     value_fc_size: int
+    residual_block_kind: ResidualBlockKind
+    activation_cap: float
+    residual_context_kind: ResidualContextKind
     optimizer_kind: OptimizerKind
     floor_fraction: float
     policy_bottleneck_rank: int
@@ -282,13 +303,40 @@ def load_initial_weights(model: torch.nn.Module, manifest_path: Path, device: to
     log(f'Initialised from {manifest_path}: {len(kept)} tensors, {len(state) - len(kept)} auxiliary or QAT dropped.')
 
 
+def student_residual_context(arguments: Arguments) -> ResidualContextConfiguration:
+    match arguments.residual_context_kind:
+        case ResidualContextKind.GLOBAL_POOLING:
+            return GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK)
+        case ResidualContextKind.DISABLED:
+            return DisabledResidualContext()
+
+
+def student_residual_block(arguments: Arguments) -> ResidualBlockConfiguration:
+    # The scaled blocks follow production: each branch is scaled by 1/sqrt(depth).
+    branch_scale = 1.0 / math.sqrt(arguments.layers)
+    match arguments.residual_block_kind:
+        case ResidualBlockKind.POST_ACTIVATION:
+            return PostActivationResidualBlockConfiguration()
+        case ResidualBlockKind.SCALED_POST_ACTIVATION:
+            return ScaledPostActivationResidualBlockConfiguration(
+                branch_scale=branch_scale, activation_cap=arguments.activation_cap
+            )
+        case ResidualBlockKind.SCALED_PRE_ACTIVATION:
+            return ScaledPreActivationResidualBlockConfiguration(
+                branch_scale=branch_scale,
+                activation_cap=arguments.activation_cap,
+                final_activation_cap=arguments.activation_cap,
+            )
+
+
 def student_architecture(arguments: Arguments) -> NetworkConfiguration:
     match arguments.network_kind:
         case NetworkKind.CONVOLUTIONAL:
             return NetworkParams(
                 num_layers=arguments.layers,
                 hidden_size=arguments.hidden_size,
-                residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+                residual_context=student_residual_context(arguments),
+                residual_block=student_residual_block(arguments),
                 policy_head=student_policy_head(arguments),
                 num_value_channels=arguments.num_value_channels,
                 value_fc_size=arguments.value_fc_size,
@@ -398,6 +446,8 @@ def learning_rate_at(
         case LearningRateSchedule.COSINE_FLOOR:
             shape = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
             return peak_learning_rate * (floor_fraction + (1.0 - floor_fraction) * shape)
+        case LearningRateSchedule.LINEAR_FLOOR:
+            return peak_learning_rate * (1.0 - (1.0 - floor_fraction) * min(progress, 1.0))
         case LearningRateSchedule.COSINE:
             anneal_start = warmup_steps
         case LearningRateSchedule.PLATEAU:
@@ -890,6 +940,17 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--num-value-channels', default=2, type=int)
     parser.add_argument('--value-fc-size', default=48, type=int)
     parser.add_argument(
+        '--residual-block',
+        default=ResidualBlockKind.POST_ACTIVATION.value,
+        choices=tuple(kind.value for kind in ResidualBlockKind),
+    )
+    parser.add_argument('--activation-cap', default=6.0, type=float, help='Upper bound of the scaled blocks.')
+    parser.add_argument(
+        '--residual-context',
+        default=ResidualContextKind.GLOBAL_POOLING.value,
+        choices=tuple(kind.value for kind in ResidualContextKind),
+    )
+    parser.add_argument(
         '--optimizer',
         default=OptimizerKind.ADAMW.value,
         choices=tuple(kind.value for kind in OptimizerKind),
@@ -966,6 +1027,9 @@ def parse_arguments() -> Arguments:
         smolgen_generated_size=namespace.smolgen_generated_size,
         num_value_channels=namespace.num_value_channels,
         value_fc_size=namespace.value_fc_size,
+        residual_block_kind=ResidualBlockKind(namespace.residual_block),
+        activation_cap=namespace.activation_cap,
+        residual_context_kind=ResidualContextKind(namespace.residual_context),
         optimizer_kind=OptimizerKind(namespace.optimizer),
         floor_fraction=namespace.floor_fraction,
         policy_bottleneck_rank=namespace.policy_bottleneck_rank,
