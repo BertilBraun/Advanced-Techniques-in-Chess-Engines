@@ -11,6 +11,21 @@ work is presented as the throughput foundation for self-play learning rather tha
 The complete narrative is typeset as a two-column paper. The [narrative outline](narrative-outline.md) and
 [completion plan](publication-plan.md) remain editorial working records, not chapters of the paper.
 
+## arXiv source package
+
+Build the PDF first, then package its generated LaTeX and referenced figures:
+
+```powershell
+uv run --group publication python py/tools/render_technical_report.py
+uv run --group publication python py/tools/package_arxiv_source.py
+```
+
+Upload `output/arxiv/engineering-efficient-self-play-chess-source.zip`. Its top-level file is `main.tex`;
+the included `00README.json` selects XeLaTeX. The package includes the 17 PDF figures and inline bibliography,
+without absolute file paths, build logs, or the compiled manuscript PDF. No Python tooling is needed to compile it.
+Review arXiv's generated PDF before completing submission. The acknowledgements follow the conclusion, before
+the references.
+
 The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength,
 selected-checkpoint training volume, and cost are presented in [training progress](06-final-chess-recipe.md) and
 [playing strength](07-final-run-results.md).

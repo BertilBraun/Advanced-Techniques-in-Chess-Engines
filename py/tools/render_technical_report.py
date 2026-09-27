@@ -461,6 +461,8 @@ def build_report(output: Path) -> None:
         [
             r'\FloatBarrier' + '\n',
             r'\balance' + '\n',
+            r'\section*{Acknowledgements}' + '\n',
+            markdown_tex(REPORT_ROOT / 'acknowledgements.md', build_directory),
             bibliography_tex(),
             r'\clearpage\onecolumn\raggedbottom\widowpenalty=150\clubpenalty=150' + '\n',
             r'\appendix' + '\n',
