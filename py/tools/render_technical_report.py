@@ -329,7 +329,7 @@ def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str,
         if appendix:
             title = re.sub(r'^Appendix [A-D]\.\s*', '', title)
             return (
-                r'\setcounter{figure}{0}\setcounter{table}{0}'
+                r'\Needspace{6\baselineskip}\setcounter{figure}{0}\setcounter{table}{0}'
                 + '\n'
                 + r'\section{'
                 + escape_tex(title)

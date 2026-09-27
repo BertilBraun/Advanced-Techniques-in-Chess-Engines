@@ -13,7 +13,7 @@ playing strength within the reported training window.
 ![64-search ladder Elo across five chess training campaigns](figures/chess-ladder-progress-paper.svg)
 
 Figure: Smoothed 64-search training ladders across five chess campaigns. The final curve ends at 2.5 days and
-the preceding baseline at 3 days.
+the preceding baseline at 3 days. The deeper-search results for the final model are shown in Figure \ref{fig:final-search-curve-paper}.
 
 ![Ingested games, replay positions, and trainer throughput](figures/final-training-volume-and-throughput-paper.svg)
 
@@ -21,10 +21,21 @@ Figure: Training volume and throughput on a common optimizer-step axis. Panels s
 training block, search visits per move, live replay occupancy, and trainer throughput. Replay capacity
 increases in steps, while the small-to-medium transition coincides with lower trainer throughput.
 
+These progress curves use only 64 searches per move to keep evaluation inexpensive during training. Their roughly
+2,400-Elo level therefore reflects a much smaller thinking budget than the final model's 3,251 benchmark Elo at
+100,000 searches per move. Additional MCTS search improves move selection using the trained network, without
+further training.
+
 The larger progression across the plotted campaigns reflects successive changes to architecture, data generation,
 and training efficiency.
 
 ## Training volume and model transition
+
+![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
+
+Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
+50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
+The horizontal axis lists search budgets categorically.
 
 Table \ref{tab:06-final-chess-recipe-1} summarizes the scale of the final run.
 
@@ -50,12 +61,6 @@ Figure \ref{fig:final-training-volume-and-throughput-paper} relates this volume 
 The smaller network supported faster early training; median trainer throughput fell from about 17.0 thousand to
 11.2 thousand samples/s across the two stages. Search increased from 300 to 600 visits per move over the plotted
 run. The configured 800-visit stage lies beyond the selected checkpoint.
-
-![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
-
-Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
-50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
-The horizontal axis lists search budgets categorically.
 
 The expanding replay window retained a broader history of self-play while the learner received approximately four
 presentations per admitted position. Throughput, search budget, and replay growth therefore changed together as

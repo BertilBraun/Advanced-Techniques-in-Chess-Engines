@@ -120,6 +120,18 @@ def test_provenance_heading_reserves_space_for_first_list_items() -> None:
     assert output.startswith(r'\Needspace{8\baselineskip}\subsection{')
 
 
+def test_appendix_heading_reserves_space_before_navigation_anchor() -> None:
+    output = section_tex(
+        'Appendix C. Supporting search and systems comparisons',
+        appendix=True,
+        level=1,
+        appendix_letter='C',
+        source=Path('appendix-c-supporting-comparisons.md'),
+    )
+    assert output.startswith(r'\Needspace{6\baselineskip}')
+    assert r'\section{Supporting search and systems comparisons}\label{app:C}' in output
+
+
 def test_report_prose_rejects_external_markdown_links() -> None:
     markdown = MarkdownIt('commonmark')
     paragraph = markdown.parse('[external](https://example.com)')[1]
