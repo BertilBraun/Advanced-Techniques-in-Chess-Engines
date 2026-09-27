@@ -168,6 +168,9 @@ search-free games, and those do not contain the positions that decide real games
 - **Consequence for a larger dataset:** more of the same search-free generation alone is unlikely to train a
   model that beats checkpoint 1026. Teacher labels on positions from real searched games (this engine's, or the
   teacher's own) are the likely missing ingredient.
+- **Update, 47M positions with Stockfish-played games (sections below):** fine-tuning checkpoint 1026 on them
+  gives the first student at or above 1026 at 64 searches (0.57 against 0.485, not yet significant), but it
+  falls behind at 1,000 searches (0.425 against 0.5625); from scratch the same data stops about 90 Elo short.
 - **Open:**
   1. *Per-move regret.* Top-move agreement cannot tell a harmless alternative from a blunder. Scoring each
      network by the teacher's evaluation of its chosen move against the teacher's best move measures the thing
@@ -224,8 +227,79 @@ Policy only against SF13 at 2,000 nodes, final checkpoint: **0.16** (6/20/74) [0
 The larger, partly Stockfish-played dataset lifted the from-scratch student three to four times over at both
 budgets, with training and held-out loss still within 0.034 of each other: it is limited by training, not by
 data. It remains below checkpoint 1026. Steps 25,000 and 30,000 are statistically equal, as the learning rate
-approached zero. A continuation from the step-30,000 weights (AdamW, 1e-3 cosine to a 1e-4 floor, 115,000
-steps, about 2.5 further passes) is running; its results are recorded when they finish.
+approached zero.
+
+### Continuation to 130,000 steps
+
+The step-30,000 weights continued under AdamW at 1e-3 (500 warm-up steps), cosine to a 1e-4 floor over a
+planned 115,000 steps, same held-out rows. It was stopped after its step-100,000 match (130,000 steps in all,
+133M samples, 2.9 passes), when the learning rate was 1.37e-4, to free the GPU for the fine-tune below.
+
+| Total step | 64 searches vs SF13 10k | Held-out gap | Train / held-out policy | Learning rate |
+|---:|---|---:|---|---:|
+| 40,000 | 0.27 (15/24/61) [0.21, 0.335] | 0.1577 | 2.2603 / 2.2971 | 9.83e-4 |
+| 50,000 | 0.235 (13/21/66) [0.175, 0.30] | 0.1492 | 2.2509 / 2.2887 | 9.34e-4 |
+| 60,000 | 0.31 (18/26/56) [0.245, 0.38] | 0.1415 | 2.2442 / 2.2810 | 8.57e-4 |
+| 70,000 | 0.34 (19/30/51) [0.265, 0.415] | 0.1345 | 2.2366 / 2.2740 | 7.57e-4 |
+| 80,000 | 0.30 (20/20/60) [0.23, 0.37] | 0.1313 | 2.2304 / 2.2707 | 6.42e-4 |
+| 90,000 | 0.345 (19/31/50) [0.27, 0.425] | 0.1258 | 2.2282 / 2.2653 | 5.19e-4 |
+| 100,000 | 0.26 (14/24/62) [0.195, 0.33] | 0.1229 | 2.2216 / 2.2623 | 3.99e-4 |
+| 110,000 | 0.37 (24/26/50) [0.295, 0.45] | 0.1198 | 2.2207 / 2.2592 | 2.90e-4 |
+| 120,000 | 0.365 (21/31/48) [0.295, 0.435] | 0.1174 | 2.2166 / 2.2568 | 2.01e-4 |
+| 130,000 | **0.36** (24/24/52) [0.285, 0.435] | 0.1159 | 2.2150 / 2.2554 | 1.37e-4 |
+
+Policy only against SF13 at 2,000 nodes, step 130,000: **0.315** (19/25/56) [0.245, 0.385].
+
+More training lifted the from-scratch student from 0.275 to about 0.36 at 64 searches (about 70 Elo) and from
+0.16 to 0.315 policy-only, and its held-out gap from 0.153 to 0.116, with training and held-out loss 0.040
+apart. It levelled off below checkpoint 1026 (0.485 and 0.395), about 90 Elo short at 64 searches.
+
+## Fine-tuning checkpoint 1026 on the 47M positions
+
+**Training.** Checkpoint 1026 loaded strictly (205 tensors; the 72 auxiliary-head and QAT tensors dropped),
+the same targets as the from-scratch student (the teacher's policy and WDL, no auxiliary targets, no outcome),
+the same 47M dataset and held-out rows. AdamW at 5e-4, 500 warm-up steps, cosine to a 5e-5 floor, batch
+1,024, 60,000 steps (61.4M samples, 1.3 passes), 4 hours. Only the starting weights differ from the
+from-scratch run.
+
+| Step | 64 searches vs SF13 10k | Held-out gap | Train / held-out policy | Learning rate |
+|---:|---|---:|---|---:|
+| 0 (checkpoint 1026) | 0.485 [0.405, 0.565] | 0.2260 | — | — |
+| 10,000 | 0.345 (20/29/51) [0.265, 0.43] | 0.1288 | 2.2363 / 2.2682 | 4.70e-4 |
+| 20,000 | 0.405 (26/29/45) [0.325, 0.49] | 0.1133 | 2.2157 / 2.2528 | 3.88e-4 |
+| 30,000 | 0.435 (26/35/39) [0.36, 0.505] | 0.1036 | 2.2039 / 2.2430 | 2.75e-4 |
+| 40,000 | 0.505 (35/31/34) [0.43, 0.585] | 0.0943 | 2.1943 / 2.2338 | 1.63e-4 |
+| 50,000 | 0.55 (42/26/32) [0.46, 0.64] | 0.0896 | 2.1880 / 2.2291 | 8.01e-5 |
+| 60,000 | **0.57** (44/26/30) [0.485, 0.655] | 0.0879 | 2.1878 / 2.2274 | 5.00e-5 |
+
+| vs Stockfish 13 | Fine-tuned 1026 | Checkpoint 1026 | From-scratch student, 130k | Teacher |
+|---|---|---|---|---|
+| Policy only, 2,000 nodes | **0.445** (31/27/42) [0.365, 0.525] | 0.395 [0.305, 0.48] | 0.315 | 0.855 |
+| 64 searches, 10,000 nodes | **0.57** (44/26/30) [0.485, 0.655] | 0.485 [0.405, 0.565] | 0.36 | 0.885 |
+| 1,000 searches, 50,000 nodes, 40 games | **0.425** (6/22/12) [0.3375, 0.513] | 0.5625 [0.4625, 0.6625] | — | 0.8625 |
+
+- **The first student at or above checkpoint 1026.** At 64 searches the final checkpoint scores 0.57, about
+  60 Elo above 1026's 0.485; steps 50,000 and 60,000 together score 0.56 over 200 games. One 100-game match
+  does not separate them (the final interval's lower end is 1026's score), so this is a likely gain, not a
+  demonstrated one. Policy only it scores 0.445 against 0.395, also inside the intervals.
+- **Strength first fell, then rose as the learning rate fell.** Step 10,000 lost about 100 Elo (0.345) while
+  the loss gap had already closed most of the way (0.226 to 0.129), the pattern the pilot showed; every later
+  checkpoint was stronger than the one before. Strength followed the annealing, not the loss alone.
+- **Starting weights matter more than steps.** From 1026 the student reached a held-out gap of 0.088 in
+  60,000 steps; from scratch it reached 0.116 in 130,000 and stayed about 90 Elo below 1026.
+- **Deeper search erodes the gain.** At 1,000 searches the fine-tuned student scores 0.425 against 1026's
+  0.5625, about 95 Elo lower on 40 games (intervals overlap): ahead at 64 searches, behind at 1,000, the
+  depth-dependent pattern of the pilot (0.35 there), milder. A deeper search leans harder on the value head,
+  which was retrained on the teacher's WDL rather than the discounted outcomes the search and its FPU were
+  tuned against. The same fine-tune with the value held to checkpoint 1026 (`--value-anchor-checkpoint`) on
+  this dataset is the run that separates a value mismatch from a weaker policy.
+
+Evidence: `.codex-diagnostics/lc0-teacher-diagnostic-20260926/evidence-finetune.tgz`
+(`71ae73c3c751c287c6044a2a7fcbda7c0953c55a23ddccce12701fb1f3301127`): 19 match result files, both training
+logs, the node scripts and logs. Weights of the fine-tuned student (`model_1026.pt` `3f7bf420…`) and of the
+from-scratch student at 130,000 steps: `student-weights-20260927.tgz`
+(`43a3c88c5f3d83e64450637ab68282cb46392ef7691e940eb0eaf0cd08867f46`).
+
 
 ## What this cost
 
