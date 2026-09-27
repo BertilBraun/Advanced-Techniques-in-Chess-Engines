@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as element_tree
-from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -444,53 +443,13 @@ def find_tectonic() -> Path:
     raise ValueError('Tectonic is required to build the report PDF. Install it and retry.')
 
 
-@dataclass(frozen=True)
-class FigurePlacementEdit:
-    start: int
-    end: int
-    replacement: str
-
-
-def advance_main_figures(latex: str) -> str:
-    edits: list[FigurePlacementEdit] = []
-    previous_insertion = 0
-    for figure in re.finditer(r'\\begin\{(?P<kind>figure|table)\*\}\[!?t\].*?\\end\{(?P=kind)\*\}\n', latex, re.DOTALL):
-        if any(
-            name in figure.group()
-            for name in ('fig:learning-loop}', 'fig:chess-network-architecture}', 'tab:02-methodology-and-evidence-1}')
-        ):
-            previous_insertion = figure.end()
-            continue
-        # Two-column top floats must enter the queue before their reference page is composed.
-        lookahead_words = 500
-        if 'fig:replay-decision-path}' in figure.group():
-            lookahead_words = 800
-        elif 'fig:throughput-to-learning}' in figure.group():
-            lookahead_words = 800
-        boundaries = [match.end() for match in re.finditer(r'\n\n', latex[previous_insertion : figure.start()])]
-        insertion = previous_insertion
-        for boundary in reversed(boundaries):
-            candidate = previous_insertion + boundary
-            if len(latex[candidate : figure.start()].split()) >= lookahead_words:
-                insertion = candidate
-                break
-        edits.append(FigurePlacementEdit(figure.start(), figure.end(), ''))
-        edits.append(FigurePlacementEdit(insertion, insertion, figure.group()))
-        previous_insertion = insertion
-    for _, edit in sorted(enumerate(edits), key=lambda item: (item[1].start, item[1].end, item[0]), reverse=True):
-        latex = latex[: edit.start] + edit.replacement + latex[edit.end :]
-    return latex
-
-
 def build_report(output: Path) -> None:
     build_directory = REPOSITORY_ROOT / 'tmp' / 'pdfs' / 'latex-build'
     build_directory.mkdir(parents=True, exist_ok=True)
     parts = [PREAMBLE, abstract_tex(), '\n', POST_ABSTRACT]
     for filename in SOURCE_FILES:
-        if filename == '07-final-run-results.md':
-            parts.append(r'\setcounter{dbltopnumber}{1}' + '\n')
         parts.append(markdown_tex(REPORT_ROOT / filename, build_directory))
-    parts = [advance_main_figures(''.join(parts))]
+    parts = [''.join(parts)]
     parts.extend(
         [
             r'\FloatBarrier' + '\n',

@@ -173,7 +173,6 @@ def training_figure(rows: int) -> tuple[Figure, list[Axes]]:
     figure, array = plt.subplots(rows, 1, figsize=(6.4, 2.05 * rows), sharex=True, squeeze=False)
     axes = [row[0] for row in array]
     figure.subplots_adjust(left=0.19, right=0.96, top=0.97, bottom=0.14 if rows == 2 else 0.10, hspace=0.17)
-    axes[-1].set_xlabel('Completed optimizer steps (thousands)')
     return figure, axes
 
 
@@ -193,7 +192,6 @@ def render_gradient(diagnostics: Diagnostics) -> None:
     line(axes, diagnostics.samples(Metric.GRADIENT), BLUE)
     axes.axhline(1, color=ORANGE, linestyle=':', label='Clip threshold: 1.0', linewidth=1.2)
     axes.legend(frameon=False, fontsize=10, loc='upper left')
-    axes.set_xlabel('Completed optimizer steps (thousands)')
     save_figure(figure, FIGURES / 'appendix-gradient-norm.svg')
 
 
@@ -254,7 +252,6 @@ def horizontal_training_figure(labels: tuple[str, ...]) -> tuple[Figure, list[Ax
         axis.set_xticks([0, 200, 400])
         axis.tick_params(labelsize=8.5)
         axis.set_title(label, fontsize=10, pad=10)
-    figure.supxlabel('Completed optimizer steps (thousands)', y=0.14, fontsize=9)
     return figure, axes
 
 

@@ -25,8 +25,7 @@
   <text x="75" y="307" class="body">many interleaved chess games</text>
   <text x="75" y="334" class="body">restart states and tree search</text>
   <text x="75" y="361" class="body">visit policy and game result</text>
-  <text x="75" y="390" class="small">Native ownership keeps Python</text>
-  <text x="75" y="408" class="small">off the search hot path.</text>
+  <text x="75" y="397" class="small">No Python in the search hot path</text>
 
   <rect x="440" y="260" width="320" height="140" rx="14" fill="#e0efe4" stroke="#4d8d62" stroke-width="3"/>
   <text x="465" y="299" class="card-title">Replay and curriculum</text>
@@ -62,8 +61,7 @@
   <rect x="830" y="520" width="320" height="130" rx="14" fill="#dfeaf2" stroke="#567e9c" stroke-width="3"/>
   <text x="855" y="559" class="card-title">Published model</text>
   <text x="855" y="589" class="body">QAT → ONNX → TensorRT engine</text>
-  <text x="855" y="607" class="small">The deployed artifact feeds</text>
-  <text x="855" y="627" class="small">the next games.</text>
+  <text x="855" y="619" class="small">Feeds the next self-play games</text>
   <path d="M 990 420 V 515" class="path"/>
   <path d="M 983 509 L 990 520 L 997 509 Z" class="arrowhead"/>
   <path d="M 1150 585 H 1175 V 213 H 210 V 235" class="path"/>

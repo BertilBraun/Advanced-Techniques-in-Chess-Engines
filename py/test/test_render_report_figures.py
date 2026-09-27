@@ -83,7 +83,7 @@ def test_resignation_uses_three_separate_axes(
         'Mean saved plies',
     ]
     assert all(axes.get_xlabel() == '' for axes in figure.axes)
-    assert figure.get_supxlabel() == 'Completed optimizer steps (thousands)'
+    assert figure.get_supxlabel() == ''
     assert len({round(axes.get_position().y0, 6) for axes in figure.axes}) == 1
     assert all(axes.title.get_fontsize() == 10 for axes in figure.axes)
     assert figure.axes[1].get_ylim()[1] > 100 * max(

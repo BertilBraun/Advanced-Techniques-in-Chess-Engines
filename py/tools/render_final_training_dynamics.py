@@ -182,14 +182,11 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
             fontsize=10,
         )
     if paper:
-        figure.supxlabel('Completed optimizer steps (thousands)', y=0.01, fontsize=10)
         for axis in axes:
             axis.set_xticks((0, 200, 400))
         loss_axes.set_ylabel('Training loss', fontsize=10)
         rate_axes.set_title('Learning rate', fontsize=10, pad=10)
         rate_axes.set_ylabel('')
-    else:
-        rate_axes.set_xlabel('Completed optimizer steps (thousands)')
     rate_axes.set_xlim(0, 510 if paper else 410)
     if not paper:
         figure.suptitle('Final lineage: training objectives and learning rate', x=0.09, ha='left', color='#203444')
@@ -240,7 +237,6 @@ def render_volume_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> N
     throughput = [point.training_samples_per_second / 1000 for point in points]
     trainer_axes.plot(x, throughput, color='#1f5875' if paper else BLUE, linewidth=0.55, alpha=0.12 if paper else 0.16)
     trainer_axes.plot(x, smooth(throughput), color='#1f5875' if paper else BLUE, linewidth=2.2 if paper else 1.8)
-    trainer_axes.set_xlabel('Completed optimizer steps (thousands)')
     trainer_axes.set_xlim(0, 410)
     if not paper:
         figure.suptitle('Final lineage: games, replay, and trainer supply', x=0.09, ha='left', color='#203444')
@@ -297,7 +293,6 @@ def render_volume_paper(points: tuple[TrainingPoint, ...], search_samples: tuple
     throughput = [point.training_samples_per_second / 1000 for point in points]
     trainer_axes.plot(x, throughput, color='#1f5875', linewidth=0.75, alpha=0.35)
     trainer_axes.plot(x, smooth(throughput), color='#1f5875', linewidth=2.2)
-    figure.supxlabel('Completed optimizer steps (thousands)', y=0.02, fontsize=9)
     figure.subplots_adjust(left=0.065, right=0.99, top=0.82, bottom=0.25, wspace=0.44)
     save_figure(figure, FIGURE_DIRECTORY / 'final-training-volume-and-throughput-paper.svg')
 

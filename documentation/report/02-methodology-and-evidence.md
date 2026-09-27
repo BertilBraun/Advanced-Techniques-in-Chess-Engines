@@ -10,12 +10,6 @@ search limits, starting from 50 openings and playing each once with each colour.
 at four progressively larger search budgets. For each budget, we tested two Stockfish limits rather than trusting a
 single opponent.
 
-## Final playing strength
-
-Table \ref{tab:02-methodology-and-evidence-1} gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
-The bold rating for each model budget comes from the opponent against which it scored closest to 50%, where the
-rating estimate needs the least extrapolation.
-
 | Model searches | Parallel | Stockfish nodes | W/D/L | Score | Benchmark Elo (95% CI) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | Policy only | -- | 1,000 | 32/24/44 | 0.440 | **1,658 [1,608, 1,710]** |
@@ -28,6 +22,12 @@ rating estimate needs the least extrapolation.
 | 10,000 | 4 | 100,000 | 30/44/26 | 0.520 | **3,114 [3,065, 3,163]** |
 | 100,000 | 16 | 100,000 | 51/38/11 | 0.700 | 3,247 [3,192, 3,305] |
 | 100,000 | 16 | 200,000 | 25/56/19 | 0.530 | **3,251 [3,206, 3,297]** |
+
+## Final playing strength
+
+Table \ref{tab:02-methodology-and-evidence-1} gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
+The bold rating for each model budget comes from the opponent against which it scored closest to 50%, where the
+rating estimate needs the least extrapolation.
 
 At the deepest budget, the model scored 3,251 benchmark Elo against the harder opponent and 3,247 against the other:
 the two measurements agree closely. The ratings use a published calibration of Stockfish's fixed node limits [9].

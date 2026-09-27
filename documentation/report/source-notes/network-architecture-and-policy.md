@@ -272,8 +272,8 @@ into publication text.
   queen, rook, and bishop offsets are added to the shared origin/destination logit.
 - En passant is an ordinary diagonal square pair. The canonical encoder represents castling as king-square to
   rook-square, so it also fits the same table.
-- The retained key width is 128. On the controlled convolutional trunk, the head contained 51,072 parameters versus
-  483,680 for the dense head.
+- The retained key width is 128. On the controlled 128-channel convolutional trunk, the head contained 50,048
+  parameters versus 483,680 for the dense head. The wider 136-channel model has 51,072 head parameters.
 
 ### Evidence and results
 

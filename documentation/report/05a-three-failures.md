@@ -14,6 +14,11 @@ little training on those positions and only shallow search during play, the mode
 advantages before the ply cap. A heuristic cutoff estimate then supplied the outcome target for the preceding
 trajectory.
 
+![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
+
+Figure: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
+returns the examples needed to learn conversion.
+
 The interaction was self-reinforcing: inadequate conversion produced more capped games, whose unreliable targets
 further degraded the policy and value estimates needed to finish them. During the most affected interval,
 approximately one ply in seven was ineligible for training, 27--32% of games reached the cap, and 36--38% of admitted
@@ -26,11 +31,6 @@ with the root value of a full search at the cutoff reduced Brier error from 0.49
 0.851 to 0.756 on 2,282 early-cut positions in a controlled continuation study. A later set of 1,144 positions
 showed the same ordering. Removing the forced cheap-search tail then restored searched endgame positions to replay,
 allowing the network to learn conversion rather than merely receive a better estimate when conversion failed.
-
-![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
-
-Figure: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
-returns the examples needed to learn conversion.
 
 Figure \ref{fig:late-game-poisoning-feedback-loop} distinguishes these two interventions. Improving the cutoff target reduced label error; restoring
 endgame coverage corrected the sampling policy that sustained the failure.
