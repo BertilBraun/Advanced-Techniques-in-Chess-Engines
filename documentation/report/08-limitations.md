@@ -17,12 +17,11 @@ Matched-compute experiments are needed to separate those effects.
 
 ## Persistent plateaus and the remaining engine gap
 
-The model remains roughly 400 benchmark Elo below the upper end of the historical calibration, approximately
-3,610 for Stockfish 13 at 256 million nodes [9]. Modern leading engines are stronger still, but their gap is not
-measured here under matched conditions. Closing the remaining strength gap requires more than improving
-the implementation of the existing recipe. Across the project's training runs, playing strength repeatedly
-approached a plateau and did not escape it during extended training. These observations make additional hours
-under unchanged settings an unpromising route to a substantial gain.
+Later continuation experiments showed diminishing strength gains, with similar plateaus at 64 and 400 searches
+per move. Appendix \ref{sec:appendix-c-supporting-comparisons-late-training-strength} presents the checkpoint
+comparisons and late-training ladder observations. Further training may yield incremental gains on the order of
+tens of Elo, but these trajectories do not suggest improvements of hundreds of points. Closing the roughly
+400-Elo gap to top-engine strength would likely require changes to the training recipe.
 
 Four changes are the most plausible next tests: substantially larger models to increase representational
 capacity; more search during self-play to improve targets; lower replay reuse to increase fresh-game exposure;

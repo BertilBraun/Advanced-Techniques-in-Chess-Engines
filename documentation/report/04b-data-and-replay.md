@@ -104,7 +104,7 @@ beyond the normal cap supplied later outcomes for evaluation. Brier score measur
 while cross-entropy penalizes assigning low probability to the eventual outcome; lower is better for both.
 At the earlier measured checkpoint, the cut-position
 search achieved Brier score 0.444 and cross-entropy 0.756, compared with 0.491 and 0.851 for material divided by 39.
-At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Search-root sign
+At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Among decisive continuations, search-root sign
 accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
 therefore performs one full search at the actual cut position and uses its root value as the bootstrap.
 The root value becomes a soft win/draw/loss target, then materialization applies the configured per-ply blur.

@@ -114,3 +114,25 @@ with different checkpoint weights, so the comparison includes both backend and m
 23.3% replay-admission gain compared separate live 400- and 600-visit stages that also differed in checkpoint
 and actor scheduling. Absolute systems rates vary with CPU quota, GPU power, PCIe and NUMA layout, runtime versions,
 model shape, batching, and concurrent training.
+
+## Late-training strength
+
+A retrospective comparison evaluated checkpoints 900, 960, and 1020 at 64 and 400 searches per move
+(Table \ref{tab:appendix-c-supporting-comparisons-4}). Each cell used 50 paired openings, giving 100 games.
+The 64-search matches used Stockfish 13 at 10,000 nodes (2,470 benchmark Elo); the 400-search matches used
+20,000 nodes (2,700 benchmark Elo). Ratings are calculated from each match score against its opponent anchor.
+
+| Checkpoint | Searches | W/D/L | Score | Benchmark Elo |
+| ---: | ---: | --- | ---: | ---: |
+| 900 | 64 | 18/26/56 | 31.0% | 2,331.0 |
+| 960 | 64 | 16/31/53 | 31.5% | 2,335.0 |
+| 1020 | 64 | 16/34/50 | 33.0% | 2,347.0 |
+| 900 | 400 | 31/41/28 | 51.5% | 2,710.4 |
+| 960 | 400 | 33/38/29 | 52.0% | 2,713.9 |
+| 1020 | 400 | 26/36/38 | 44.0% | 2,658.1 |
+
+The 64-search estimate increased by 16.0 Elo between the first and last checkpoints, while the 400-search
+matches showed no sustained gain. Separately, a late continuation produced 28 successive observations on the
+three-rung 64-search ladder over 9.2 hours. The mean of the first 14 observations was 2,373.7 Elo, compared with
+2,376.7 for the last 14: a change of 3.0 Elo. These within-protocol comparisons support diminishing returns
+from continued training, rather than demonstrating that further improvement is impossible.

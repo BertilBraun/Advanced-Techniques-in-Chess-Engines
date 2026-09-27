@@ -126,6 +126,7 @@ TABLE_CAPTIONS = {
     ('appendix-c-supporting-comparisons.md', 1): 'CNN width: measured throughput versus arithmetic prediction',
     ('appendix-c-supporting-comparisons.md', 2): 'Depth and width: throughput ratios across batch sizes',
     ('appendix-c-supporting-comparisons.md', 3): 'Trainer throughput under actor overlap',
+    ('appendix-c-supporting-comparisons.md', 4): 'Late-training checkpoint comparisons at two search budgets',
     ('appendix-d-reproducibility.md', 1): 'Chess input planes in tensor order (zero-based indices)',
 }
 MARKDOWN = MarkdownIt('commonmark').enable('table')

@@ -19,6 +19,7 @@ by self-play.
 
 Further scaling remains open. The larger model recovered its parent's strength without surpassing it during the
 available continuation, while distillation retained substantial strength in a much smaller network without matching
-the teacher. Repeated plateaus make longer training under unchanged settings an unlikely solution. Larger models, deeper
+the teacher. Continued training may yield modest gains, but the observed plateaus point toward changes to the
+recipe for a substantial improvement. Larger models, deeper
 self-play search, lower reuse, and broader replay are the next hypotheses to test against measured strength per
 unit of compute.
