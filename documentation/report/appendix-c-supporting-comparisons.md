@@ -7,7 +7,7 @@ Chapters 4 and 5. Each comparison retains its own workload and measurement scale
 
 The width sweep used 12-block global-pooling CNNs with a dense policy head, BF16, batch 512, and one RTX 4070
 SUPER. Each width was benchmarked in a separate process against an interleaved width-128 reference.
-Table C1 contrasts measured throughput with the inverse-width-squared estimate implied by convolutional
+Table \ref{tab:appendix-c-supporting-comparisons-1} contrasts measured throughput with the inverse-width-squared estimate implied by convolutional
 arithmetic. Ratios below are normalized to the unrounded width-128 rate of 103,490 positions/s.
 
 | Depth × width | Positions/s (k) | Measured ratio | Arithmetic ratio |
@@ -29,7 +29,7 @@ The 112- and 120-channel models perform less arithmetic than the 128-channel mod
 per second. The sharp loss at 136 channels likewise exceeds the arithmetic prediction. Width alone is therefore
 an unreliable proxy for inference cost.
 
-Table C2 extends the comparison to depth and serving batch size. Ratios are relative to the specified reference
+Table \ref{tab:appendix-c-supporting-comparisons-2} extends the comparison to depth and serving batch size. Ratios are relative to the specified reference
 at the same batch size. The width sweep is backed by per-process measurements; the depth/batch comparisons are
 transcribed benchmark summaries. Dashes indicate settings not measured.
 
@@ -52,6 +52,11 @@ transcribed benchmark summaries. Dashes indicate settings not measured.
 
 The 20×128 network is faster than 14×152 at batch 512 but slower at batch 64. Such reversals motivate measuring
 candidate models at both self-play and interactive batch sizes rather than extrapolating from parameter count.
+
+The attention comparison controlled bootstrap policy shape, serving precision, and runtime. Its best Smolgen
+cell reduced held-out loss by 0.0090 nats relative to the parameter-matched from-to CNN, but delivered only
+36.1% of the dense CNN reference's batch-512 forward rate and 45.8% at batch 64, with 5.17× its peak training
+memory. These rates use the dense CNN reference, not the parameter-matched from-to comparison.
 
 ## Replay-reuse controls
 
@@ -91,13 +96,13 @@ In these workloads, the measured reuse was insufficient to offset the cost of de
 8,790 positions/s against an arrival rate of 1,365 accepted positions/s.
 
 **Training.** An eight-GPU benchmark with global batch 2,048, bfloat16 autocast, and concurrent self-play
-processed 6,252 training samples/s. The actor-overlap sweep in Table 3 is a separate workload; its trainer
+processed 6,252 training samples/s. The actor-overlap sweep in Table \ref{tab:05-systems-optimization-1} is a separate workload; its trainer
 and concurrent-search rates should be compared within that sweep.
 
-Table C3 retains the unrounded trainer measurements. Chapter 5 presents the comparison alongside the scheduling
-decision. Complete-cycle time includes training and the remaining wait for self-play data.
+Table \ref{tab:appendix-c-supporting-comparisons-3} retains the unrounded trainer measurements. Chapter \ref{sec:05-systems-optimization} presents the comparison alongside the scheduling
+decision. Cycle times are estimated from measured training duration and search throughput.
 
-| Active actors | Training samples/s | Complete cycle (s) |
+| Active actors | Training samples/s | Estimated cycle time (s) |
 | ---: | ---: | ---: |
 | 0 | 25,275 | -- |
 | 8 | 21,492 | 117.1 |

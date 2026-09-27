@@ -3,11 +3,11 @@
 The data strategy determines both the distribution of self-play experience and its contribution to learning.
 Restart states direct new games towards unresolved alternatives; replay capacity and sampling determine which
 searched positions remain available and how often they are trained on. Resignation and cutoff handling affect
-the reliability of their outcome targets. Figure 4 distinguishes these decisions along the path to a training batch.
+the reliability of their outcome targets. Figure \ref{fig:replay-decision-path} distinguishes these decisions along the path to a training batch.
 
 ![Generation, admission, selection, weighting, and presentation credit as distinct replay decisions](figures/replay-decision-path.svg)
 
-Figure 4: Starting positions shape the games that are played. Their searched positions enter replay, where
+Figure: Starting positions shape the games that are played. Their searched positions enter replay, where
 sampling determines which examples the learner revisits. New examples also set the pace of optimizer updates.
 
 ## Restart-state selection
@@ -19,7 +19,7 @@ but not searched or trained directly. Drawing zero plies also keeps some games a
 The other half begin from archived self-play states, falling back to random openings when a worker's restart
 archive is empty. The archive favors positions with a meaningful unresolved alternative: they are not near the end
 of the source game or already decided, and search found a small set of plausible moves. A restarted game chooses an
-untried branch, reconstructs the prefix, then explores the alternative the source game did not play. Appendix D
+untried branch, reconstructs the prefix, then explores the alternative the source game did not play. Appendix \ref{app:D}
 gives the eligibility thresholds.
 
 The archive gives 30% probability to uniform selection. Otherwise it favors positions where search substantially
@@ -39,21 +39,19 @@ on ply: searched endgame positions remain eligible throughout the game. Sparse p
 
 ![Replay occupancy versus capacity and elapsed age of sampled positions](figures/appendix-replay-age.svg)
 
-Figure 5: Replay occupancy follows the expanding capacity during final training. The mean age of sampled positions
+Figure: Replay occupancy follows the expanding capacity during final training. The mean age of sampled positions
 grows to roughly two hours; age is measured from position creation. Both horizontal axes show completed optimizer
 steps in thousands. The dashed line marks the small-to-medium model transition.
 
 ## Replay capacity and reuse
 
-A finite replay window trades diversity against target age. Small windows rapidly replace early policies but
-discard infrequent openings and endgames; larger windows preserve that coverage at the cost of retaining older
-targets. The retained schedule expands the active window as self-play supplies new positions.
+The capacity experiments addressed the diversity–age tradeoff introduced in Section \ref{sec:03-system-and-methods-replay-and-materialization}.
 
 The physical memory map is preallocated once, while its logical capacity grows from 600,000 to 20 million rows.
 The early window stays small when little data exists; later growth preserves more openings, endgames, and policy
 history. In an earlier campaign, playing strength continued to improve after fixed-dataset policy accuracy largely
-saturated, reinforcing the value of fresh and varied positions. Appendix D gives the full capacity schedule.
-Figure 5 shows replay occupancy and sampled-position age during final training.
+saturated, reinforcing the value of fresh and varied positions. Appendix \ref{app:D} gives the full capacity schedule.
+Figure \ref{fig:appendix-replay-age} shows replay occupancy and sampled-position age during final training.
 
 Replay reuse introduces a second tradeoff. The configured ratio is the number of optimizer presentations funded by
 each newly admitted row. In the retained setting, four presentations are credited per row; a 500-step quantum at a
@@ -62,13 +60,11 @@ the replay store count towards this allowance.
 
 Higher reuse funds more updates from each game; lower reuse gives each update fresher positions if the actors can
 supply them. Short controls at ratios 4, 6.25, and 8 showed similar strength despite different update rates.
-The selected ratio of 4 favors freshness. Appendix C gives the duration and scope of these short controls.
+The selected ratio of 4 favors freshness. Appendix \ref{app:C} gives the duration and scope of these short controls.
 
 ## Policy-surprise sampling
 
-Search disagreement suggests an opportunity to learn beyond the network's initial move preference. Within the live
-window, the sampler therefore favors rows with high *policy surprise*: divergence between search's visit
-distribution and the network prior. Seventy percent of draws follow this signal, capped at 2.0 so extreme rows
+The retained sampler assigns seventy percent of draws to policy surprise, capped at 2.0 so extreme rows
 cannot dominate; the remaining 30% are uniform to preserve coverage. A row can recur across optimizer steps but is
 drawn only once within a global batch. This is related to prioritized replay [4], though it uses a different signal.
 
@@ -80,7 +76,7 @@ An earlier replay design instead weighted merged duplicate positions by their mu
 
 ![Resignation threshold, rolling false-nonloss audit, and estimated saved plies](figures/appendix-resignation.svg)
 
-Figure 6: Resignation threshold, observed false-resignation rate and its one-sided 95% upper bound, and estimated
+Figure: Resignation threshold, observed false-resignation rate and its one-sided 95% upper bound, and estimated
 saved plies during final training. The error panel shows periods when the resignation gate is enabled; the dotted
 line marks the 2.5% calibration target, including observed excursions. Saved plies are estimated from continuation
 games. Faint traces show raw values, with eleven-quantum averages overlaid. All horizontal axes show completed
@@ -98,7 +94,7 @@ outcome remains unknown.
 Calibration estimates the fraction of hypothetical resignations whose continued games end in a draw or win.
 A threshold requires at least 100 observations and a one-sided 95% upper confidence bound no greater than 2.5%.
 It can become more conservative immediately but relaxes by at most 0.01 per publication. Recalibration tracks
-changes in the model's value predictions. Figure 6 reports the threshold, rolling error estimates, and saved plies.
+changes in the model's value predictions. Figure \ref{fig:appendix-resignation} reports the threshold, rolling error estimates, and saved plies.
 
 ## Outcome targets at the ply cap
 
@@ -112,7 +108,7 @@ At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.3
 accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
 therefore performs one full search at the actual cut position and uses its root value as the bootstrap.
 The root value becomes a soft win/draw/loss target, then materialization applies the configured per-ply blur.
-Appendix D gives the conversion.
+Appendix \ref{app:D} gives the conversion.
 
 ## Discounting and intermediate value targets
 
@@ -124,7 +120,7 @@ assigned to early positions. With signed values, discounting likewise makes a de
 
 The two discounts act at different points in the learning loop, but share the intended incentive to complete
 winning games sooner. Their independent benefit was not established. Restoring searched endgame positions to
-replay, rather than discounting, was the identified repair for the conversion failure discussed in Section 6.1.
+replay, rather than discounting, was the identified repair for the conversion failure discussed in Section \ref{sec:05a-three-failures-late-game-target-poisoning}.
 Whether either discount improves the retained recipe remains open.
 
 A separate scheduled blend incorporates up to 10% of the stored search-root value into the training target,
@@ -132,9 +128,8 @@ combining the completed game's outcome with search's assessment of the current p
 
 ## Auxiliary trajectory targets
 
-The completed trajectory also provides two auxiliary tasks: predict the next searched policy and the remaining
-game length. These encourage the shared representation to capture how play develops, not just the current move.
-Label availability depends on the recorded trajectory. A next-policy label exists only if there is a following searched
+For the auxiliary objectives introduced in Section \ref{sec:03-system-and-methods}, label availability depends on the recorded trajectory.
+A next-policy label exists only if there is a following searched
 observation, and a capped game cannot reveal its true remaining length. Missing labels are excluded from the
 corresponding loss.
 
@@ -155,10 +150,8 @@ models. The retained 500-step interval reduces that overhead while still refresh
 
 ## Actor-trainer overlap
 
-The actors and trainer share the GPUs. Pausing all actors gives the trainer more compute, but no new games arrive;
-keeping every actor running slows training. The retained compromise keeps half the actors active during each
-500-step training block. Models are still published at coordinated boundaries rather than changing underneath an
-ongoing search. Chapter 5 compares how much search and training this overlap supports.
+The retained schedule keeps half the actors active during each 500-step training block. Chapter \ref{sec:05-systems-optimization} presents the
+overlap comparison and its effect on training duration and concurrent search throughput.
 
 ## The retained data strategy
 

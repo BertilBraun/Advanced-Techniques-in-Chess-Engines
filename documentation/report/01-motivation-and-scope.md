@@ -8,8 +8,8 @@ matters only if the complete loop produces stronger play within the available ti
 This study asks how strong that loop can become on a single eight-GPU node when the system is engineered for
 efficiency. Over **2.5 days** of training from random weights on searched self-play games, the run produced a
 6.32-million-parameter model. It reached **1,658 benchmark Elo without search**
-and **3,251 benchmark Elo at 100,000 searches per move**—roughly five seconds of thinking time—against the project's fixed-node Stockfish 13 ladder.
-Table 1 gives the match results; Chapter 8 follows the model's improvement across search budgets.
+and **3,251 benchmark Elo at 100,000 searches per move**—estimated at under five seconds of thinking time—against the project's fixed-node Stockfish 13 ladder.
+Table \ref{tab:02-methodology-and-evidence-1} gives the match results; Chapter \ref{sec:07-final-run-results} follows the model's improvement across search budgets.
 
 The result depends on the whole learning loop. The network's representation affects both what it can learn and how
 quickly it can supply search. Native search, batched inference, and TensorRT make enough searched games available
@@ -33,9 +33,9 @@ A live chess demonstration is also available [12].
 
 ## Roadmap
 
-[Chapter 2](02-methodology-and-evidence.md) presents the chess evaluation.
-[Chapter 3](03-system-and-methods.md) explains the AlphaZero learning principle and the system that implements it.
-[Chapter 4](04a-search.md) examines search, replay, and network design, followed by throughput engineering in
-[Chapter 5](05-systems-optimization.md). The three failure studies in [Chapter 6](05a-three-failures.md)
-lead into training progress in [Chapter 7](06-final-chess-recipe.md) and playing strength in
-[Chapter 8](07-final-run-results.md). [Appendix D](appendix-d-reproducibility.md) specifies the final recipe.
+Chapter \ref{sec:02-methodology-and-evidence} presents the chess evaluation.
+Chapter \ref{sec:03-system-and-methods} explains the AlphaZero learning principle and the system that implements it.
+Chapter \ref{sec:04-research-investigations} examines search, replay, and network design, followed by throughput engineering in
+Chapter \ref{sec:05-systems-optimization}. The three failure studies in Chapter \ref{sec:05a-three-failures}
+lead into training progress in Chapter \ref{sec:06-final-chess-recipe} and playing strength in
+Chapter \ref{sec:07-final-run-results}. Appendix \ref{app:D} specifies the final recipe.

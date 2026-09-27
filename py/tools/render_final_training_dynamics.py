@@ -185,9 +185,8 @@ def render_loss_figure(points: tuple[TrainingPoint, ...], *, paper: bool) -> Non
         figure.supxlabel('Completed optimizer steps (thousands)', y=0.01, fontsize=10)
         for axis in axes:
             axis.set_xticks((0, 200, 400))
-        loss_axes.set_xlabel('Training loss')
-        rate_axes.set_xlabel('Learning rate')
-        loss_axes.set_ylabel('')
+        loss_axes.set_ylabel('Training loss', fontsize=10)
+        rate_axes.set_title('Learning rate', fontsize=10, pad=10)
         rate_axes.set_ylabel('')
     else:
         rate_axes.set_xlabel('Completed optimizer steps (thousands)')
@@ -270,7 +269,7 @@ def render_volume_paper(points: tuple[TrainingPoint, ...], search_samples: tuple
         (trainer_axes, 'Train samples/s (k)'),
     ):
         configure_axes(axis, '', paper=True)
-        axis.set_xlabel(label, fontsize=9)
+        axis.set_title(label, fontsize=9, pad=10)
         axis.tick_params(labelsize=8)
         axis.set_xticks((0, 200, 400))
         axis.set_xlim(0, 410)
@@ -299,7 +298,7 @@ def render_volume_paper(points: tuple[TrainingPoint, ...], search_samples: tuple
     trainer_axes.plot(x, throughput, color='#1f5875', linewidth=0.75, alpha=0.35)
     trainer_axes.plot(x, smooth(throughput), color='#1f5875', linewidth=2.2)
     figure.supxlabel('Completed optimizer steps (thousands)', y=0.02, fontsize=9)
-    figure.subplots_adjust(left=0.065, right=0.99, top=0.95, bottom=0.33, wspace=0.44)
+    figure.subplots_adjust(left=0.065, right=0.99, top=0.82, bottom=0.25, wspace=0.44)
     save_figure(figure, FIGURE_DIRECTORY / 'final-training-volume-and-throughput-paper.svg')
 
 

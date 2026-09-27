@@ -77,14 +77,15 @@ def test_resignation_uses_three_separate_axes(
     renderer.render_resignation(diagnostics)
     figure = figures[0]
     assert len(figure.axes) == 3
-    assert [axes.get_xlabel() for axes in figure.axes] == [
+    assert [axes.get_title() for axes in figure.axes] == [
         'Resignation threshold',
         'False non-loss (%)',
         'Mean saved plies',
     ]
-    assert all(axes.get_title() == '' for axes in figure.axes)
+    assert all(axes.get_xlabel() == '' for axes in figure.axes)
+    assert figure.get_supxlabel() == 'Completed optimizer steps (thousands)'
     assert len({round(axes.get_position().y0, 6) for axes in figure.axes}) == 1
-    assert all(axes.xaxis.label.get_fontsize() == 10 for axes in figure.axes)
+    assert all(axes.title.get_fontsize() == 10 for axes in figure.axes)
     assert figure.axes[1].get_ylim()[1] > 100 * max(
         sample.value
         for sample in diagnostics.samples(renderer.Metric.UPPER_BOUND)

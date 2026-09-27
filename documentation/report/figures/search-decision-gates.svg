@@ -3,11 +3,11 @@
   <desc id="description">Four candidate search optimizations are placed at the gate where their measured benefit failed to survive: target integrity, online learning, critical-path time, or net inference throughput. Fixed visits remain the retained baseline.</desc>
   <defs>
     <style>
-      text { font-family: Arial, sans-serif; fill: #172b36; }
+      text { font-size: 18px; font-family: Arial, sans-serif; fill: #172b36; }
       .gate { fill: #f2f6f5; stroke: #255c5a; stroke-width: 3; }
       .gate-title { font-size: 21px; font-weight: 700; }
-      .body { font-size: 17px; }
-      .note { font-size: 16px; fill: #344c58; }
+      .body { font-size: 18px; }
+      .note { font-size: 18px; fill: #344c58; }
       .negative { fill: #ac4d37; font-weight: 700; }
       .positive { fill: #17615b; font-weight: 700; }
       .rule { stroke: #255c5a; stroke-width: 3; }

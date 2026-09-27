@@ -19,28 +19,28 @@
 
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
     <circle cx="78" cy="168" r="15" fill="#A8443C"/>
-    <text x="78" y="174" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">1</text>
+    <text x="78" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">1</text>
     <text x="78" y="210" fill="#15243A" font-size="21" font-weight="600">
       <tspan x="78" dy="0">No searched</tspan>
       <tspan x="78" dy="30">endgame rows</tspan>
     </text>
 
     <circle cx="363" cy="168" r="15" fill="#A8443C"/>
-    <text x="363" y="174" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">2</text>
+    <text x="363" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">2</text>
     <text x="363" y="210" fill="#15243A" font-size="21" font-weight="600">
       <tspan x="363" dy="0">Conversion stays</tspan>
       <tspan x="363" dy="30">weak</tspan>
     </text>
 
     <circle cx="648" cy="168" r="15" fill="#A8443C"/>
-    <text x="648" y="174" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">3</text>
+    <text x="648" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">3</text>
     <text x="648" y="210" fill="#15243A" font-size="21" font-weight="600">
       <tspan x="648" dy="0">More games reach</tspan>
       <tspan x="648" dy="30">the ply cap</tspan>
     </text>
 
     <circle cx="933" cy="168" r="15" fill="#A8443C"/>
-    <text x="933" y="174" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">4</text>
+    <text x="933" y="174" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">4</text>
     <text x="933" y="210" fill="#15243A" font-size="21" font-weight="600">
       <tspan x="933" dy="0">Cutoff targets</tspan>
       <tspan x="933" dy="30">are unreliable</tspan>
@@ -72,26 +72,26 @@
 
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
     <circle cx="87" cy="482" r="20" fill="#16786F"/>
-    <text x="87" y="489" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">1</text>
+    <text x="87" y="489" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">1</text>
     <text x="122" y="480" fill="#15243A" font-size="21" font-weight="600">Full search at the cut</text>
-    <text x="122" y="510" fill="#526070" font-size="18">
+    <text x="122" y="510" fill="#526070" font-size="19">
       <tspan x="122" dy="0">Replace the cutoff heuristic with a</tspan>
       <tspan x="122" dy="24">searched root value.</tspan>
     </text>
     <line x1="122" y1="556" x2="158" y2="556" stroke="#16786F" stroke-width="3"/>
     <polygon points="157,549 171,556 157,563" fill="#16786F"/>
-    <text x="184" y="562" fill="#11675F" font-size="18" font-weight="600">repairs target provenance</text>
+    <text x="184" y="562" fill="#11675F" font-size="19" font-weight="600">repairs target provenance</text>
 
     <circle cx="667" cy="482" r="20" fill="#16786F"/>
-    <text x="667" y="489" text-anchor="middle" fill="#FFFFFF" font-size="16" font-weight="600">2</text>
+    <text x="667" y="489" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">2</text>
     <text x="702" y="480" fill="#15243A" font-size="21" font-weight="600">Fully search the endgame</text>
-    <text x="702" y="510" fill="#526070" font-size="18">
+    <text x="702" y="510" fill="#526070" font-size="19">
       <tspan x="702" dy="0">Restore searched conversion</tspan>
       <tspan x="702" dy="24">positions to replay.</tspan>
     </text>
     <line x1="702" y1="556" x2="738" y2="556" stroke="#16786F" stroke-width="3"/>
     <polygon points="737,549 751,556 737,563" fill="#16786F"/>
-    <text x="764" y="562" fill="#11675F" font-size="18" font-weight="600">breaks the loop at its source</text>
+    <text x="764" y="562" fill="#11675F" font-size="19" font-weight="600">breaks the loop at its source</text>
   </g>
   </g>
 

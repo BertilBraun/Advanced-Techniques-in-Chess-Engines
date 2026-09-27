@@ -1,22 +1,20 @@
 # 5. From inference speed to learning speed
 
 Under a fixed compute budget, inference throughput matters through the training data it makes affordable.
-Search, game completion, replay delivery, and optimization jointly determine that supply (Figure 9).
+Search, game completion, replay delivery, and optimization jointly determine that supply (Figure \ref{fig:throughput-to-learning}).
 This chapter examines the bottlenecks at those stages and the scheduling required to share GPUs between actors
 and the learner. Relative gains are reported within each controlled benchmark;
-[Appendix C](appendix-c-supporting-comparisons.md) collects the absolute rates and settings.
+Appendix \ref{app:C} collects the absolute rates and settings.
 
 ![Inference and search throughput must pass through games, replay, and optimization before improving playing strength](figures/throughput-to-learning.svg)
 
-Figure 9: Search speed passes through game completion, replay admission, and optimizer work before it can affect
+Figure: Search speed passes through game completion, replay admission, and optimizer work before it can affect
 playing strength. Each boundary has its own throughput measure.
 
 ## Native ownership of the search loop
 
 Per-position Python dispatch made board updates, legal-move generation, encoding, and inference submission a
-host-side bottleneck. The production loop therefore keeps game rules,
-search trees, selection and backup, and asynchronous inference requests in C++. Python coordinates configuration,
-replay, training, publication, and evaluation outside that hot path.
+host-side bottleneck. The native execution boundary described in Section \ref{sec:03-system-and-methods-why-the-search-loop-stays-in-c} removes that per-position dispatch.
 
 Each actor interleaves 512 games through a preallocated inference pipeline and retains search subtrees across
 moves. The retained topology uses four actors per GPU, one inference worker per actor, batches of up to 320
@@ -43,7 +41,7 @@ batches. The measurements supported process-level concurrency with one inference
 
 Per-tree parallelism can supplement batching when too few independent games remain active. Unlike inter-game
 concurrency, it changes leaf selection through virtual reservations and can reduce search quality. Its
-strength-throughput tradeoff is examined in Chapter 4.
+strength-throughput tradeoff is examined in Chapter \ref{sec:04-research-investigations}.
 
 ## Inference runtimes and precision
 
@@ -52,11 +50,11 @@ delivered 1.86x the inference throughput of a TorchScript BF16 control in a matc
 Quantization-aware INT8 added a further 1.31x over TensorRT FP16 on the tested quantization-oriented network.
 Production-topology tests found INT8 gains of 14.4% for the smaller network and 39.1% for the medium network.
 
-As Section 4.3 explains, the INT8 speedup required training the network to tolerate quantization. Most trunk
+As Section \ref{sec:04c-networks-and-training} explains, the INT8 speedup required training the network to tolerate quantization. Most trunk
 convolutions run in INT8, while the start block, heads, and linear layers remain at higher precision. Export records
 the quantization and dequantization operations explicitly in ONNX so TensorRT can compile the intended arithmetic.
 Rather than rebuild the complete engine after every update, publication refits a prepared template with the new
-weights [8]. Chapter 6 examines a failure in this step that made output comparisons essential.
+weights [8]. Chapter \ref{sec:05a-three-failures} examines a failure in this step that made output comparisons essential.
 
 The alternative `torch.compile` path accelerated eager batch-64 inference by roughly 27--33%, but
 fused TorchScript remained faster. In the tested eight-GPU training workload, compilation reduced throughput by
@@ -67,7 +65,7 @@ Similar parameter counts did not imply similar inference cost. Width and depth c
 TensorRT tactics, and memory behavior discontinuously. Channels-last layout and cuDNN autotuning helped relevant CNN
 shapes, but no analytic parameter-count rule predicted the fastest network. Progressive model sizes were therefore
 benchmarked at their actual serving batch and precision rather than selected from FLOPs alone.
-The width and depth sweeps in [Appendix C](appendix-c-supporting-comparisons.md), Tables C1 and C2,
+The width and depth sweeps in Appendix \ref{app:C}, Table \ref{tab:appendix-c-supporting-comparisons-1} and Table \ref{tab:appendix-c-supporting-comparisons-2},
 quantify this mismatch: narrower networks were not consistently faster, and changing batch size could reverse
 the ranking of deep-narrow and shallow-wide designs.
 
@@ -94,14 +92,13 @@ Self-play and training compete for GPU capacity but have different resource prof
 traversal and transfer intervals that allow useful overlap with optimizer work. Scheduling must therefore balance
 the slower training block against the reduction in subsequent waiting for new games.
 
-The overlap sweep compared keeping 8, 16, or all 32 actors active during training, measuring both training time
-and the remaining wait for self-play.
+The overlap sweep compared keeping 8, 16, or all 32 actors active during training.
 Moving from half to all actors active nearly doubled the trainer's work time for only a small reduction in the
 complete cycle. The retained half-active policy balances ongoing game production against optimizer throughput;
-Table 3 gives both sides of this tradeoff. Complete-cycle time includes training and the remaining wait for
-self-play data; with all actors paused, training alone reached 25.3 thousand samples/s.
+Table \ref{tab:05-systems-optimization-1} gives both sides of this tradeoff. Cycle times are estimated from measured training duration and search
+throughput. With all actors paused, training alone reached 25.3 thousand samples/s.
 
-| Actors | Train (k/s) | Search (k/s) | Cycle (s) |
+| Actors | Train (k/s) | Search (k/s) | Estimated cycle time (s) |
 | ---: | ---: | ---: | ---: |
 | 8 | 21.5 | 506 | 117 |
 | 16 | 17.1 | 606 | 113 |
@@ -120,4 +117,4 @@ from limiting training, and actor overlap replenishes replay during optimizer up
 Additional search capacity can support more games at a fixed budget or deeper searches per position. Those uses
 alter data diversity and target quality differently, while replay reuse controls their rate of consumption.
 The systems improvements therefore expand the feasible training regime; the recipe determines how that capacity
-is spent. Chapter 7 evaluates the resulting progress in playing strength over wall-clock time.
+is spent. Chapter \ref{sec:06-final-chess-recipe} evaluates the resulting progress in playing strength over wall-clock time.

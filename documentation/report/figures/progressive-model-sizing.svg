@@ -7,10 +7,10 @@
       .stage { fill: #f6f9f8; stroke: #255c5a; stroke-width: 3; }
       .candidate { fill: #f9f8f3; stroke: #9b7840; stroke-width: 3; }
       .heading { font-size: 22px; font-weight: 700; }
-      .body { font-size: 17px; }
-      .note { font-size: 16px; fill: #344c58; }
-      .good { font-size: 17px; fill: #17615b; font-weight: 700; }
-      .uncertain { font-size: 17px; fill: #805e2e; font-weight: 700; }
+      .body { font-size: 19px; }
+      .note { font-size: 19px; fill: #344c58; }
+      .good { font-size: 19px; fill: #17615b; font-weight: 700; }
+      .uncertain { font-size: 19px; fill: #805e2e; font-weight: 700; }
       .solid { stroke: #17615b; stroke-width: 5; fill: none; }
       .dashed { stroke: #9b7840; stroke-width: 5; stroke-dasharray: 11 8; fill: none; }
     </style>

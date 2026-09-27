@@ -116,7 +116,8 @@ SPECIAL_CHARACTERS = {
     '”': "''",
 }
 CITATION = re.compile(r'(?<!\[)\[(1[0-2]|[1-9])\](?!\])')
-PLAIN_CAPTION = re.compile(r'^Figure\s+[0-9A-D.]+\s*(?:[.:—-])?\s*')
+PLAIN_CAPTION = re.compile(r'^Figure(?:\s+[0-9A-D.]+)?\s*(?:[.:—-])?\s*')
+TEX_REFERENCE = re.compile(r'\\ref\{(?:fig|tab|sec|app):[A-Za-z0-9:-]+\}')
 TABLE_CAPTIONS = {
     ('02-methodology-and-evidence.md', 1): 'Final checkpoint against fixed-node Stockfish 13',
     ('05-systems-optimization.md', 1): 'Actor overlap: optimizer throughput and concurrent search',
@@ -133,7 +134,16 @@ MARKDOWN = MarkdownIt('commonmark').enable('table')
 
 def escape_tex(value: str, *, citations: bool = True) -> str:
     """Escape prose while preserving only numbered public-source citations."""
-    fragments: list[str] = []
+    if TEX_REFERENCE.search(value):
+        fragments: list[str] = []
+        start = 0
+        for reference in TEX_REFERENCE.finditer(value):
+            fragments.append(escape_tex(value[start : reference.start()], citations=citations))
+            fragments.append(reference.group())
+            start = reference.end()
+        fragments.append(escape_tex(value[start:], citations=citations))
+        return ''.join(fragments)
+    fragments = []
     start = 0
     matches = CITATION.finditer(value) if citations else ()
     for match in matches:
@@ -167,7 +177,7 @@ def inline_tex(tokens: list[Token], *, bibliography: bool = False) -> str:
                     continue
                 if address in SOURCE_FILES:
                     links.append(address)
-                    label = 'research' if address == '04a-search.md' else Path(address).stem
+                    label = Path(address).stem
                     parts.append(r'\hyperref[sec:' + label + ']{')
                     continue
                 if not bibliography:
@@ -297,6 +307,11 @@ def table_tex(rows: list[list[str]], *, source: Path, table_number: int, appendi
     )
     lines.extend([table_opening, r'\toprule'])
     for row_index, row in enumerate(rows):
+        if row_index == 0 and not appendix:
+            row = [
+                r'\shortstack[l]{Estimated\\cycle time (s)}' if cell == 'Estimated cycle time (s)' else cell
+                for cell in row
+            ]
         lines.append(' & '.join(row) + r' \\')
         if row_index == 0:
             lines.append(r'\midrule')
@@ -326,9 +341,11 @@ def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str,
             return r'\section{' + escape_tex(heading) + r'}\label{sec:research}\label{sec:' + source.stem + '}' + '\n'
         return r'\section{' + escape_tex(heading) + r'}\label{sec:' + source.stem + '}' + '\n'
     if level == 2:
+        slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+        label = r'\label{sec:' + source.stem + '-' + slug + '}'
         if source.name.startswith(('04a-', '04b-', '04c-')) and not appendix:
-            return r'\subsubsection{' + escape_tex(title) + '}' + '\n'
-        return r'\subsection{' + escape_tex(title) + '}' + '\n'
+            return r'\subsubsection{' + escape_tex(title) + '}' + label + '\n'
+        return r'\subsection{' + escape_tex(title) + '}' + label + '\n'
     return r'\paragraph{' + escape_tex(title) + '}' + '\n'
 
 

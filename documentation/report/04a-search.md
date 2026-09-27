@@ -13,17 +13,14 @@ strength, agreement with a deeper policy, strength of the next trained model, an
 
 ![The measured search alternatives and the gates at which their expected savings failed to improve the learning loop](figures/search-decision-gates.svg)
 
-Figure 3: Why the search alternatives were not retained. Fast/full search discarded useful targets; predicted
+Figure: Why the search alternatives were not retained. Fast/full search discarded useful targets; predicted
 allocation improved policy agreement but weakened learning; stopping saved search without much faster training;
 and exact graph or cache reuse saved too little work to repay its overhead.
 
 ## The fixed-budget baseline
 
-The baseline spends a fixed number of visits on each move. Within that budget, the PUCT selection rule combines
-the value found for a move with an exploration bonus based on its policy probability and visit count. A promising
-but little-explored move receives more attention; a heavily explored move must justify further visits through its
-value. New leaf evaluations update the choices along their search paths, with the perspective alternating between
-the two players. Batching these evaluations across games makes the search practical on a GPU.
+The baseline uses the PUCT search described in Section \ref{sec:03-system-and-methods-search-and-self-play}, changing only the visit budget in the fixed-network
+comparison below.
 
 Against the same opponent, score rose from 0.318 at 200 visits to 0.537, 0.580, 0.662, and 0.748 at 400, 600,
 1,000, and 1,600 visits. Across the better-resolved middle and deep part of the sweep, the fitted trend was about
@@ -116,14 +113,14 @@ games can fill it before per-tree parallelism has any effect. A sweep that delib
 estimated a loss of 6.4 ± 4.7 Elo per doubling of parallel leaves. With that uncertainty, comparisons at specific
 search budgets are more informative than treating the estimate as a general rule.
 
-The tradeoff also depended on the total budget. Table 2 pairs strength with match duration in a fixed-network
+The tradeoff also depended on the total budget. Table \ref{tab:04a-search-1} pairs strength with match duration in a fixed-network
 sweep at 1,000 searches against 20,000-node Stockfish.
 
 | Leaves | Elo | Time (min) | Elo change |
 | ---: | ---: | ---: | ---: |
-| 1 | 2,820 | 18.1–18.5 | 0 |
-| 4 | 2,800 | 3.4–3.8 | −19 |
-| 16 | 2,780 | 1.3–1.8 | −45 |
+| 1 | 2,823 | 18.1–18.5 | 0 |
+| 4 | 2,804 | 3.4–3.8 | −19 |
+| 16 | 2,778 | 1.3–1.8 | −45 |
 
 Four- and sixteen-way parallelism reduced match time by roughly factors of five and eleven. Their strength
 differences were smaller than the overlapping match intervals. At only 100 searches, however, sixteen-way
@@ -147,11 +144,9 @@ state, the halfmove clock, and repetition-relevant history can change the legal 
 on those fields would create an approximate algorithm with different game semantics. Under exact equality, most
 apparent board transpositions disappeared.
 
-At ordinary budgets, useful sharing was negligible. Only 0.0249% and
+In the corrected chess self-play benchmark with a randomly initialized network, useful sharing was negligible. Only 0.0249% and
 0.1769% of neural evaluations were avoided at 1,000 and 10,000 searches, while the graph was 8.63% and 8.28% slower.
-At 30,000 and 60,000 searches, table hits rose to 2.37% and 3.46%, but avoided evaluations remained approximately
-0.0001% and 0.0348%; throughput was still 7.06% and 5.76% lower. Structural counters confirmed that shared
-descendants and statistics were active. Exact reuse was orders of magnitude too sparse to repay the bookkeeping
+Structural counters confirmed that shared descendants and statistics were active. Exact reuse was too sparse to repay the bookkeeping
 cost in this implementation, so it was not taken to a final strength match.
 
 ## Why inference caching found little to reuse
@@ -187,5 +182,5 @@ preferred move.
 For an unvisited move, first-play urgency starts from a reduced parent value rather than an optimistic default.
 A 0.99 per-ply discount favours nearer favourable outcomes, while retaining 60% of subtree visits after a played
 move reuses analysis without allowing old statistics to dominate completely. Together with native batching,
-these mechanisms make fixed-budget search both exploratory and affordable. Appendix D specifies the recipe;
-Appendix D gives the numerical settings.
+these mechanisms make fixed-budget search both exploratory and affordable. Appendix \ref{app:D} specifies the recipe;
+Appendix \ref{app:D} gives the numerical settings.

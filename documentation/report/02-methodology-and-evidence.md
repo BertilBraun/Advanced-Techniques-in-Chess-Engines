@@ -12,7 +12,7 @@ single opponent.
 
 ## Final playing strength
 
-Table 1 gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
+Table \ref{tab:02-methodology-and-evidence-1} gives all ten matches. Each row contains 100 games; wins, draws, and losses are from our model's perspective.
 The bold rating for each model budget comes from the opponent against which it scored closest to 50%, where the
 rating estimate needs the least extrapolation.
 
@@ -31,7 +31,7 @@ rating estimate needs the least extrapolation.
 
 At the deepest budget, the model scored 3,251 benchmark Elo against the harder opponent and 3,247 against the other:
 the two measurements agree closely. The ratings use a published calibration of Stockfish's fixed node limits [9].
-Chapter 8 examines how strength changes with search; Appendix B gives the rating calculation and interval method.
+Chapter \ref{sec:07-final-run-results} examines how strength changes with search; Appendix \ref{app:B} gives the rating calculation and interval method.
 
 ## Reading the component experiments
 

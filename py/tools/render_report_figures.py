@@ -180,7 +180,6 @@ def training_figure(rows: int) -> tuple[Figure, list[Axes]]:
 def render_auxiliary(diagnostics: Diagnostics) -> None:
     figure, axes = horizontal_training_figure(('Next-policy loss', 'Remaining-length loss'))
     figure.subplots_adjust(top=0.88, wspace=0.45)
-    figure.supxlabel('Completed optimizer steps (thousands)', y=0.01, fontsize=9)
     line(axes[0], diagnostics.samples(Metric.NEXT_POLICY), BLUE)
     line(axes[1], diagnostics.samples(Metric.REMAINING_LENGTH), TEAL)
     axes[1].ticklabel_format(axis='y', style='sci', scilimits=(0, 0), useMathText=True)
@@ -228,7 +227,7 @@ def render_replay(trajectory: tuple[TrainingObservation, ...], diagnostics: Diag
 
 def render_resignation(diagnostics: Diagnostics) -> None:
     figure, axes = horizontal_training_figure(('Resignation threshold', 'False non-loss (%)', 'Mean saved plies'))
-    figure.subplots_adjust(bottom=0.36)
+    figure.subplots_adjust(bottom=0.38)
     threshold = diagnostics.samples(Metric.THRESHOLD)
     axes[0].plot([p.optimizer_steps / 1000 for p in threshold], [p.value for p in threshold], color=BLUE, linewidth=1)
     safe_steps = {p.optimizer_steps for p in diagnostics.samples(Metric.SAFE) if p.value == 1}
@@ -249,12 +248,13 @@ def render_resignation(diagnostics: Diagnostics) -> None:
 def horizontal_training_figure(labels: tuple[str, ...]) -> tuple[Figure, list[Axes]]:
     figure, array = plt.subplots(1, len(labels), figsize=(7, 2.6), squeeze=False)
     axes = list(array[0])
-    figure.subplots_adjust(left=0.07, right=0.99, top=0.96, bottom=0.28, wspace=0.38)
+    figure.subplots_adjust(left=0.07, right=0.99, top=0.83, bottom=0.25, wspace=0.38)
     for axis, label in zip(axes, labels, strict=True):
         training_axis(axis, '')
         axis.set_xticks([0, 200, 400])
         axis.tick_params(labelsize=8.5)
-        axis.set_xlabel(label, fontsize=10)
+        axis.set_title(label, fontsize=10, pad=10)
+    figure.supxlabel('Completed optimizer steps (thousands)', y=0.14, fontsize=9)
     return figure, axes
 
 

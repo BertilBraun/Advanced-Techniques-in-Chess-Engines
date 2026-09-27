@@ -17,7 +17,9 @@ Matched-compute experiments are needed to separate those effects.
 
 ## Persistent plateaus and the remaining engine gap
 
-The remaining gap to leading engines is estimated at roughly 400 Elo. Closing it requires more than improving
+The model remains roughly 400 benchmark Elo below the upper end of the historical calibration, approximately
+3,610 for Stockfish 13 at 256 million nodes [9]. Modern leading engines are stronger still, but their gap is not
+measured here under matched conditions. Closing the remaining strength gap requires more than improving
 the implementation of the existing recipe. Across the project's training runs, playing strength repeatedly
 approached a plateau and did not escape it during extended training. These observations make additional hours
 under unchanged settings an unpromising route to a substantial gain.

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 680" role="img" aria-labelledby="title description">
   <title id="title">Three chess policy representations</title>
-  <desc id="description">Dense reduced-action projection, spatial move planes, and retained from-to attention share a trunk but differ in output geometry. The controlled dense and retained heads have 483,680 and 51,072 parameters respectively.</desc>
+  <desc id="description">Dense reduced-action projection, spatial move planes, and retained from-to attention share a trunk but differ in output geometry. The controlled dense and retained heads have 483,680 and 50,048 parameters respectively.</desc>
   <defs>
     <pattern id="board" width="20" height="20" patternUnits="userSpaceOnUse">
       <rect width="20" height="20" fill="#f8fafc"/>
@@ -16,10 +16,10 @@
       .selected { fill: #eef7f4; stroke: #17615b; stroke-width: 3; }
       .box { fill: #fff; stroke: #536d7b; stroke-width: 2.3; }
       .accent-box { fill: #dceeea; stroke: #17615b; stroke-width: 2.4; }
-      .title { font-size: 23px; font-weight: 700; }
-      .body { font-size: 18px; }
-      .label { font-size: 18px; font-weight: 600; }
-      .minor { font-size: 16px; fill: #344c58; }
+      .title { font-size: 22px; font-weight: 700; }
+      .body { font-size: 20px; }
+      .label { font-size: 20px; font-weight: 600; }
+      .minor { font-size: 20px; fill: #344c58; }
       .count { font-size: 22px; font-weight: 700; }
       .accent { fill: #17615b; }
       .line { fill: none; stroke: #344f5d; stroke-width: 3; }
@@ -45,7 +45,7 @@
   <path class="line" d="M225 434 V473"/>
   <path d="M218 473 L225 485 L232 473 Z" fill="#344f5d"/>
   <rect class="box" x="116" y="495" width="218" height="61" rx="8"/>
-  <text class="label" x="225" y="533" text-anchor="middle">Legal-action mask</text>
+  <text class="label" x="225" y="533" text-anchor="middle">Legal mask</text>
   <line x1="55" y1="582" x2="395" y2="582" stroke="#b8c9d0" stroke-width="2"/>
   <text class="count" x="55" y="621">483,680</text>
   <text class="minor" x="180" y="620">head parameters</text>
@@ -70,7 +70,7 @@
   <path class="line" d="M660 434 V473"/>
   <path d="M653 473 L660 485 L667 473 Z" fill="#344f5d"/>
   <rect class="box" x="551" y="495" width="218" height="61" rx="8"/>
-  <text class="label" x="660" y="533" text-anchor="middle">Legal-action mask</text>
+  <text class="label" x="660" y="533" text-anchor="middle">Legal mask</text>
   <line x1="490" y1="582" x2="830" y2="582" stroke="#b8c9d0" stroke-width="2"/>
   <text class="minor" x="490" y="622">Head counts vary by interface.</text>
 
@@ -98,8 +98,8 @@
   <path class="accent-line" d="M1095 434 V473"/>
   <path d="M1088 473 L1095 485 L1102 473 Z" fill="#17615b"/>
   <rect class="accent-box" x="986" y="495" width="218" height="61" rx="8"/>
-  <text class="label accent" x="1095" y="533" text-anchor="middle">Legal-action mask</text>
+  <text class="label accent" x="1095" y="533" text-anchor="middle">Legal mask</text>
   <line x1="925" y1="582" x2="1265" y2="582" stroke="#b8d5ee" stroke-width="2"/>
-  <text class="count accent" x="925" y="621">51,072</text>
+  <text class="count accent" x="925" y="621">50,048</text>
   <text class="minor" x="1037" y="620">head parameters</text>
 </svg>

@@ -159,9 +159,106 @@ z
       </g>
      </g>
     </g>
-    <g id="text_4">
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_4">
+      <path d="M 37.296 122.611211
+L 248.099478 122.611211
+" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_5"/>
+     <g id="text_4">
+      <!-- 1 -->
+      <g style="fill: #34495b" transform="translate(23.82725 126.979375) scale(0.12 -0.12)">
+       <defs>
+        <path id="SegoeUI-14" d="M 2263 0
+L 1750 0
+L 1750 3872
+Q 1691 3813 1577 3736
+Q 1463 3659 1320 3584
+Q 1178 3509 1020 3443
+Q 863 3378 713 3341
+L 713 3859
+Q 881 3906 1070 3986
+Q 1259 4066 1442 4164
+Q 1625 4263 1787 4370
+Q 1950 4478 2069 4581
+L 2263 4581
+L 2263 0
+z
+" transform="scale(0.015625)"/>
+       </defs>
+       <use xlink:href="#SegoeUI-14"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_6">
+      <path d="M 37.296 87.763823
+L 248.099478 87.763823
+" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_7"/>
+     <g id="text_5">
+      <!-- 2 -->
+      <g style="fill: #34495b" transform="translate(23.82725 92.131987) scale(0.12 -0.12)">
+       <use xlink:href="#SegoeUI-15"/>
+      </g>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_8">
+      <path d="M 37.296 52.916434
+L 248.099478 52.916434
+" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_9"/>
+     <g id="text_6">
+      <!-- 3 -->
+      <g style="fill: #34495b" transform="translate(23.82725 57.284598) scale(0.12 -0.12)">
+       <defs>
+        <path id="SegoeUI-16" d="M 2978 1269
+Q 2978 966 2864 717
+Q 2750 469 2542 292
+Q 2334 116 2043 19
+Q 1753 -78 1403 -78
+Q 763 -78 384 166
+L 384 716
+Q 838 359 1422 359
+Q 1656 359 1845 418
+Q 2034 478 2170 590
+Q 2306 703 2379 862
+Q 2453 1022 2453 1222
+Q 2453 2100 1203 2100
+L 831 2100
+L 831 2534
+L 1184 2534
+Q 2291 2534 2291 3359
+Q 2291 4122 1447 4122
+Q 972 4122 556 3803
+L 556 4300
+Q 984 4556 1575 4556
+Q 1856 4556 2084 4478
+Q 2313 4400 2475 4259
+Q 2638 4119 2727 3922
+Q 2816 3725 2816 3488
+Q 2816 2603 1922 2350
+L 1922 2338
+Q 2150 2313 2344 2227
+Q 2538 2141 2678 2003
+Q 2819 1866 2898 1680
+Q 2978 1494 2978 1269
+z
+" transform="scale(0.015625)"/>
+       </defs>
+       <use xlink:href="#SegoeUI-16"/>
+      </g>
+     </g>
+    </g>
+    <g id="text_7">
      <!-- Training loss -->
-     <g transform="translate(110.001489 172.265469) scale(0.12 -0.12)">
+     <g transform="translate(17.474125 109.902875) rotate(-90) scale(0.1 -0.1)">
       <defs>
        <path id="SegoeUI-37" d="M 3238 4006
 L 1944 4006
@@ -364,103 +461,6 @@ z
       <use xlink:href="#SegoeUI-52" transform="translate(401.46875 0)"/>
       <use xlink:href="#SegoeUI-56" transform="translate(460.0625 0)"/>
       <use xlink:href="#SegoeUI-56" transform="translate(502.5 0)"/>
-     </g>
-    </g>
-   </g>
-   <g id="matplotlib.axis_2">
-    <g id="ytick_1">
-     <g id="line2d_4">
-      <path d="M 37.296 122.611211
-L 248.099478 122.611211
-" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
-     </g>
-     <g id="line2d_5"/>
-     <g id="text_5">
-      <!-- 1 -->
-      <g style="fill: #34495b" transform="translate(23.82725 126.979375) scale(0.12 -0.12)">
-       <defs>
-        <path id="SegoeUI-14" d="M 2263 0
-L 1750 0
-L 1750 3872
-Q 1691 3813 1577 3736
-Q 1463 3659 1320 3584
-Q 1178 3509 1020 3443
-Q 863 3378 713 3341
-L 713 3859
-Q 881 3906 1070 3986
-Q 1259 4066 1442 4164
-Q 1625 4263 1787 4370
-Q 1950 4478 2069 4581
-L 2263 4581
-L 2263 0
-z
-" transform="scale(0.015625)"/>
-       </defs>
-       <use xlink:href="#SegoeUI-14"/>
-      </g>
-     </g>
-    </g>
-    <g id="ytick_2">
-     <g id="line2d_6">
-      <path d="M 37.296 87.763823
-L 248.099478 87.763823
-" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
-     </g>
-     <g id="line2d_7"/>
-     <g id="text_6">
-      <!-- 2 -->
-      <g style="fill: #34495b" transform="translate(23.82725 92.131987) scale(0.12 -0.12)">
-       <use xlink:href="#SegoeUI-15"/>
-      </g>
-     </g>
-    </g>
-    <g id="ytick_3">
-     <g id="line2d_8">
-      <path d="M 37.296 52.916434
-L 248.099478 52.916434
-" clip-path="url(#p66be1fbff7)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
-     </g>
-     <g id="line2d_9"/>
-     <g id="text_7">
-      <!-- 3 -->
-      <g style="fill: #34495b" transform="translate(23.82725 57.284598) scale(0.12 -0.12)">
-       <defs>
-        <path id="SegoeUI-16" d="M 2978 1269
-Q 2978 966 2864 717
-Q 2750 469 2542 292
-Q 2334 116 2043 19
-Q 1753 -78 1403 -78
-Q 763 -78 384 166
-L 384 716
-Q 838 359 1422 359
-Q 1656 359 1845 418
-Q 2034 478 2170 590
-Q 2306 703 2379 862
-Q 2453 1022 2453 1222
-Q 2453 2100 1203 2100
-L 831 2100
-L 831 2534
-L 1184 2534
-Q 2291 2534 2291 3359
-Q 2291 4122 1447 4122
-Q 972 4122 556 3803
-L 556 4300
-Q 984 4556 1575 4556
-Q 1856 4556 2084 4478
-Q 2313 4400 2475 4259
-Q 2638 4119 2727 3922
-Q 2816 3725 2816 3488
-Q 2816 2603 1922 2350
-L 1922 2338
-Q 2150 2313 2344 2227
-Q 2538 2141 2678 2003
-Q 2819 1866 2898 1680
-Q 2978 1494 2978 1269
-z
-" transform="scale(0.015625)"/>
-       </defs>
-       <use xlink:href="#SegoeUI-16"/>
-      </g>
      </g>
     </g>
    </g>
@@ -1637,49 +1637,6 @@ z
       </g>
      </g>
     </g>
-    <g id="text_17">
-     <!-- Learning rate -->
-     <g transform="translate(381.910386 172.152969) scale(0.12 -0.12)">
-      <defs>
-       <path id="SegoeUI-48" d="M 3091 1472
-L 831 1472
-Q 844 938 1119 647
-Q 1394 356 1875 356
-Q 2416 356 2869 713
-L 2869 231
-Q 2447 -75 1753 -75
-Q 1075 -75 687 361
-Q 300 797 300 1588
-Q 300 2334 723 2804
-Q 1147 3275 1775 3275
-Q 2403 3275 2747 2869
-Q 3091 2463 3091 1741
-L 3091 1472
-z
-M 2566 1906
-Q 2563 2350 2352 2597
-Q 2141 2844 1766 2844
-Q 1403 2844 1150 2584
-Q 897 2325 838 1906
-L 2566 1906
-z
-" transform="scale(0.015625)"/>
-      </defs>
-      <use xlink:href="#SegoeUI-2f"/>
-      <use xlink:href="#SegoeUI-48" transform="translate(47.078125 0)"/>
-      <use xlink:href="#SegoeUI-44" transform="translate(99.375 0)"/>
-      <use xlink:href="#SegoeUI-55" transform="translate(150.25 0)"/>
-      <use xlink:href="#SegoeUI-51" transform="translate(185.015625 0)"/>
-      <use xlink:href="#SegoeUI-4c" transform="translate(241.609375 0)"/>
-      <use xlink:href="#SegoeUI-51" transform="translate(265.828125 0)"/>
-      <use xlink:href="#SegoeUI-4a" transform="translate(322.421875 0)"/>
-      <use xlink:href="#SegoeUI-3" transform="translate(381.3125 0)"/>
-      <use xlink:href="#SegoeUI-55" transform="translate(408.703125 0)"/>
-      <use xlink:href="#SegoeUI-44" transform="translate(443.46875 0)"/>
-      <use xlink:href="#SegoeUI-57" transform="translate(494.34375 0)"/>
-      <use xlink:href="#SegoeUI-48" transform="translate(528.234375 0)"/>
-     </g>
-    </g>
    </g>
    <g id="matplotlib.axis_4">
     <g id="ytick_4">
@@ -1689,7 +1646,7 @@ L 522.144 134.624
 " clip-path="url(#p39ec979944)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_27"/>
-     <g id="text_18">
+     <g id="text_17">
       <!-- 0.02 -->
       <g style="fill: #34495b" transform="translate(282.331772 138.992164) scale(0.12 -0.12)">
        <use xlink:href="#SegoeUI-13"/>
@@ -1706,7 +1663,7 @@ L 522.144 108.64
 " clip-path="url(#p39ec979944)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_29"/>
-     <g id="text_19">
+     <g id="text_18">
       <!-- 0.04 -->
       <g style="fill: #34495b" transform="translate(282.331772 113.008164) scale(0.12 -0.12)">
        <use xlink:href="#SegoeUI-13"/>
@@ -1723,7 +1680,7 @@ L 522.144 82.656
 " clip-path="url(#p39ec979944)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_31"/>
-     <g id="text_20">
+     <g id="text_19">
       <!-- 0.06 -->
       <g style="fill: #34495b" transform="translate(282.331772 87.024164) scale(0.12 -0.12)">
        <defs>
@@ -1788,7 +1745,7 @@ L 522.144 56.672
 " clip-path="url(#p39ec979944)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_33"/>
-     <g id="text_21">
+     <g id="text_20">
       <!-- 0.08 -->
       <g style="fill: #34495b" transform="translate(282.331772 61.040164) scale(0.12 -0.12)">
        <use xlink:href="#SegoeUI-13"/>
@@ -1805,7 +1762,7 @@ L 522.144 30.688
 " clip-path="url(#p39ec979944)" style="fill: none; stroke: #c9d3dc; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_35"/>
-     <g id="text_22">
+     <g id="text_21">
       <!-- 0.10 -->
       <g style="fill: #34495b" transform="translate(282.331772 35.056164) scale(0.12 -0.12)">
        <use xlink:href="#SegoeUI-13"/>
@@ -1844,7 +1801,7 @@ L 311.340522 24.192
 L 522.144 141.12
 " style="fill: none; stroke: #647b88; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
-   <g id="text_23">
+   <g id="text_22">
     <!-- 0.0266 -->
     <g style="fill: #1f5875" transform="translate(486.189974 122.101249) scale(0.1 -0.1)">
      <use xlink:href="#SegoeUI-13"/>
@@ -1853,6 +1810,49 @@ L 522.144 141.12
      <use xlink:href="#SegoeUI-15" transform="translate(129.5 0)"/>
      <use xlink:href="#SegoeUI-19" transform="translate(183.40625 0)"/>
      <use xlink:href="#SegoeUI-19" transform="translate(237.3125 0)"/>
+    </g>
+   </g>
+   <g id="text_23">
+    <!-- Learning rate -->
+    <g transform="translate(387.715698 14.192) scale(0.1 -0.1)">
+     <defs>
+      <path id="SegoeUI-48" d="M 3091 1472
+L 831 1472
+Q 844 938 1119 647
+Q 1394 356 1875 356
+Q 2416 356 2869 713
+L 2869 231
+Q 2447 -75 1753 -75
+Q 1075 -75 687 361
+Q 300 797 300 1588
+Q 300 2334 723 2804
+Q 1147 3275 1775 3275
+Q 2403 3275 2747 2869
+Q 3091 2463 3091 1741
+L 3091 1472
+z
+M 2566 1906
+Q 2563 2350 2352 2597
+Q 2141 2844 1766 2844
+Q 1403 2844 1150 2584
+Q 897 2325 838 1906
+L 2566 1906
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#SegoeUI-2f"/>
+     <use xlink:href="#SegoeUI-48" transform="translate(47.078125 0)"/>
+     <use xlink:href="#SegoeUI-44" transform="translate(99.375 0)"/>
+     <use xlink:href="#SegoeUI-55" transform="translate(150.25 0)"/>
+     <use xlink:href="#SegoeUI-51" transform="translate(185.015625 0)"/>
+     <use xlink:href="#SegoeUI-4c" transform="translate(241.609375 0)"/>
+     <use xlink:href="#SegoeUI-51" transform="translate(265.828125 0)"/>
+     <use xlink:href="#SegoeUI-4a" transform="translate(322.421875 0)"/>
+     <use xlink:href="#SegoeUI-3" transform="translate(381.3125 0)"/>
+     <use xlink:href="#SegoeUI-55" transform="translate(408.703125 0)"/>
+     <use xlink:href="#SegoeUI-44" transform="translate(443.46875 0)"/>
+     <use xlink:href="#SegoeUI-57" transform="translate(494.34375 0)"/>
+     <use xlink:href="#SegoeUI-48" transform="translate(528.234375 0)"/>
     </g>
    </g>
   </g>

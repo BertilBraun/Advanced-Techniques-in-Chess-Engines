@@ -29,10 +29,10 @@ allowing the network to learn conversion rather than merely receive a better est
 
 ![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
 
-Figure 10: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
+Figure: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
 returns the examples needed to learn conversion.
 
-Figure 10 distinguishes these two interventions. Improving the cutoff target reduced label error; restoring
+Figure \ref{fig:late-game-poisoning-feedback-loop} distinguishes these two interventions. Improving the cutoff target reduced label error; restoring
 endgame coverage corrected the sampling policy that sustained the failure.
 
 ## Prediction drift under TensorRT refitting
@@ -64,4 +64,4 @@ deployment artifact passing inference-fidelity checks.
 Promotion now requires a score of at least 0.48 in two consecutive paired matches against the active deployment
 artifact. A failing score resets the sequence; failed or cancelled matches do not count. This separates the
 optimization objective from the replacement decision: training loss guides candidate fitting, while direct play
-determines whether it can replace the active model. Appendix D specifies candidate timing and catch-up training.
+determines whether it can replace the active model. Appendix \ref{app:D} specifies candidate timing and catch-up training.

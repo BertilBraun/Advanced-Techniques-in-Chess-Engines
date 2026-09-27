@@ -2,7 +2,7 @@
 
 This chapter introduces the AlphaZero learning loop and the system used to run it under limited compute.
 It follows the path from network predictions through search and self-play to replay and training, establishing
-the foundations for the experiments in Chapter 4.
+the foundations for the experiments in Chapter \ref{sec:04-research-investigations}.
 
 ## Learning through search
 
@@ -36,14 +36,14 @@ Several narrower lines of work address where that compute should go. Dynamic sim
 search [3], and targeted search control starts self-play from archived states to explore beyond ordinary opening
 trajectories [5]. Prioritized experience replay changes which stored examples are learned from again [4], while
 Monte Carlo graph search shares work across paths reaching the same state [6]. These ideas motivate the allocation,
-replay, restart, and reuse experiments. This chapter explains the resulting system; Chapter 4 examines how the
-alternatives performed, and Chapter 5 measures the throughput needed to run it.
+replay, restart, and reuse experiments. This chapter explains the resulting system; Chapter \ref{sec:04-research-investigations} examines how the
+alternatives performed, and Chapter \ref{sec:05-systems-optimization} measures the throughput needed to run it.
 
 ## One learning cycle
 
 ![Python coordination, native self-play, batched TensorRT inference, replay, training, and evaluation feedback](figures/learning-loop.svg)
 
-Figure 1: Self-play turns a published network into searched games, replay supplies their positions to the trainer,
+Figure: Self-play turns a published network into searched games, replay supplies their positions to the trainer,
 and updated weights return to the actors. Separate matches measure the player's progress.
 
 The learning loop has three sources of work: actors play games, the replay pipeline stores their experience, and
@@ -51,7 +51,7 @@ the trainer updates the network. An *actor* is a self-play process that advances
 than waiting for each game to finish before starting another. All those games use a published set of network
 weights to guide their searches.
 
-Figure 1 follows the flow between these components. Python orchestration starts and coordinates the work. Within
+Figure \ref{fig:learning-loop} follows the flow between these components. Python orchestration starts and coordinates the work. Within
 each actor, native C++ search requests policy and value predictions for newly explored positions. Requests from
 different games are grouped into batches and evaluated on the GPU by TensorRT, the optimized inference engine.
 While a batch is being evaluated, other ready games can advance. Returned predictions let the waiting searches
@@ -69,7 +69,7 @@ matches measure progress; they do not become self-play training data.
 
 ![Shared residual chess backbone with policy, outcome, and training-only auxiliary branches](figures/chess-network-architecture.svg)
 
-Figure 2: The final chess network. A shared 14-block, 160-channel backbone processes 52 input planes. Policy and
+Figure: The final chess network. A shared 14-block, 160-channel backbone processes 52 input planes. Policy and
 value heads provide the predictions used by search; the two auxiliary heads contribute only during training.
 
 ## Why the search loop stays in C++
@@ -92,10 +92,10 @@ every operation native: it is to keep the expensive repeated work fast enough to
 
 ## Chess representation and outputs
 
-Figure 2 shows the network from its 52×8×8 chess input through a shared residual backbone to its output heads.
+Figure \ref{fig:chess-network-architecture} shows the network from its 52×8×8 chess input through a shared residual backbone to its output heads.
 The input planes encode pieces, recent moves, and game-state features from the side-to-move perspective. Castling
 rights, repetition, and the halfmove clock distinguish positions whose boards look identical but whose legal
-continuations or draw conditions differ. Appendix D, Table D1 gives the complete channel-by-channel specification.
+continuations or draw conditions differ. Appendix \ref{app:D}, Table \ref{tab:appendix-d-reproducibility-1} gives the complete channel-by-channel specification.
 
 The backbone learns a common spatial representation for move selection and position evaluation. Its 14 residual
 blocks, each with 160 channels, refine board features by adding learned corrections to the preceding representation.
@@ -115,7 +115,7 @@ from equally likely winning and losing outcomes.
 Both objectives train the same backbone, sharing the cost of extracting board features. Two auxiliary heads add
 supervision for the next searched policy and remaining game length. Their predictions are not needed to choose
 moves, so they are omitted from the inference copy while the backbone retains the features learned from those tasks.
-Appendix D specifies the output shapes and action encoding.
+Appendix \ref{app:D} specifies the output shapes and action encoding.
 
 ## Search and self-play
 
@@ -214,7 +214,7 @@ with weights 0.15 and 0.1. Their gradients meet in the shared backbone, so a fea
 can also improve the representation from which move preferences are learned.
 
 Outcome discounting softens targets for positions far from the end of a game. It was introduced, alongside search
-discounting, to favour earlier conversion of winning positions; Section 4.2 discusses the motivation and unresolved
+discounting, to favour earlier conversion of winning positions; Section \ref{sec:04b-data-and-replay} discusses the motivation and unresolved
 benefit. A small contribution from the position's searched value is also blended into the training target.
 The auxiliary losses add next-policy and remaining-length supervision when those labels exist.
 An unfinished game cannot reveal its true remaining length, so that auxiliary loss is omitted rather than trained
@@ -266,7 +266,7 @@ draws, and losses determine the match score and its implied rating on the projec
 During training, short 64-search and policy-only evaluations track progress at modest cost. They answer different
 questions: policy-only play tests the network's immediate move choice, while searched play tests how useful its
 policy and value are together in a tree. Larger final matches repeat the assessment across increasing search
-budgets, as reported in Table 1.
+budgets, as reported in Table \ref{tab:02-methodology-and-evidence-1}.
 
 The resulting feedback completes the experimental loop. A change that improves a local loss or throughput measure
 still has to help produce a stronger player within the available training time. The following chapters use this

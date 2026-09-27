@@ -99,6 +99,8 @@ def test_main_results_tables_and_architecture_sweeps_render(tmp_path: Path) -> N
         ('KataGo [7]', r'KataGo \cite{ref7}'),
         ('Elo [3,065, 3,163]', 'Elo [3,065, 3,163]'),
         ('50% and 7×7', r'50\% and 7\ensuremath{\times}7'),
+        (r'Figure \ref{fig:learning-loop}', r'Figure \ref{fig:learning-loop}'),
+        (r'Table \ref{tab:appendix-d-reproducibility-1}', r'Table \ref{tab:appendix-d-reproducibility-1}'),
     ],
 )
 def test_report_text_escapes_citations_without_changing_intervals(source: str, expected: str) -> None:
@@ -147,11 +149,14 @@ def test_investigations_use_numeric_section_hierarchy() -> None:
         '4.1. Search', appendix=False, level=1, appendix_letter='', source=search
     )
     assert section_tex('Search budgets', appendix=False, level=2, appendix_letter='', source=search) == (
-        '\\subsubsection{Search budgets}\n'
+        '\\subsubsection{Search budgets}\\label{sec:04a-search-search-budgets}\n'
     )
 
 
 def test_figure_caption_uses_latex_counter_instead_of_manual_number() -> None:
+    assert caption_tex('Figure: Strength across budgets.', 'strength') == (
+        r'\caption{Strength across budgets.}\label{fig:strength}'
+    )
     assert caption_tex('Figure 7.2: Strength across budgets.', 'strength') == (
         r'\caption{Strength across budgets.}\label{fig:strength}'
     )

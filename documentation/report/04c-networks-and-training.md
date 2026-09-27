@@ -2,13 +2,13 @@
 
 ![Comparison of dense reduced-action, spatial move-plane, and from-to policy heads](figures/policy-representations.svg)
 
-Figure 7: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
+Figure: Dense heads project to a move list, move-plane heads predict spatial move types, and the retained from-to
 head scores square pairs before gathering canonical actions and masking illegal moves.
 
 Network architecture constrains both prediction quality and the volume of search affordable during training.
 We compared policy representations, convolutional and attention trunks, global context, and value heads, then
 examined model growth and quantization. The policy head was a major source of parameter cost in small networks;
-Figure 7 summarizes the three representations evaluated.
+Figure \ref{fig:policy-representations} summarizes the three representations evaluated.
 
 ## Three policy representations
 
@@ -32,11 +32,11 @@ moves. Both express the same basic idea: predict move types at board locations r
 
 The retained **from-to head** uses query-key dot products over the 64 trunk squares, with a fixed gather into the
 canonical action space and separate promotion offsets. This retains spatial structure without a large dense
-projection. On the controlled convolutional trunk, the head used 51,072 parameters rather than 483,680 for the dense
-alternative. Section 3.5 and Appendix D specify its representation and action mapping.
+projection. On the controlled 128-channel convolutional trunk, the head used 50,048 parameters rather than 483,680 for the dense
+alternative. Section \ref{sec:03-system-and-methods-chess-representation-and-outputs} and Appendix \ref{app:D} specify its representation and action mapping.
 
 Holding that trunk fixed, the from-to head improved the held-out policy gap by 0.0298 nats (paired 95% interval
-0.0285--0.0311). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
+0.0285--0.0311 over held-out positions, not training seeds). Spending the saved parameters on a wider trunk added only 0.0018 nats in the three measured cells;
 the missing fourth cell prevents fully separating the two effects. Forward throughput fell by approximately 1.9%
 at batch 512 and 9% at batch 64. The from-to head therefore improved policy fit and reduced parameter count, with
 a serving penalty that was smaller at the large batches used for self-play.
@@ -45,7 +45,7 @@ a serving penalty that was smaller at the large batches used for self-play.
 
 The selected model receives 52 side-to-move-canonical board planes: pieces, castling rights, en passant, checks,
 repetition, the eight most recent moves, material counts, and the fifty-move counter. Rule-sensitive planes keep
-positions with different legal or draw states distinguishable. [Appendix D](appendix-d-reproducibility.md), Table D1
+positions with different legal or draw states distinguishable. Appendix \ref{app:D}, Table \ref{tab:appendix-d-reproducibility-1}
 lists all 52 planes and their encodings. File reflection is the only augmentation; it also
 mirrors action targets and exchanges kingside and queenside castling planes. Some earlier component comparisons
 used a 29-plane input, so their absolute scores are not input-matched to the final model.
@@ -62,10 +62,11 @@ Smolgen-style attention biases were implemented. These biases respectively add n
 the offset between squares, or depend on the board itself. The preserved comparison covers the first and third.
 
 With bootstrap policy shape, head, runtime, and precision controlled, the convolutional trunk beat bare attention
-by 0.0060 nats on held-out teacher data. Smolgen gave the best attention cell, but changing the attention model's
-dense head to from-to improved the held-out gap by a much larger 0.1573 nats. Attention also consumed more memory
-and served more slowly at the relevant batches. The tested convolutional design was the better choice for this
-workload; the result does not rule out attention in other chess systems.
+by 0.0060 nats on held-out teacher data. Replacing the attention model's dense head with from-to and reallocating
+capacity to the trunk improved the held-out gap by 0.1573 nats; this was not an isolated head replacement.
+The best Smolgen attention cell achieved slightly better held-out fit than the convolutional comparison, by
+0.0090 nats. Convolution nevertheless remained the preferred operating choice because attention served more
+slowly and consumed more memory at the relevant batch sizes. Appendix \ref{app:C} gives the serving comparison.
 
 Local convolution receives global context every second residual block: board-wide means and maxima from one
 quarter of the channels are projected back as biases on local features. Squeeze-excitation was another implemented
@@ -102,7 +103,7 @@ Those positions set numerical scale without supplying supervised chess targets.
 The retained optimizer is Nesterov SGD. Frozen-replay tests helped choose warm-up and learning-rate settings before
 committing to self-play runs. AdamW had also trained successful models; the choice of SGD does not mean AdamW failed.
 Gradient clipping limits unusually large updates. The final run completed 408,500 optimizer steps, with the learning
-rate, losses, and gradient norms shown in Appendix A.
+rate, losses, and gradient norms shown in Appendix \ref{app:A}.
 
 ## Quantization as an architectural constraint
 
@@ -139,7 +140,7 @@ over the ordinary floating-point residual block.
 
 ![Small-to-medium promotion is supported while the larger-model transition remains unresolved](figures/progressive-model-sizing.svg)
 
-Figure 8: A small model reduces early self-play cost, and a medium candidate trains on the same replay before
+Figure: A small model reduces early self-play cost, and a medium candidate trains on the same replay before
 paired-match promotion. The larger candidate may avoid catch-up with function-preserving growth, but the limited
 continuation did not demonstrate a strength gain; the reported checkpoint remains medium-sized.
 
@@ -148,8 +149,8 @@ on the same replay before promotion. The throughput advantage is most useful whi
 capacity to absorb the available experience. The small-to-medium transition worked repeatedly in this project.
 
 Candidate start follows a stage-specific searched-Elo plateau; promotion instead requires two passing paired
-matches against the active model. Section 6.3 explains why matches replaced training loss as the promotion criterion;
-Appendix D states the retained thresholds.
+matches against the active model. Section \ref{sec:05a-three-failures-promotion-from-incomparable-training-losses} explains why matches replaced training loss as the promotion criterion;
+Appendix \ref{app:D} states the retained thresholds.
 
 An independently initialized larger candidate needed substantial catch-up. Function-preserving growth instead
 initializes the larger model to compute the same predictions as the medium model. It avoids relearning that
@@ -178,8 +179,7 @@ which counted neural arithmetic but omitted tree work and inference overhead. Th
 compute advantage was therefore much larger than the extra search it could actually perform in the same time.
 
 A final compression study trained a 470,295-parameter student on a separate frozen 20-million-row replay
-snapshot for 110,000 optimizer steps, roughly 23 epochs. It reached approximately 2,700 benchmark Elo at
-10,000 searches and 2,870 at 100,000 searches against the one opponent tested there. Chapter 8 presents
+snapshot for 110,000 optimizer steps, roughly 23 epochs. Chapter \ref{sec:07-final-run-results} presents
 these final student results alongside the full model.
 
 The resulting compact models reduced inference cost, but their realized search advantage was substantially smaller
@@ -188,7 +188,7 @@ the measured comparisons. Distillation was separate from the primary self-play t
 
 ## Decision
 
-The retained network combines the rule-complete 52-plane input, a shared convolutional trunk, periodic global
+The retained network combines the rule-aware 52-plane input, a shared convolutional trunk, periodic global
 context, the from-to policy head, a compact WDL head, and training-only next-policy and remaining-length objectives.
 Scaled post-activation blocks make the trunk compatible with quantization-aware deployment. Progressive sizing
 successfully exploited a small model before handing off to the medium model, while the value of the larger stage

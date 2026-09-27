@@ -6,7 +6,7 @@ the model used for the reported results.
 
 ## Network input and output contract
 
-The network input is a 52×8×8 tensor with channels listed in Table D1. "Own" denotes the player to move.
+The network input is a 52×8×8 tensor with channels listed in Table \ref{tab:appendix-d-reproducibility-1}. "Own" denotes the player to move.
 For Black to move, ranks are reflected and piece colours are exchanged;
 files retain their order. Tensor row zero is the player's home rank, and column zero is file a. There is no separate
 absolute-colour plane. Spatial masks contain zeros and ones; flags and scalar values fill all 64 squares.
@@ -151,7 +151,7 @@ External dependencies, reference sources, and third-party data retain their own 
 Matched evaluation uses the published checkpoint and inference artifact, paired opening suite, opponent binary,
 node limits, thread and hash settings, candidate search budget, parallelism, batching, and adjudication rules.
 Re-exporting with a different toolchain can change predictions and constitutes a new deployment comparison.
-[Appendix B](appendix-b-evaluation-tables.md) specifies the final match protocol and rating calculation.
+Appendix \ref{app:B} specifies the final match protocol and rating calculation.
 
 Performance measurements distinguish isolated neural-network throughput, saturated multi-game search, and
 single-game latency. These measure different execution regimes and require separate benchmarks.
