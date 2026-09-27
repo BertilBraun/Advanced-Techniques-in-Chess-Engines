@@ -7,10 +7,9 @@ Chess is the research result. Go 7x7 and 9x9 appear only where they explain the 
 decision, including why small-board Go was not retained as a proxy for chess hyperparameter optimization. Systems
 work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
 
-> **Owner-review edition.** The complete narrative is typeset as a two-column PDF for one consolidated owner pass.
-> The [narrative outline](narrative-outline.md) and [completion plan](publication-plan.md) remain editorial working
-> records, not chapters of the review edition. The owner has already accepted the opening, the three failure-study
-> directions, and the reader path.
+**[Read the published technical report (PDF)](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/download/final-chess-report/engineering-efficient-self-play-chess.pdf).**
+The complete narrative is typeset as a two-column paper. The [narrative outline](narrative-outline.md) and
+[completion plan](publication-plan.md) remain editorial working records, not chapters of the paper.
 
 The final chess training lineage and its reported teacher/student evaluations are complete. Terminal strength,
 selected-checkpoint training volume, and cost are presented in [training progress](06-final-chess-recipe.md) and

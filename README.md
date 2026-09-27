@@ -6,15 +6,15 @@ without human games or pretrained chess weights, while sharing eight RTX 4070 SU
 and evaluation.
 
 The selected 6.32-million-parameter convolutional model reached **3,251 benchmark Elo at 100,000 searches per
-move** and **1,658 without search** in paired games against fixed-node Stockfish 13. A matched-estimator comparison
-places its 64-search training plateau about **74 Elo** above the previous completed baseline. These numbers use a
+move** and **1,658 without search** in paired games against fixed-node Stockfish 13. These numbers use a
 historical Stockfish-node calibration; they are not FIDE ratings or claims against unrestricted current engines.
 The full match protocol, intervals, artifacts, and limitations are in the
 [final result record](documentation/results/final-chess-run.md) and [technical report](documentation/report/README.md).
 
 [Play against the model](https://chess.bertil-braun.de/) ·
 [Model repository](https://huggingface.co/BertilBraun/alphazero-chess) ·
-[Read the technical report](documentation/report/README.md)
+[Read the technical report (PDF)](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/download/final-chess-report/engineering-efficient-self-play-chess.pdf) ·
+[Report sources and evidence](documentation/report/README.md)
 
 ## Measured strength
 
@@ -51,11 +51,10 @@ defines each counter.
 
 ![64-search ladder Elo across five chess training campaigns](documentation/showcase/chess-ladder-progress.svg)
 
-The curves show consistent progress across major training campaigns, with the final lineage trimmed at 2.5 days
-and the preceding baseline at its clean three-day endpoint. The displayed endpoints should not be subtracted as a
-cross-campaign Elo claim because the ladder estimator changed. The approximately 74-Elo plateau comparison uses a
-matched estimator; [Chapter 7](documentation/report/07-final-run-results.md) explains that calculation and the
-excluded intervals.
+The curves show progress across major training campaigns, with the final lineage trimmed at 2.5 days
+and the preceding baseline at its clean three-day endpoint. These inexpensive training evaluations use only
+64 searches per move; the final model's 3,251 benchmark Elo uses 100,000 searches per move.
+[Chapter 7](documentation/report/06-final-chess-recipe.md) discusses the progression across campaigns.
 
 ## How it works
 
