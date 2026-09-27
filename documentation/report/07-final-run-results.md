@@ -1,5 +1,11 @@
 # 8. Playing strength and model compression
 
+![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
+
+Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
+50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
+The horizontal axis lists search budgets categorically.
+
 The final model reached **3,251 benchmark Elo at 100,000 searches per move**, estimated at under five seconds
 of thinking time on an RTX 4070 SUPER. This chapter examines the strength gained from search
 and the performance retained by a much smaller distilled model.
@@ -10,12 +16,6 @@ Table \ref{tab:02-methodology-and-evidence-1} contains the full paired-match res
 Search increased playing strength from **1,658 Elo for policy-only play** to **3,251 Elo** at the
 deepest budget, a gain of 1,593 points. Figure \ref{fig:final-search-curve-paper} shows continuing improvement with diminishing returns:
 the final tenfold increase in search added 137 Elo, substantially less than the increases at shallow budgets.
-
-![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
-
-Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
-50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
-The horizontal axis lists search budgets categorically.
 
 The two opponent-based estimates at the deepest budget differ by only four Elo. At shallower budgets the estimates
 are farther apart, as shown by the paired points. Appendix \ref{app:B} describes the calibration and rating calculation.
