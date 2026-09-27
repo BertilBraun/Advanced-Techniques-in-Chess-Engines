@@ -6,7 +6,7 @@
 4. Schaul, T. et al. (2015). *Prioritized Experience Replay*. [arXiv:1511.05952](https://arxiv.org/abs/1511.05952).
 5. Trudeau, A. and Bowling, M. (2023). *Targeted Search Control in AlphaZero for Effective Policy Improvement*. [arXiv:2302.12359](https://arxiv.org/abs/2302.12359).
 6. Czech, J., Korus, P., and Kersting, K. (2020). *Monte-Carlo Graph Search for AlphaZero*. [arXiv:2012.11045](https://arxiv.org/abs/2012.11045).
-7. KataGo project (release 1.17.1). [Self-play training methods](https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md).
+7. KataGo project (release 1.17.1). [Other methods implemented in KataGo](https://github.com/lightvector/KataGo/blob/v1.17.1/docs/KataGoMethods.md).
 8. NVIDIA. [TensorRT engine refitting](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/refitting-engines.html).
 9. Meloni, M. (2021). *Stockfish and Lc0, test at different number of nodes*. [Calibration benchmark](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/).
 10. Braun, B. [Advanced Techniques in Chess Engines: source code and release documentation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines).

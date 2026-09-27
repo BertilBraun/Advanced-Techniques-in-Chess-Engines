@@ -138,9 +138,9 @@ reported experiment.
 
 ## Reproducing the software
 
-The public source release [10] contains setup and validation instructions. On production nodes,
-`deployment/setup_remote.sh` installs locked dependencies, builds the Release extension, installs pinned
-evaluation engines, and verifies engine execution. `deployment/run_control.sh` manages the run lifecycle.
+The public source release [10] contains setup and validation instructions. Node setup uses
+`deployment/setup_remote.sh` to install locked dependencies, build the Release extension, install pinned engines,
+and verify their execution. Run lifecycle management uses `deployment/run_control.sh`.
 
 Original project code and documentation, including this report, are available under the MIT License in the
 source release [10]. The published final model artifacts carry the same license in the model repository [11].

@@ -35,7 +35,7 @@ played move also saves work: some visits at the new root have already been perfo
 
 ## Why fast and full searches did not transfer
 
-A scheme inspired by KataGo's self-play methods [7] used cheap searches to advance most moves and full searches on
+A scheme inspired by KataGo's playout-cap randomization [2] used cheap searches to advance most moves and full searches on
 a random minority, which alone became primary policy targets. The trade is attractive in 19×19 Go: long games make
 finished outcomes expensive, so cheap moves can supply more independent value targets. Chess games are shorter,
 their outcomes and positions are often clearer, and the value objective was already learning. The transferred
@@ -182,5 +182,4 @@ preferred move.
 For an unvisited move, first-play urgency starts from a reduced parent value rather than an optimistic default.
 A 0.99 per-ply discount favours nearer favourable outcomes, while retaining 60% of subtree visits after a played
 move reuses analysis without allowing old statistics to dominate completely. Together with native batching,
-these mechanisms make fixed-budget search both exploratory and affordable. Appendix \ref{app:D} specifies the recipe;
-Appendix \ref{app:D} gives the numerical settings.
+these mechanisms make fixed-budget search both exploratory and affordable. Appendix \ref{app:D} gives the complete numerical recipe.

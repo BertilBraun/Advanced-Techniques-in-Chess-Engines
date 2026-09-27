@@ -1,11 +1,5 @@
 # 8. Playing strength and model compression
 
-![Final model playing strength across measured search budgets](figures/final-search-curve-paper.svg)
-
-Figure: Final playing strength across search budgets. Connected points use the opponent rung with score nearest
-50%; pale diamonds show the second opponent-based estimate and bars indicate 95% match-bootstrap intervals.
-The horizontal axis lists search budgets categorically.
-
 The final model reached **3,251 benchmark Elo at 100,000 searches per move**, estimated at under five seconds
 of thinking time on an RTX 4070 SUPER. This chapter examines the strength gained from search
 and the performance retained by a much smaller distilled model.

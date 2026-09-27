@@ -99,7 +99,25 @@ def test_bibliography_has_clickable_numbered_targets() -> None:
     bibliography = bibliography_tex()
     assert bibliography.count(r'\bibitem{ref') == 12
     assert r'\bibitem{ref7}' in bibliography
-    assert r'\href{https://github.com/lightvector/KataGo/blob/v1.17.1/SelfplayTraining.md}' in bibliography
+    assert r'\href{https://github.com/lightvector/KataGo/blob/v1.17.1/docs/KataGoMethods.md}' in bibliography
+
+
+def test_inline_deployment_path_allows_line_breaks() -> None:
+    paragraph = MarkdownIt('commonmark').parse('Run `deployment/setup_remote.sh` on the node.')[1]
+    assert inline_tex(paragraph.children or []) == r'Run \path{deployment/setup_remote.sh} on the node.'
+    formula = MarkdownIt('commonmark').parse('`max(v, 0) + r/3`')[1]
+    assert inline_tex(formula.children or []) == r'\texttt{max(v, 0) + r/3}'
+
+
+def test_provenance_heading_reserves_space_for_first_list_items() -> None:
+    output = section_tex(
+        'Result identity and provenance',
+        appendix=True,
+        level=2,
+        appendix_letter='D',
+        source=Path('appendix-d-reproducibility.md'),
+    )
+    assert output.startswith(r'\Needspace{8\baselineskip}\subsection{')
 
 
 def test_report_prose_rejects_external_markdown_links() -> None:

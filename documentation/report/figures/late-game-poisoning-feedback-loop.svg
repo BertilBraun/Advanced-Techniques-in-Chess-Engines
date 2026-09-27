@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title description">
-  <title id="title">Late-game target poisoning and its two-stage repair</title>
-  <desc id="description">A four-stage feedback loop connects absent searched endgame rows, weak conversion, more capped games, and unreliable cutoff targets that train the same weakness. Two repair steps replace the cutoff target with a full-search root value and restore fully searched endgame rows.</desc>
+  <title id="title">Late-game target poisoning and two corrective interventions</title>
+  <desc id="description">A four-stage feedback loop connects absent searched endgame rows, weak conversion, more capped games, and preceding cheap-search bootstrap targets. A dedicated full search evaluates the actual cutoff; restored searched endgame rows close the coverage gap. Conversion recovered after concurrent changes, without isolating their contributions.</desc>
   <defs>
     <filter id="soft-shadow" x="-10%" y="-20%" width="120%" height="150%">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#15243A" flood-opacity="0.12"/>
@@ -75,8 +75,8 @@
     <text x="87" y="489" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="600">1</text>
     <text x="122" y="480" fill="#15243A" font-size="21" font-weight="600">Full search at the cut</text>
     <text x="122" y="510" fill="#526070" font-size="19">
-      <tspan x="122" dy="0">Replace the cutoff heuristic with a</tspan>
-      <tspan x="122" dy="24">searched root value.</tspan>
+      <tspan x="122" dy="0">Replace the preceding cheap-search</tspan>
+      <tspan x="122" dy="24">bootstrap at the actual cutoff.</tspan>
     </text>
     <line x1="122" y1="556" x2="158" y2="556" stroke="#16786F" stroke-width="3"/>
     <polygon points="157,549 171,556 157,563" fill="#16786F"/>
@@ -91,7 +91,7 @@
     </text>
     <line x1="702" y1="556" x2="738" y2="556" stroke="#16786F" stroke-width="3"/>
     <polygon points="737,549 751,556 737,563" fill="#16786F"/>
-    <text x="764" y="562" fill="#11675F" font-size="19" font-weight="600">breaks the loop at its source</text>
+    <text x="764" y="562" fill="#11675F" font-size="19" font-weight="600">closes the coverage gap</text>
   </g>
   </g>
 

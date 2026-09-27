@@ -40,7 +40,7 @@ on ply: searched endgame positions remain eligible throughout the game. Sparse p
 ![Replay occupancy versus capacity and elapsed age of sampled positions](figures/appendix-replay-age.svg)
 
 Figure: Replay occupancy follows the expanding capacity during final training. The mean age of sampled positions
-grows to roughly two hours; age is measured from position creation. Both horizontal axes show completed optimizer
+grows to roughly two hours; age is measured from completion of the source game. Both horizontal axes show completed optimizer
 steps in thousands. The dashed line marks the small-to-medium model transition.
 
 ## Replay capacity and reuse
@@ -66,7 +66,9 @@ The selected ratio of 4 favors freshness. Appendix \ref{app:C} gives the duratio
 
 The retained sampler assigns seventy percent of draws to policy surprise, capped at 2.0 so extreme rows
 cannot dominate; the remaining 30% are uniform to preserve coverage. A row can recur across optimizer steps but is
-drawn only once within a global batch. This is related to prioritized replay [4], though it uses a different signal.
+drawn only once within a global batch. The closer precedent is KataGo's policy-surprise weighting [7], which
+increases sample frequency according to disagreement between the search target and policy prior. This also belongs
+to the broader family of prioritized replay [4].
 
 The priority deliberately changes which positions dominate training. It is not corrected back to uniform sampling.
 Because surprise can also reflect search noise or old targets, the uniform component preserves broader coverage.
@@ -105,8 +107,10 @@ while cross-entropy penalizes assigning low probability to the eventual outcome;
 At the earlier measured checkpoint, the cut-position
 search achieved Brier score 0.444 and cross-entropy 0.756, compared with 0.491 and 0.851 for material divided by 39.
 At the later checkpoint the corresponding scores were 0.193 and 0.374 versus 0.388 and 0.707. Among decisive continuations, search-root sign
-accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. The retained worker
-therefore performs one full search at the actual cut position and uses its root value as the bootstrap.
+accuracy exceeded 98% in both cohorts; calibration, not merely sign, distinguished the targets. This comparison
+motivated replacing material-based targets with searched values. Initially, the worker reused the preceding
+move's root value, which could come from a forced cheap search. The retained worker instead performs a dedicated
+full search at the actual cut position and uses its root value as the bootstrap.
 The root value becomes a soft win/draw/loss target, then materialization applies the configured per-ply blur.
 Appendix \ref{app:D} gives the conversion.
 
@@ -119,8 +123,9 @@ WDL target towards uniform. This attenuates the expected value of distant outcom
 assigned to early positions. With signed values, discounting likewise makes a delayed loss less negative.
 
 The two discounts act at different points in the learning loop, but share the intended incentive to complete
-winning games sooner. Their independent benefit was not established. Restoring searched endgame positions to
-replay, rather than discounting, was the identified repair for the conversion failure discussed in Section \ref{sec:05a-three-failures-late-game-target-poisoning}.
+winning games sooner. Their independent benefit was not established. Restoring searched endgame positions removed
+a known gap in training coverage. Conversion recovered after several concurrent changes, so their individual
+contributions were not isolated (Section \ref{sec:05a-three-failures-late-game-target-poisoning}).
 Whether either discount improves the retained recipe remains open.
 
 A separate scheduled blend incorporates up to 10% of the stored search-root value into the training target,

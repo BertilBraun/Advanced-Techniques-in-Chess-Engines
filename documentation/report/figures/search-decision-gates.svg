@@ -31,9 +31,9 @@
   <line x1="1022" y1="173" x2="1022" y2="225" class="rule"/>
 
   <text x="48" y="260" class="negative">Fast/full searches</text>
-  <text x="48" y="289" class="body">Cheap moves still cost 42.9% of</text>
-  <text x="48" y="316" class="body">nominal work; excluded targets</text>
-  <text x="48" y="343" class="body">and poisoned late endgames.</text>
+  <text x="48" y="289" class="body">Reduced primary-target</text>
+  <text x="48" y="316" class="body">density and underfilled</text>
+  <text x="48" y="343" class="body">batch tails.</text>
 
   <text x="332" y="260" class="negative">Predicted allocation</text>
   <text x="332" y="289" class="body">Improved deep-policy fidelity,</text>

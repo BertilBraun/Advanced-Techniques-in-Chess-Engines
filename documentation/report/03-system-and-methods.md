@@ -28,8 +28,8 @@ learning affordable.
 
 AlphaZero establishes the self-play learning framework [1]; KataGo shows how substantially its compute requirements
 can be reduced through changes to search, training, and network architecture [2]. KataGo is the closest practical
-precedent for this study's efficiency focus. Its fast/full search schedule, auxiliary objectives, and self-play
-methods [7] motivated several investigations here. Their usefulness still depends on the game: completing more
+precedent for this study's efficiency focus. Its fast/full search schedule and auxiliary objectives [2], along with
+later self-play methods [7], motivated several investigations here. Their usefulness still depends on the game: completing more
 long Go games and supplying more searched chess positions need not favour the same allocation of compute.
 
 Several narrower lines of work address where that compute should go. Dynamic simulation MCTS studies when to stop

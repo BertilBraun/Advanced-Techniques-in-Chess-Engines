@@ -19,7 +19,7 @@ improved a local metric without improving that complete loop.
 ## Scope and contributions
 
 Chess is the subject of the study. The runtime also supports Go, and KataGo's fast and full searches inspired one
-of the approaches tested here [7]. We briefly considered 7×7 and 9×9 Go as cheaper settings for tuning chess
+of the approaches tested here [2]. We briefly considered 7×7 and 9×9 Go as cheaper settings for tuning chess
 hyperparameters. In those exploratory games, we observed a strong first-player advantage, short trajectories, and
 a value target that learned quickly. Useful Go tuning appeared unlikely to transfer directly to chess, so we kept
 chess as the focus.

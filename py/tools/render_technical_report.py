@@ -55,6 +55,7 @@ PREAMBLE = r"""\documentclass[10pt,twocolumn]{article}
 \usepackage{caption}
 \usepackage{float}
 \usepackage{placeins}
+\usepackage{needspace}
 \usepackage{balance}
 \definecolor{vlteal}{HTML}{16615A}
 \definecolor{vltealdark}{HTML}{0E4742}
@@ -162,7 +163,10 @@ def inline_tex(tokens: list[Token], *, bibliography: bool = False) -> str:
             case 'text':
                 parts.append(escape_tex(token.content, citations=not bibliography))
             case 'code_inline':
-                parts.append(r'\texttt{' + escape_tex(token.content, citations=False) + '}')
+                if token.content.startswith('deployment/'):
+                    parts.append(r'\path{' + token.content + '}')
+                else:
+                    parts.append(r'\texttt{' + escape_tex(token.content, citations=False) + '}')
             case 'strong_open':
                 parts.append(r'\textbf{')
             case 'em_open':
@@ -343,6 +347,8 @@ def section_tex(title: str, *, appendix: bool, level: int, appendix_letter: str,
     if level == 2:
         slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
         label = r'\label{sec:' + source.stem + '-' + slug + '}'
+        if source.name == 'appendix-d-reproducibility.md' and title == 'Result identity and provenance':
+            return r'\Needspace{8\baselineskip}\subsection{' + escape_tex(title) + '}' + label + '\n'
         if source.name.startswith(('04a-', '04b-', '04c-')) and not appendix:
             return r'\subsubsection{' + escape_tex(title) + '}' + label + '\n'
         return r'\subsection{' + escape_tex(title) + '}' + label + '\n'

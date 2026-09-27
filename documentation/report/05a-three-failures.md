@@ -11,10 +11,10 @@ To prevent noisy positions from exceptionally long endings from dominating repla
 excluded the late-game tail from primary training targets and reduced its search budget. This saved compute on
 positions that would otherwise be discarded, but systematically removed examples of endgame conversion. With
 little training on those positions and only shallow search during play, the model frequently failed to convert
-advantages before the ply cap. A heuristic cutoff estimate then supplied the outcome target for the preceding
-trajectory.
+advantages before the ply cap. In the affected run, the preceding cheap search's root value supplied the outcome
+target for the recorded trajectory, after reversing the side-to-move perspective.
 
-![Late-game target poisoning feedback loop and its two-stage repair](figures/late-game-poisoning-feedback-loop.svg)
+![Late-game target poisoning feedback loop and two corrective interventions](figures/late-game-poisoning-feedback-loop.svg)
 
 Figure: A searched cutoff value improves labels for unfinished games; restoring fully searched endgames also
 returns the examples needed to learn conversion.
@@ -26,19 +26,22 @@ rows inherited a cutoff target. Consequently, an error introduced at the end of 
 its recorded trajectory. Replay turnover removed the original rows but did not necessarily remove their influence
 on the model or the self-play distribution.
 
-The correction addressed target estimation and training coverage separately. Replacing the material heuristic
-with the root value of a full search at the cutoff reduced Brier error from 0.491 to 0.444 and cross-entropy from
-0.851 to 0.756 on 2,282 early-cut positions in a controlled continuation study. A later set of 1,144 positions
-showed the same ordering. Removing the forced cheap-search tail then restored searched endgame positions to replay,
-allowing the network to learn conversion rather than merely receive a better estimate when conversion failed.
+An earlier target-comparison study had already favoured searched values over the material baseline: on 2,282
+early-cut positions, the cut-position search achieved Brier error 0.444 and cross-entropy 0.756, versus 0.491 and
+0.851 for material. A later set of 1,144 positions showed the same ordering. These measurements compare target
+estimators, not the complete conversion repair. The initial implementation reused the preceding move's search;
+under forced late-game cheap search, that bootstrap still came from a shallow search at the adjacent position.
 
-Figure \ref{fig:late-game-poisoning-feedback-loop} distinguishes these two interventions. Improving the cutoff target reduced label error; restoring
-endgame coverage corrected the sampling policy that sustained the failure.
+The subsequent correction performed a dedicated full search at the actual cutoff, supplying both its root value
+and a searched policy target for that position. Restoring searched endgame positions removed a known gap in
+training coverage (Figure \ref{fig:late-game-poisoning-feedback-loop}). Conversion recovered after several concurrent
+changes, including discounting, ply-cap scheduling, and resignation settings, so their individual contributions
+were not isolated.
 
 ## Prediction drift under TensorRT refitting
 
 The deployment pipeline refits a compiled TensorRT template after each training block to avoid rebuilding the
-engine. In a failing template, equal quantization-scale constants allowed optimizations that became invalid when
+engine. In TensorRT 10.14.1.48, a failing template's equal quantization-scale constants allowed optimizations that became invalid when
 subsequent training produced unequal scales. TensorRT accepted all replacement weights and reported a successful
 refit, yet the resulting engine no longer reproduced the source network's predictions.
 
