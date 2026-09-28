@@ -301,6 +301,109 @@ from-scratch student at 130,000 steps: `student-weights-20260927.tgz`
 (`43a3c88c5f3d83e64450637ab68282cb46392ef7691e940eb0eaf0cd08867f46`).
 
 
+## Architecture: a student built like T1 against the convolutional student
+
+The student network's construction, not its size, turned out to be the lever. A student built like Lc0's T1
+(`lc0_attention`, `7c4a89ae`) and trained from scratch on the same 47M positions, with the same held-out rows and
+exactly the 14x160 convolutional student's schedule, beats that student at every checkpoint and passes checkpoint
+1026 by about 150 Elo at 64 searches.
+
+**Network.** T1's construction with only the sizes changed: each square's 52 input planes concatenated with a
+64-dimensional one-hot square code, a linear embedding with Mish and learned per-square multiplicative and
+additive gates; ten post-norm encoders (embedding 192, 6 heads of 32) with residual branches scaled by
+(2N)^-1/4, a squared-ReLU feed-forward of 768 and a generated attention bias (smolgen 32/192/192, one template
+bank shared by all layers) in every layer; the from-to policy head with Mish at width 192; a value head of 32 per
+square into 128. 11,908,643 parameters, 366M MAC per position against the convolutional student's 6,261,007 and
+396M; most of the extra parameters are smolgen's position-level layers, as in T1. At T1's own size (10x256,
+8 heads) the same code has 20,114,979 parameters against T1's 20,204,372. Lc0's own square-code table is not
+copied (GPL); any full-rank code gives the embedding the same freedom.
+
+**Training.** AdamW at 2e-3, cosine to zero over 30,000 steps, then 1e-3 cosine to a 1e-4 floor over a planned
+115,000 steps; batch 1,024 as two accumulated micro-batches of 512 (the whole batch needs about 8.1 GB).
+2.95-3.0 steps a second against the convolutional student's 4.1-4.4. Stopped after step 110,000 of the planned
+130,000, once three consecutive checkpoints agreed.
+
+| Step | Held-out gap | 64 searches vs SF13 10k | Convolutional student, same step |
+|---:|---:|---|---|
+| 5,000 | 0.2151 | 0.055 (1/9/90) | 0.2465, 0.08 |
+| 10,000 | 0.1660 | 0.195 (9/21/70) | 0.2010, 0.12 |
+| 15,000 | 0.1363 | 0.29 (17/24/59) | 0.1837, 0.20 |
+| 20,000 | 0.1110 | 0.495 (32/35/33) | 0.1626, 0.225 |
+| 25,000 | 0.0952 | 0.47 (28/38/34) | —, 0.295 |
+| 30,000 | 0.0910 | 0.49 (34/30/36) | 0.1527, 0.275 |
+| 40,000 | 0.1037 | 0.38 (22/32/46) | 0.1577, 0.27 |
+| 50,000 | 0.0982 | 0.545 (33/43/24) | 0.1492, 0.235 |
+| 60,000 | 0.0906 | 0.53 (40/26/34) | 0.1415, 0.31 |
+| 70,000 | 0.0810 | 0.58 (38/40/22) [0.495, 0.66] | 0.1345, 0.34 |
+| 80,000 | 0.0746 | 0.565 (40/33/27) [0.495, 0.635] | 0.1313, 0.30 |
+| 90,000 | 0.0690 | **0.685** (57/23/20) [0.61, 0.76] | 0.1258, 0.345 |
+| 100,000 | 0.0660 | **0.695** (55/29/16) [0.61, 0.78] | 0.1229, 0.26 |
+| 110,000 | **0.0623** | **0.68** (51/34/15) [0.62, 0.745] | 0.1198, 0.37 |
+
+Policy only against SF13 at 2,000 nodes, step 30,000: **0.36** (20/32/48) [0.29, 0.43], against 0.16 for the
+convolutional student and 0.395 for checkpoint 1026.
+
+- **The architecture is worth about 200 Elo at equal compute per position.** From step 70,000 the T1-shaped
+  student scores 0.57-0.70 at 64 searches where the convolutional student scores 0.26-0.37.
+- **It passes checkpoint 1026 from scratch, without self-play.** Steps 90,000-110,000 score 0.68-0.695, each
+  interval above 1026's 0.485 [0.405, 0.565]: about +150 Elo. It matched 1026 by step 20,000.
+- **It fits the teacher better than any student before it.** Held-out gap 0.0623 against 0.0879 for 1026
+  fine-tuned and 0.0806 for the grown 19x176, and still falling when stopped; training and held-out loss stayed
+  0.037-0.042 apart.
+- **It remains far below the teacher** (0.885 at 64 searches), and T1 is itself distilled from much larger Lc0
+  networks, so this does not show that self-play at this size would reach it.
+
+### Early-learning ablation of the convolutional student (SGD)
+
+Before the T1-shaped student, eight 14x160-class variants were trained from scratch with production's optimizer
+(SGD, Nesterov 0.9, weight decay 1e-4, clip 1.0; 0.05 falling linearly to 0.005 at batch 1,024) for 30,000
+steps. At that length every variant is far from converged (the baseline plays 0.11), so this measures learning
+speed only.
+
+| Variant | Parameters | Held-out gap, step 19,000 | Final gap | 64 searches |
+|---|---:|---:|---:|---|
+| Baseline (scaled post-activation, ReLU6, pooling, from-to policy, value 2/48) | 6.26M | 0.2462 | 0.2123 | 0.11 |
+| Value head 32/128 | 6.52M | 0.2477 | 0.2116 | 0.11 |
+| 10x192 (wide, shallow) | 6.45M | 0.2473 | 0.2092 | 0.115 |
+| Plain post-activation (AlphaZero block) | 6.26M | 0.2492 | 0.2113 | 0.10 |
+| Scaled pre-activation | 6.26M | 0.2531 | 0.2141 | 0.09 |
+| Global pooling off | 6.60M | 0.2558 | — | — |
+| 20x128 (deep, narrow) | 5.72M | 0.2565 | — | — |
+| Dense policy head | 6.69M | 0.3183 | 0.2665 | 0.03 |
+
+Only the policy head mattered: the production from-to head is clearly better. Pooling-off and 20x128 were lost at
+step ~19,000 when their trainers' source was overwritten mid-run (TorchScript export re-reads it). The ablation
+used SGD and the T1-shaped student AdamW, so their numbers do not compare with each other.
+
+### Inference cost
+
+The same 3070, fixed batch 320, float16. Self-play: `tools/run_self_play_search_benchmark.sh` with V97's live
+settings (4 processes, 512 games each, one inference worker, 2 outstanding batches, 800 visits), 60 s measured
+after warm-up. Forward-only: 200 timed batches after 20 warm-up batches.
+
+| | 14x160 CNN (checkpoint 1026) | 10x192 T1-shaped | T1-shaped / CNN |
+|---|---:|---:|---:|
+| Self-play, TorchScript float16 | 28,514 searches/s (GPU 96%) | 20,306 searches/s (GPU 95%) | 0.71 |
+| Forward only, TorchScript float16 | 23,539 positions/s | 22,094 | 0.94 |
+| Forward only, TensorRT float16 | 60,230 positions/s | 32,888 | **0.55** |
+
+TensorRT speeds the convolutional network 2.56x over TorchScript but the attention network only 1.49x, so at
+equal arithmetic the T1-shaped network serves at a bit over half the CNN's rate. Production serves the CNN in
+INT8, which widens the gap further and has no attention counterpart; that was not measured. The native
+TensorRT self-play arms could not run: this node's native extension was built without TensorRT, so the TensorRT
+rows are forward-only. Self-play was GPU-bound in both TorchScript arms.
+
+At equal time, about 1.8x fewer searches would cost roughly 50-120 Elo by the report's 190-470 Elo per decade in
+this range, against about +150 Elo at equal searches; only a self-play run settles whether the architecture
+wins at equal time.
+
+Evidence: `evidence-lc0arch-and-throughput.tgz`
+(`971a26486d3099f98ffd2a348b9eb8855acdc793761ab2eef15d7723608ac4be`): training logs, all matches, the step-110,000
+weights, the benchmark results and forward timings; `evidence-ablation-and-lc0arch-part1.tgz`
+(`96c218a6b0ded5ef1a1be4e2160802d03709dd3336c73867380b345311a2cd8c`): the ablation and the step-30,000 and
+step-100,000 weights; `evidence-grown-final.tgz`
+(`4253f76ad4647679b63ff1660cd5fae6b3100d8bf5c592301c5f5056277ac914`): the grown 19x176's final weights and matches.
+
 ## What this cost
 
 One RTX 3070 node, roughly 3 hours including provisioning, the lc0 build, the gate, two distillation runs and

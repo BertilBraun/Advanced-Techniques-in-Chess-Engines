@@ -7,15 +7,22 @@ live in the linked records.
 
 ## Short answer
 
-Several candidate causes are now **ruled out**, one is **confirmed**, and the main question is **still open**.
+Several candidate causes are now **ruled out**, two are **confirmed**, and what remains **open** is whether
+self-play reaches the same level.
 
-- **Ruled out:** the search and the evaluation harness; the learning-rate floor; self-play label quality at
-  1,600 visits; replay diversity; model size alone (as far as V101 and the grown 19x176 can show).
-- **Confirmed:** the network is the limit. A stronger network (Lc0's 20M-parameter T1) in our unchanged search
+- **Ruled out:** the search and the evaluation harness; the learning-rate floor raised to 0.02; self-play label
+  quality at 1,600 visits; replay diversity; model size alone (as far as V101 and the grown 19x176 can show).
+- **Confirmed: the network is the limit.** A stronger network (Lc0's 20M-parameter T1) in our unchanged search
   plays at least 360 Elo above checkpoint 1026.
-- **Open:** why our network family does not get there. Distilling the Lc0 network into it gained at most about
-  60 Elo at 64 searches (not significant at 1,000 searches), and the architecture ablation so far only measured
-  early learning speed, not the level each variant can reach.
+- **Confirmed: the architecture is the lever (update, 2026-09-28).** A student built like T1 at our compute
+  (10x192 attention with smolgen, 366M MAC per position against 396M) trained from scratch on the 47M teacher
+  labels beats the convolutional student trained identically by about 200 Elo, and passes checkpoint 1026 by
+  about 150 Elo at 64 searches (0.68-0.695 at steps 90,000-110,000). No convolutional variant came close.
+- **Cost:** served through TensorRT float16 it runs at 0.55x the CNN's positions per second (0.71x in self-play on
+  TorchScript); production's INT8 CNN is faster still.
+- **Open:** whether self-play with this architecture, at its lower throughput, climbs past the convolutional
+  plateau without a teacher. T1 itself is distilled from much larger networks, so its level is not a self-play
+  target at this size. Our self-play also never anneals below a 0.01 learning rate, where Lc0 ends at 0.0005.
 
 ## Timeline
 
@@ -32,6 +39,10 @@ Several candidate causes are now **ruled out**, one is **confirmed**, and the ma
 | 9 | Fine-tune continuation | 09-27 | 40,000 more steps at a re-raised learning rate | Same level; one 1,000-search point at 0.6125 |
 | 10 | Grown 19x176 | 09-27 | Run 8 grown function-preserving to 10.2M parameters, 80,000 steps | Better fit to the teacher, same strength |
 | 11 | Architecture ablation | 09-27/28 | Eight from-scratch variants, SGD, 30,000 steps each | Only the policy head matters for early learning |
+| 12 | T1-shaped student | 09-28 | T1's construction at 10x192, from scratch, the convolutional student's exact schedule, 110,000 steps | **About +200 Elo over the CNN student, +150 over checkpoint 1026** |
+| 13 | Inference cost | 09-28 | Self-play and forward throughput, CNN against T1-shaped, float16 | 0.71x in self-play (TorchScript), 0.55x forward (TensorRT) |
+
+Full numbers for 12 and 13: [Lc0 teacher diagnostic, architecture section](../benchmarks/lc0-teacher-diagnostic-rtx3070-20260926/README.md#architecture-a-student-built-like-t1-against-the-convolutional-student).
 
 ## Results
 
@@ -123,14 +134,19 @@ On branch `worktree-lc0-teacher`:
 
 ## What is still open
 
-1. **Can any variant of our network family reach a higher level?** Needs long runs, not 30,000-step ones. The
-   14x160 from-scratch AdamW run (130,000 steps, gap 0.116, 0.36) is a converged baseline, so a variant trained
-   on the identical schedule and compared at the same checkpoints answers this without re-running the baseline.
-   About 14 hours for two variants in parallel on the current node.
-2. **Does self-play hold a distilled start?** Seeding self-play with the fine-tuned 1026 is the only test of the
-   training loop itself. It needs the production setup.
-3. **Why does the Lc0 network get so much more out of 20M parameters?** Untested. Its body is attention-based;
-   our attention student has only a simple input embedding and was not trained here.
+1. **Does self-play with the T1-shaped network beat the convolutional plateau at equal time?** Answered only in
+   distillation so far. It needs the network kind in the production configuration, a TensorRT float16 serving
+   path for it (INT8 QAT does not exist for attention) and either a small attention-against-CNN A/B or a rerun
+   of the final training run. The 0.55x serving rate costs about 1.8x fewer searches at equal time, worth roughly
+   50-120 Elo against a gain of about 150 at equal searches.
+2. **Does annealing the learning rate lift the convolutional plateau?** Lc0 steps down to 0.0005; our self-play
+   holds 0.01, and every distillation run gained most while annealing. Testable by resuming checkpoint 1026 with
+   a stepped-down rate.
+3. **Can the attention network be served faster?** TensorRT gains 2.56x on the CNN but 1.49x on the attention
+   network; the generated attention bias probably blocks fused attention kernels.
+4. **Does the report's conclusion hold?** The attention-viability decision (8,000-step comparison plus
+   throughput), "capacity was not the binding constraint" and the final recipe's convolutional trunk need
+   revisiting once 1 has a first answer.
 
 ## Evidence
 
