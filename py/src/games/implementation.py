@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
-from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
+from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration, TorchScriptInferenceBackend
 from src.self_play.native_configuration import (
     native_execution_options,
     native_inference_backend,
@@ -157,6 +157,9 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         inference: BatchedInferenceParams | None = None,
     ) -> Path:
         effective = self.self_play_configuration.inference if inference is None else inference
+        # TorchScript serves the checkpoint's own export; only TensorRT templates are keyed by a configured model.
+        if isinstance(effective.backend, TorchScriptInferenceBackend):
+            return checkpoint.inference_model_path
         manifest = read_checkpoint_manifest(checkpoint.generation, checkpoint.manifest_path.parent)
         model_ids = tuple(
             model.model_id
