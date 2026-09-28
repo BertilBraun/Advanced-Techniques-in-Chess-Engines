@@ -385,10 +385,17 @@ after warm-up. Forward-only: 200 timed batches after 20 warm-up batches.
 |---|---:|---:|---:|
 | Self-play, TorchScript float16 | 28,514 searches/s (GPU 96%) | 20,306 searches/s (GPU 95%) | 0.71 |
 | Forward only, TorchScript float16 | 23,539 positions/s | 22,094 | 0.94 |
-| Forward only, TensorRT float16 | 60,230 positions/s | 32,888 | **0.55** |
+| Forward only, TensorRT float16 | 60,230 positions/s | 32,888 | 0.55 |
+| Forward only, TensorRT float16, squared ReLU as x·relu(x) (`df4463d6`) | 59,437 positions/s | 36,205 | **0.61** |
 
 TensorRT speeds the convolutional network 2.56x over TorchScript but the attention network only 1.49x, so at
-equal arithmetic the T1-shaped network serves at a bit over half the CNN's rate. Production serves the CNN in
+equal arithmetic the T1-shaped network serves at a bit over half the CNN's rate. A per-layer profile shows
+TensorRT already runs attention in its fused MHA kernel (0.116 ms of about 1 ms per layer); an explicit
+matmul-softmax-matmul attention and builder optimization level 5 changed nothing. Squared ReLU exported as
+relu(x) then a separate square ran as its own elementwise pass (0.154 ms per layer); written as x·relu(x), with
+identical outputs, TensorRT fuses it into the feed-forward matmul and the engine gains 14%, to 0.61x the CNN.
+What remains per layer (the feed-forward matmuls, fused attention and the smolgen template projection) is
+inherent to the architecture's sizes. Production serves the CNN in
 INT8, which widens the gap further and has no attention counterpart; that was not measured. The native
 TensorRT self-play arms could not run: this node's native extension was built without TensorRT, so the TensorRT
 rows are forward-only. Self-play was GPU-bound in both TorchScript arms.
