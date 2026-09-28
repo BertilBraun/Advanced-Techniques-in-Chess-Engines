@@ -395,7 +395,23 @@ matmul-softmax-matmul attention and builder optimization level 5 changed nothing
 relu(x) then a separate square ran as its own elementwise pass (0.154 ms per layer); written as x·relu(x), with
 identical outputs, TensorRT fuses it into the feed-forward matmul and the engine gains 14%, to 0.61x the CNN.
 What remains per layer (the feed-forward matmuls, fused attention and the smolgen template projection) is
-inherent to the architecture's sizes. Production serves the CNN in
+inherent to the architecture's sizes.
+
+**INT8, throughput only** (random calibration data, so the outputs are not meaningful and fidelity is untested):
+
+| TensorRT engine, batch 320 | Positions/s | vs its float16 |
+|---|---:|---:|
+| CNN, float16 | 59,433 | — |
+| CNN, INT8 (calibrated) | **100,906** | 1.70x |
+| T1-shaped, float16 | 36,167 | — |
+| T1-shaped, INT8 (calibrated) | 36,393 | none: TensorRT's transformer compiler ignores calibrated INT8 |
+| T1-shaped, explicit INT8 on every matmul (ModelOpt Q/DQ) | 33,598 | 0.93x: quantized attention products break the fused MHA kernel |
+| T1-shaped, explicit INT8 on the 87 weight matmuls only | **40,442** | 1.12x |
+
+Both networks in INT8 as production would serve them: the T1-shaped network at **0.40x** the CNN's rate. INT8
+buys the CNN 1.7x but the attention network only 1.12x, because a smaller share of its time is in weight
+matmuls. Evidence: `evidence-int8-throughput.tgz` and `batch-scaling.txt` (larger engine batches gain 3-9% for
+both networks). Production serves the CNN in
 INT8, which widens the gap further and has no attention counterpart; that was not measured. The native
 TensorRT self-play arms could not run: this node's native extension was built without TensorRT, so the TensorRT
 rows are forward-only. Self-play was GPU-bound in both TorchScript arms.
