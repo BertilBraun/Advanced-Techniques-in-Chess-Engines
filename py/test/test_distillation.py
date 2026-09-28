@@ -56,6 +56,7 @@ from tools.distill_train_student import (
     ProductionReplayInput,
     ResidualBlockKind,
     ResidualContextKind,
+    accumulate_gradients,
     auxiliary_head_layouts,
     close_training_dataset,
     dataset_split,
@@ -92,6 +93,7 @@ STUDENT_ARGUMENTS = Arguments(
     floor_fraction=0.1,
     policy_bottleneck_rank=16,
     batch_size=64,
+    gradient_accumulation_steps=1,
     steps=1000,
     learning_rate=0.002,
     learning_rate_schedule=LearningRateSchedule.COSINE,
@@ -480,6 +482,35 @@ def overfit_observation() -> OverfitObservation:
         final=observed_losses(loss),
         floor=achievable_loss_floor(batch, objective),
     )
+
+
+def test_two_accumulated_half_batches_give_the_full_batch_gradient() -> None:
+    torch.manual_seed(20260927)
+    records = _synthetic_records(8, seed=9)
+    # The from-to head keeps the network free of batch normalization, whose statistics depend on the batch.
+    architecture = student_architecture(
+        replace(
+            STUDENT_ARGUMENTS,
+            network_kind=NetworkKind.LC0_ATTENTION,
+            layers=1,
+            hidden_size=16,
+            heads=2,
+            policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
+            policy_key_size=16,
+        )
+    )
+    model = create_model(architecture, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    objective = distillation_objective()
+
+    def gradients(micro_batches: tuple[TrainingBatch, ...]) -> list[torch.Tensor]:
+        model.zero_grad(set_to_none=True)
+        accumulate_gradients(model.training_output, objective, micro_batches, torch.device('cpu'))
+        return [parameter.grad.clone() for parameter in model.parameters() if parameter.grad is not None]
+
+    whole = gradients((_batch(records),))
+    halves = gradients((_batch(records[:4]), _batch(records[4:])))
+
+    assert all(torch.allclose(full, split, atol=1e-6) for full, split in zip(whole, halves, strict=True))
 
 
 def test_training_loss_falls_well_below_its_starting_value(overfit_observation: OverfitObservation) -> None:

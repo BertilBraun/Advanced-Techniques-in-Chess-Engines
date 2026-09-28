@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
@@ -25,7 +26,7 @@ from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTR
 from src.games.chess.training import ChessImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore, ReplayStoreState
-from src.training.batch import TrainingBatch
+from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.checkpoint.contracts import CheckpointManifest, read_checkpoint_manifest
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.checkpoint.persistence import create_model
@@ -156,6 +157,7 @@ class Arguments:
     floor_fraction: float
     policy_bottleneck_rank: int
     batch_size: int
+    gradient_accumulation_steps: int
     steps: int
     learning_rate: float
     learning_rate_schedule: LearningRateSchedule
@@ -482,6 +484,22 @@ def observed_losses(loss: ObjectiveLoss) -> LossValues:
         auxiliary=tuple(float(value.detach()) for value in loss.auxiliary),
         total=float(loss.total.detach()),
     )
+
+
+def accumulate_gradients(
+    step_model: Callable[[torch.Tensor], TrainingModelOutput],
+    objective: ResolvedTrainingObjective,
+    micro_batches: tuple[TrainingBatch, ...],
+    device: torch.device,
+) -> LossValues:
+    # Equal to one step on the concatenated batch only for networks without batch normalization.
+    observed: list[LossValues] = []
+    for micro_batch in micro_batches:
+        with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
+            loss = objective.calculate_loss(step_model(micro_batch.states), micro_batch)
+        (loss.total / len(micro_batches)).backward()
+        observed.append(observed_losses(loss))
+    return mean_loss_values(tuple(observed))
 
 
 def mean_loss_values(values: tuple[LossValues, ...]) -> LossValues:
@@ -821,30 +839,31 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         )
         for parameter_group in optimizer.param_groups:
             parameter_group['lr'] = step_learning_rate
-        batch = source_training_batch(
-            dataset,
-            split.training_row_count,
-            local_batch_size,
-            generator,
-            device,
-            auxiliary_heads,
-        )
-        if value_anchor is not None:
-            # Policy learns from the teacher while value is held to the anchor: retraining the value head on
-            # the teacher's WDL cost the first pilot about 75 Elo in search with an unchanged raw policy.
-            with (
-                torch.no_grad(),
-                torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'),
-            ):
-                anchor_wdl = torch.softmax(value_anchor.training_output(batch.states).wdl_logits.float(), dim=1)
-            batch = replace(batch, wdl_targets=anchor_wdl.to(batch.wdl_targets.dtype))
+        micro_batches: list[TrainingBatch] = []
+        for _ in range(arguments.gradient_accumulation_steps):
+            batch = source_training_batch(
+                dataset,
+                split.training_row_count,
+                local_batch_size // arguments.gradient_accumulation_steps,
+                generator,
+                device,
+                auxiliary_heads,
+            )
+            if value_anchor is not None:
+                # Policy learns from the teacher while value is held to the anchor: retraining the value head on
+                # the teacher's WDL cost the first pilot about 75 Elo in search with an unchanged raw policy.
+                with (
+                    torch.no_grad(),
+                    torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'),
+                ):
+                    anchor_wdl = torch.softmax(value_anchor.training_output(batch.states).wdl_logits.float(), dim=1)
+                batch = replace(batch, wdl_targets=anchor_wdl.to(batch.wdl_targets.dtype))
+            micro_batches.append(batch)
         optimizer.zero_grad(set_to_none=True)
-        with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
-            loss = objective.calculate_loss(step_model(batch.states), batch)
-        loss.total.backward()
+        step_losses = accumulate_gradients(step_model, objective, tuple(micro_batches), device)
         torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.max_grad_norm)
         optimizer.step()
-        recent_training_losses.append(observed_losses(loss))
+        recent_training_losses.append(step_losses)
         window_steps += 1
         if rank != 0:
             if step % arguments.evaluate_every == 0 or step == arguments.steps:
@@ -980,6 +999,12 @@ def parse_arguments() -> Arguments:
         help='Zero removes the bottleneck, which is the dense head production runs.',
     )
     parser.add_argument('--batch-size', default=1024, type=int)
+    parser.add_argument(
+        '--gradient-accumulation-steps',
+        default=1,
+        type=int,
+        help='Micro-batches per optimizer step; the batch size stays the whole step.',
+    )
     parser.add_argument('--steps', required=True, type=int)
     parser.add_argument('--learning-rate', default=0.002, type=float)
     parser.add_argument(
@@ -1051,6 +1076,7 @@ def parse_arguments() -> Arguments:
         floor_fraction=namespace.floor_fraction,
         policy_bottleneck_rank=namespace.policy_bottleneck_rank,
         batch_size=namespace.batch_size,
+        gradient_accumulation_steps=namespace.gradient_accumulation_steps,
         steps=namespace.steps,
         learning_rate=namespace.learning_rate,
         learning_rate_schedule=LearningRateSchedule(namespace.learning_rate_schedule),
@@ -1090,6 +1116,12 @@ def parse_arguments() -> Arguments:
                 )
     if min(arguments.layers, arguments.hidden_size) <= 0:
         raise ValueError('Layers and hidden size must be positive.')
+    local_batch_size = arguments.batch_size // len(arguments.device_ids)
+    if arguments.gradient_accumulation_steps <= 0 or local_batch_size % arguments.gradient_accumulation_steps:
+        raise ValueError(
+            f'Gradient accumulation of {arguments.gradient_accumulation_steps} does not divide the per-device '
+            f'batch of {local_batch_size}.'
+        )
     if arguments.policy_bottleneck_rank < 0:
         raise ValueError('Policy bottleneck rank must be nonnegative; zero removes the bottleneck.')
     if min(arguments.heads, arguments.feedforward, arguments.policy_key_size) <= 0:
