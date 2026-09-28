@@ -31,6 +31,7 @@ from src.training.checkpoint.persistence import create_model, create_optimizer
 from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     DisabledResidualContext,
+    Lc0AttentionNetworkParams,
     PostActivationResidualBlockConfiguration,
     ScaledPostActivationResidualBlockConfiguration,
     ScaledPreActivationResidualBlockConfiguration,
@@ -963,6 +964,15 @@ def test_scaled_student_blocks_scale_each_branch_by_the_inverse_root_of_depth() 
     )
 
     assert architecture.residual_block.branch_scale == pytest.approx(0.25)
+
+
+def test_lc0_attention_student_takes_the_configured_sizes() -> None:
+    architecture = student_architecture(
+        replace(STUDENT_ARGUMENTS, network_kind=NetworkKind.LC0_ATTENTION, layers=10, hidden_size=192, heads=6)
+    )
+
+    assert isinstance(architecture, Lc0AttentionNetworkParams)
+    assert (architecture.num_layers, architecture.embedding_size, architecture.num_heads) == (10, 192, 6)
 
 
 def test_student_residual_context_can_be_disabled() -> None:

@@ -38,6 +38,7 @@ from src.training.network import (
     DisabledResidualContext,
     GlobalPoolingResidualContext,
     InferenceNetwork,
+    Lc0AttentionNetworkParams,
     Network,
     NetworkConfiguration,
     NetworkParams,
@@ -93,6 +94,7 @@ class OptimizerKind(str, Enum):
 class NetworkKind(str, Enum):
     CONVOLUTIONAL = 'convolutional'
     ATTENTION = 'attention'
+    LC0_ATTENTION = 'lc0_attention'
 
 
 class PolicyHeadKind(str, Enum):
@@ -349,6 +351,21 @@ def student_architecture(arguments: Arguments) -> NetworkConfiguration:
                 feedforward_size=arguments.feedforward,
                 dropout=0.0,
                 attention_bias=student_attention_bias(arguments),
+                policy_head=student_policy_head(arguments),
+                num_value_channels=arguments.num_value_channels,
+                value_fc_size=arguments.value_fc_size,
+            )
+        case NetworkKind.LC0_ATTENTION:
+            return Lc0AttentionNetworkParams(
+                num_layers=arguments.layers,
+                embedding_size=arguments.hidden_size,
+                num_heads=arguments.heads,
+                feedforward_size=arguments.feedforward,
+                smolgen=SmolgenAttentionBiasConfiguration(
+                    compressed_size=arguments.smolgen_compressed_size,
+                    hidden_size=arguments.smolgen_hidden_size,
+                    generated_size=arguments.smolgen_generated_size,
+                ),
                 policy_head=student_policy_head(arguments),
                 num_value_channels=arguments.num_value_channels,
                 value_fc_size=arguments.value_fc_size,
@@ -1077,7 +1094,9 @@ def parse_arguments() -> Arguments:
         raise ValueError('Policy bottleneck rank must be nonnegative; zero removes the bottleneck.')
     if min(arguments.heads, arguments.feedforward, arguments.policy_key_size) <= 0:
         raise ValueError('Head count, feedforward size and policy key size must be positive.')
-    if arguments.network_kind is NetworkKind.ATTENTION and arguments.hidden_size % arguments.heads:
+    if arguments.network_kind in (NetworkKind.ATTENTION, NetworkKind.LC0_ATTENTION) and (
+        arguments.hidden_size % arguments.heads
+    ):
         raise ValueError(f'An embedding size of {arguments.hidden_size} is not divisible by {arguments.heads} heads.')
     # The from-to head reads the trunk output as 64 square tokens, which a convolutional trunk also
     # produces, so it is allowed on both: separating the head's contribution from the trunk's needs it.
