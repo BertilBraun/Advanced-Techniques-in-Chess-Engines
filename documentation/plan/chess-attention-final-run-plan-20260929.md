@@ -2,7 +2,7 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `895c540a6cba7f1e240f5fb1a1896214ee6cecf251d33d7e463d19e7f700f647`). Not started;
+(`experiment_configuration_sha256` `457ae3a5774de3cf72bb5e322013d42d20c7b7840bdca103be71be246973d0cf`). Not started;
 the node is provisioned and the pre-start checks are below.
 
 ## Why this run

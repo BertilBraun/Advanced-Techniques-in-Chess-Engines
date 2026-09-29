@@ -83,6 +83,9 @@ training:
       self_play_backpressure_quanta: 5
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention.stop
+    # psutil reports the host's 125 GiB, and the container is killed at its 120.7 GiB limit (96.5%); 95% stops
+    # the run cleanly about 1.8 GiB before that.
+    maximum_host_ram_percent: 95.0
   progressive_model_sizing:
     kind: progressive
     models:
@@ -133,6 +136,9 @@ training:
         rounding: none
 
 evaluation:
+  # Each concurrent evaluation job holds about 4.5 GiB; three keep the 120 GiB node below its limit next to
+  # self-play and training (the smoke peaked at 103 GiB with three).
+  maximum_concurrent_jobs: 3
   # Lists replace wholesale. The final recipe's list lacks the progressive-candidate match its promotion gate
   # names, so the gate would never see a result and no candidate would ever be promoted; V98 carried it, and it
   # is restored here at the searched ladder's budget.
