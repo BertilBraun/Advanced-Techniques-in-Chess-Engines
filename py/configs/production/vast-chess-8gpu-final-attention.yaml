@@ -28,17 +28,31 @@ training:
   trainer:
     quantization:
       kind: disabled
-    # AlphaZero's 0.2 at batch 4,096 is 0.1 at our 2,048 under linear scaling. It then drops tenfold three
-    # times, as AlphaZero did, ending at a thousandth of the peak where the final recipe held a 0.01 floor.
+    # AlphaZero's 0.2 at batch 4,096 is 0.1 at our 2,048 under linear scaling. Held through the early climb,
+    # then a constant ratio per generation down to 1/200 of the peak by generation 1000, where the final recipe
+    # held a 0.01 floor. A smooth decay rather than AlphaZero's three tenfold steps; KataGo's own schedule is
+    # nine to fifteen smaller steps with a 16x to 240x total decay, Lc0's example 40x, AlphaZero's 1000x.
     learning_rate:
-      kind: staged
-      stages:
-      - {start_generation: 0, value: 0.1}
-      - {start_generation: 300, value: 0.01}
-      - {start_generation: 600, value: 0.001}
-      - {start_generation: 900, value: 0.0001}
+      kind: geometric
+      start_generation: 100
+      end_generation: 1000
+      start_value: 0.1
+      end_value: 0.0005
+      rounding: none
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
+  lifecycle:
+    # A generation every 402 optimizer steps instead of 500, and each position presented three times instead of
+    # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model
+    # nearer the data it trains on. 402 rather than 400 because reuse 3 needs a whole number of new positions per
+    # generation (274,432). Generation-keyed schedules are deliberately left as they are, so their boundaries
+    # arrive after 0.8x the optimizer steps.
+    credit:
+      replay_ratio: '3'
+      optimizer_steps_per_quantum: 402
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 6
+      self_play_backpressure_quanta: 5
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention.stop
   progressive_model_sizing:
@@ -70,22 +84,30 @@ training:
       kind: staged_elo_plateau
       stages:
       - candidate_model_id: chess-lc0-attention-10x192
-        minimum_worthwhile_gain_per_hour: 50.0
+        minimum_worthwhile_gain_per_hour: 20.0
+    # The candidate trains from scratch on the shared replay, on its own generation clock, and is promoted
+    # after two consecutive progressive-candidate matches scoring at least 0.48 against the active model.
+    # Once promoted it follows the main learning rate at the run's generation.
     promotion:
       candidate_match_gate:
         definition_id: progressive-candidate
         minimum_score: 0.48
         consecutive_evaluations: 2
       candidate_step_multiplier: 1.5
+      # V98's floor: a catch-up rate that ends at the active model's level surrenders the candidate's advantage
+      # while it still has to overtake.
       candidate_catchup_learning_rate:
         kind: linear
         start_generation: 0
         end_generation: 600
         start_value: 0.1
-        end_value: 0.01
+        end_value: 0.03
         rounding: none
 
 evaluation:
+  # Lists replace wholesale. The final recipe's list lacks the progressive-candidate match its promotion gate
+  # names, so the gate would never see a result and no candidate would ever be promoted; V98 carried it, and it
+  # is restored here at the searched ladder's budget.
   definitions:
   - opening_pair_count: 50
     maximum_game_plies: 300
@@ -99,7 +121,7 @@ evaluation:
     advance_score_threshold: 0.7
     bracket_rungs: 3
     engine_executable_path: engines/stockfish-13
-    search:
+    search: &searched_ladder_search
       searches_per_move: 64
       parallel_searches: 1
       exploration_constant: auto
@@ -143,6 +165,13 @@ evaluation:
           - {kind: float, model_id: chess-lc0-attention-10x192, engine_path: /workspace/tensorrt/lc0-attention-10x192-fp16-b64.engine}
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: progressive_candidate
+    definition_id: progressive-candidate
+    search: *searched_ladder_search
 
 chess:
   self_play:
