@@ -50,6 +50,7 @@ from src.training.quantization.runtime import (  # noqa: E402
     recalibrate_qat,
     restore_qat_model,
     save_qat_state,
+    specialize_float_onnx_batch,
     specialize_qat_onnx_batch,
 )
 from src.training.trainer.rank import _fixed_qat_probe_position_count  # noqa: E402
@@ -161,6 +162,49 @@ def test_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Path) 
     assert constants['shape'].tolist() == [64, 4]
     assert constants['scatter_data'].shape == (64, 4)
     assert constants['unrelated'].tolist() == [320]
+
+
+def _fixed_batch_expand_onnx(path: Path, batch_size: int) -> None:
+    def constant(name: str, value: np.ndarray) -> onnx.NodeProto:
+        return helper.make_node('Constant', (), (name,), value=numpy_helper.from_array(value))
+
+    # The pattern torch.expand(batch_size, -1) exports: the target shape reaches Expand through Equal and Where.
+    nodes = (
+        constant('shape', np.array([batch_size, 4], dtype=np.int64)),
+        helper.make_node('Reshape', ('states', 'shape'), ('reshaped',)),
+        constant('code', np.ones((1, 4), dtype=np.float32)),
+        constant('expand_shape', np.array([batch_size, -1], dtype=np.int64)),
+        constant('minus_ones', np.array([-1, -1], dtype=np.int64)),
+        constant('ones', np.array([1, 1], dtype=np.int64)),
+        helper.make_node('Equal', ('expand_shape', 'minus_ones'), ('keep',)),
+        helper.make_node('Where', ('keep', 'ones', 'expand_shape'), ('target',)),
+        helper.make_node('Expand', ('code', 'target'), ('expanded',)),
+        helper.make_node('Add', ('reshaped', 'expanded'), ('updates',)),
+        constant('scatter_data', np.zeros((batch_size, 4), dtype=np.float32)),
+        constant('indices', np.zeros((batch_size, 4), dtype=np.int64)),
+        helper.make_node('ScatterElements', ('scatter_data', 'indices', 'updates'), ('policy_logits',), axis=1),
+    )
+    graph = helper.make_graph(
+        nodes,
+        'fixed-batch-expand',
+        (helper.make_tensor_value_info('states', TensorProto.FLOAT, (batch_size, 4)),),
+        (helper.make_tensor_value_info('policy_logits', TensorProto.FLOAT, (batch_size, 4)),),
+    )
+    onnx.save(helper.make_model(graph, opset_imports=(helper.make_opsetid('', 20),)), path)
+
+
+def test_float_onnx_batch_specialization_resizes_expanded_batch_shapes(tmp_path: Path) -> None:
+    source_path = tmp_path / 'model.fp16.onnx'
+    _fixed_batch_expand_onnx(source_path, 320)
+
+    specialize_float_onnx_batch(source_path, tmp_path / 'specialized.onnx', 64)
+
+    constants = {
+        node.output[0]: numpy_helper.to_array(node.attribute[0].t)
+        for node in onnx.load(tmp_path / 'specialized.onnx').graph.node
+        if node.op_type == 'Constant'
+    }
+    assert constants['expand_shape'].tolist() == [64, -1]
 
 
 def test_qat_onnx_batch_specialization_rejects_enlargement(tmp_path: Path) -> None:

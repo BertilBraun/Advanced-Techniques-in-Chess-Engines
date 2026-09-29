@@ -1,0 +1,11 @@
+# The attention smoke again after batch specialization learned expanded shapes.
+extends: vast-chess-attention-smoke.yaml
+
+run:
+  run_name: vast-chess-attention-smoke-v5
+  tensorboard_run_directory: vast-chess-attention-smoke-v5
+
+training:
+  save_path: py/training_data/validation/vast-chess-attention-smoke-v5
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-attention-smoke-v5.stop

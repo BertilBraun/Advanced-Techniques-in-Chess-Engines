@@ -35,6 +35,9 @@ from src.util.hashing import file_sha256
 from torch import Tensor, nn
 
 CalibrationLoop = Callable[[nn.Module], None]
+BATCH_LEADING_SHAPE_INPUTS = frozenset(
+    {('Reshape', 1), ('Expand', 1), ('Equal', 0), ('Equal', 1), ('Where', 1), ('Where', 2)}
+)
 
 
 class QatOnnxArtifact(FrozenModel):
@@ -377,7 +380,11 @@ def _specialize_onnx_batch(source_path: Path, destination_path: Path, batch_size
             continue
         uses = consumers.get(node.output[0], [])
         value = onnx.numpy_helper.to_array(value_attribute.t)
-        if uses and all(consumer.op_type == 'Reshape' and input_index == 1 for consumer, input_index in uses):
+        # torch.expand exports its target shape through Equal and Where into Expand, so those shapes lead with
+        # the batch as well.
+        if uses and all(
+            (consumer.op_type, input_index) in BATCH_LEADING_SHAPE_INPUTS for consumer, input_index in uses
+        ):
             if value.ndim == 1 and value.size > 0 and value[0] == source_batch_size:
                 specialized_shape = value.copy()
                 specialized_shape[0] = batch_size
