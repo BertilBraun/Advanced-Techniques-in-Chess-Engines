@@ -9,6 +9,7 @@ from src.util.generation_schedule import (
     GeometricSchedule,
     IntegerGenerationSchedule,
     LinearSchedule,
+    PowerSchedule,
     ScheduleRounding,
     StagedSchedule,
 )
@@ -244,3 +245,48 @@ def test_float_linear_schedule_rejects_integer_rounding() -> None:
 def test_schedule_evaluation_rejects_negative_generation(generation: int) -> None:
     with pytest.raises(ValueError, match='nonnegative'):
         ConstantSchedule[int](value=1).value_at(generation)
+
+
+def test_square_root_power_schedule_covers_most_of_its_range_early() -> None:
+    schedule = PowerSchedule[float](
+        start_generation=0, end_generation=100, start_value=0.0, end_value=1.0, exponent=0.5, rounding='none'
+    )
+
+    assert tuple(schedule.value_at(generation) for generation in (0, 1, 25, 100, 200)) == pytest.approx(
+        (0.0, 0.1, 0.5, 1.0, 1.0)
+    )
+
+
+def test_power_schedule_with_exponent_one_matches_linear() -> None:
+    endpoints = dict(start_generation=10, end_generation=50, start_value=2.0, end_value=0.5, rounding='none')
+    power = PowerSchedule[float](exponent=1.0, **endpoints)
+    linear = LinearSchedule[float](**endpoints)
+
+    assert [power.value_at(generation) for generation in range(60)] == pytest.approx(
+        [linear.value_at(generation) for generation in range(60)]
+    )
+
+
+def test_integer_power_schedule_rounds() -> None:
+    schedule = PowerSchedule[int](
+        start_generation=0, end_generation=4, start_value=100, end_value=300, exponent=0.5, rounding='nearest'
+    )
+
+    assert tuple(schedule.value_at(generation) for generation in range(5)) == (100, 200, 241, 273, 300)
+
+
+def test_power_schedule_parses_through_the_integer_discriminator() -> None:
+    schedule = TypeAdapter(IntegerGenerationSchedule).validate_python(
+        {
+            'kind': 'power',
+            'start_generation': 0,
+            'end_generation': 1000,
+            'start_value': 600_000,
+            'end_value': 20_000_000,
+            'exponent': 0.5,
+            'rounding': 'nearest',
+        }
+    )
+
+    assert isinstance(schedule, PowerSchedule)
+    assert schedule.value_at(100) == 6_734_819

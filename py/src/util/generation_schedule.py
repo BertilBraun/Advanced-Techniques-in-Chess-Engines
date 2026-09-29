@@ -146,11 +146,58 @@ class GeometricSchedule(FrozenModel, Generic[NumericScheduleValueT]):
                 return math.ceil(interpolated)
 
 
+class PowerSchedule(FrozenModel, Generic[NumericScheduleValueT]):
+    """Interpolates along progress ** exponent; 0.5 grows like a square root, fast early and slower later."""
+
+    kind: Literal['power'] = 'power'
+    start_generation: int = Field(ge=0)
+    end_generation: int = Field(ge=0)
+    start_value: NumericScheduleValueT
+    end_value: NumericScheduleValueT
+    exponent: float = Field(gt=0.0)
+    rounding: ScheduleRounding
+
+    @model_validator(mode='after')
+    def validate_interpolation(self) -> PowerSchedule[NumericScheduleValueT]:
+        if self.end_generation <= self.start_generation:
+            raise ValueError('Power schedule end generation must be greater than its start generation.')
+        integer_values = isinstance(self.start_value, int) and isinstance(self.end_value, int)
+        if integer_values and self.rounding is ScheduleRounding.NONE:
+            raise ValueError('Integer power schedules require floor, nearest, or ceiling rounding.')
+        if not integer_values and self.rounding is not ScheduleRounding.NONE:
+            raise ValueError('Float power schedules require rounding mode none.')
+        return self
+
+    def value_at(self, model_generation: int) -> NumericScheduleValueT:
+        _validate_generation(model_generation)
+        if model_generation <= self.start_generation:
+            return self.start_value
+        if model_generation >= self.end_generation:
+            return self.end_value
+        progress = (model_generation - self.start_generation) / (self.end_generation - self.start_generation)
+        interpolated = float(self.start_value) + (float(self.end_value) - float(self.start_value)) * (
+            progress**self.exponent
+        )
+        match self.rounding:
+            case ScheduleRounding.NONE:
+                return interpolated
+            case ScheduleRounding.FLOOR:
+                return math.floor(interpolated)
+            case ScheduleRounding.NEAREST:
+                return math.floor(interpolated + 0.5) if interpolated >= 0.0 else math.ceil(interpolated - 0.5)
+            case ScheduleRounding.CEILING:
+                return math.ceil(interpolated)
+
+
 FloatScheduleModel: TypeAlias = (
-    ConstantSchedule[float] | StagedSchedule[float] | LinearSchedule[float] | GeometricSchedule[float]
+    ConstantSchedule[float]
+    | StagedSchedule[float]
+    | LinearSchedule[float]
+    | GeometricSchedule[float]
+    | PowerSchedule[float]
 )
 IntegerScheduleModel: TypeAlias = (
-    ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int] | GeometricSchedule[int]
+    ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int] | GeometricSchedule[int] | PowerSchedule[int]
 )
 DecimalScheduleModel: TypeAlias = ConstantSchedule[Decimal] | StagedSchedule[Decimal]
 
@@ -211,7 +258,9 @@ def defined_schedule_values(
     | LinearSchedule[int]
     | LinearSchedule[float]
     | GeometricSchedule[int]
-    | GeometricSchedule[float],
+    | GeometricSchedule[float]
+    | PowerSchedule[int]
+    | PowerSchedule[float],
 ) -> tuple[ScheduleValueT | int | float, ...]:
     match schedule:
         case ConstantSchedule(value=value):
@@ -222,6 +271,8 @@ def defined_schedule_values(
             return (start_value, end_value)
         case GeometricSchedule(start_value=start_value, end_value=end_value):
             return (start_value, end_value)
+        case PowerSchedule(start_value=start_value, end_value=end_value):
+            return (start_value, end_value)
 
 
 def schedule_change_generations(
@@ -230,7 +281,9 @@ def schedule_change_generations(
     | LinearSchedule[int]
     | LinearSchedule[float]
     | GeometricSchedule[int]
-    | GeometricSchedule[float],
+    | GeometricSchedule[float]
+    | PowerSchedule[int]
+    | PowerSchedule[float],
 ) -> tuple[int, ...]:
     match schedule:
         case ConstantSchedule():
@@ -240,4 +293,6 @@ def schedule_change_generations(
         case LinearSchedule(start_generation=start_generation, end_generation=end_generation):
             return (0, *range(start_generation, end_generation + 1))
         case GeometricSchedule(start_generation=start_generation, end_generation=end_generation):
+            return (0, *range(start_generation, end_generation + 1))
+        case PowerSchedule(start_generation=start_generation, end_generation=end_generation):
             return (0, *range(start_generation, end_generation + 1))
