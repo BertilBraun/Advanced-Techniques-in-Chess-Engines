@@ -13,11 +13,9 @@
 #   same factor as the convolutional 12x128 -> 14x160;
 # - INT8 QAT off: it is defined only for post-activation convolutional models, so both stages serve TensorRT
 #   float16 engines (the attention network gains only 1.12x from weight-only INT8 anyway);
-# - AdamW instead of SGD: every attention network trained in this project trained with AdamW, and a post-norm
-#   transformer at an SGD rate of 0.2 is untested;
-# - a learning rate that anneals twenty-fold to 5e-5 instead of holding a floor: every distillation run gained
-#   most of its strength while its rate fell, and the convolutional lineage sat on its 0.01 floor for 130+
-#   generations while the ladder was flat. Lc0 ends at 1/40 of its peak.
+# - SGD as AlphaZero, KataGo and Lc0 train, at AlphaZero's rate scaled to our batch, with tenfold drops instead
+#   of a floor: every distillation run gained most of its strength while its rate fell, and the convolutional
+#   lineage sat on its 0.01 floor for 130+ generations while the ladder was flat.
 # Everything else - search, replay, objective, auxiliary targets, evaluation - is the final recipe unchanged.
 extends: chess-final-config.yaml
 
@@ -28,22 +26,17 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-final-attention
   trainer:
-    optimizer:
-      kind: adamw
-      weight_decay: 0.0001
-      amsgrad: true
-      epsilon: 0.00001
     quantization:
       kind: disabled
-    # Held at 1e-3 through the fast early climb, then a constant ratio per generation down to 5e-5 by
-    # generation 1000, about where the convolutional final run ended.
+    # AlphaZero's 0.2 at batch 4,096 is 0.1 at our 2,048 under linear scaling. It then drops tenfold three
+    # times, as AlphaZero did, ending at a thousandth of the peak where the final recipe held a 0.01 floor.
     learning_rate:
-      kind: geometric
-      start_generation: 100
-      end_generation: 1000
-      start_value: 0.001
-      end_value: 0.00005
-      rounding: none
+      kind: staged
+      stages:
+      - {start_generation: 0, value: 0.1}
+      - {start_generation: 300, value: 0.01}
+      - {start_generation: 600, value: 0.001}
+      - {start_generation: 900, value: 0.0001}
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
   limits:
@@ -84,13 +77,12 @@ training:
         minimum_score: 0.48
         consecutive_evaluations: 2
       candidate_step_multiplier: 1.5
-      # The final recipe's 0.1 -> 0.01 in SGD terms, restated for AdamW on the candidate's own clock.
       candidate_catchup_learning_rate:
-        kind: geometric
+        kind: linear
         start_generation: 0
         end_generation: 600
-        start_value: 0.001
-        end_value: 0.0001
+        start_value: 0.1
+        end_value: 0.01
         rounding: none
 
 evaluation:
