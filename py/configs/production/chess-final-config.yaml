@@ -343,7 +343,7 @@ evaluation:
     advance_score_threshold: 0.7
     bracket_rungs: 3
     engine_executable_path: engines/stockfish-13
-    search:
+    search: &searched_ladder_search
       searches_per_move: 64
       parallel_searches: 1
       exploration_constant: auto
@@ -415,6 +415,15 @@ evaluation:
             engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
+  # The match the promotion gate reads: without it the gate never sees a result and no candidate is ever
+  # promoted. The lineage that ran carried it from V98; at the searched ladder's budget, 100 games measured 339 s.
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: progressive_candidate
+    definition_id: progressive-candidate
+    search: *searched_ladder_search
 game: chess
 chess:
   self_play:
