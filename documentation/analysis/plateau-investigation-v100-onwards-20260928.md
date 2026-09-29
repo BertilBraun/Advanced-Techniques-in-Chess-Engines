@@ -137,14 +137,14 @@ On branch `worktree-lc0-teacher`:
 ## Next experiment
 
 [`vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(sha256 `d039bf49777f4be12112feae0cbb03ac4d1ce4bde92f549e6d507df46db7fb61`) is the final recipe with:
+(sha256 `52f23a9951a5678c5d600fcef2f2ffcba0d52be96925cfb2e93692b914806485`) is the final recipe with:
 - a two-stage ladder of T1-shaped networks, 8x160 (207M MAC per position) then 10x192 (366M); the second size is
   to be settled by a throughput comparison on the rented node (12x192 at 437M and 10x224 at 494M are the
   candidates);
 - float16 TensorRT, INT8 QAT off;
 - SGD as in the final recipe, at AlphaZero's 0.2 at batch 4,096 scaled to 0.1 at 2,048, held to generation 100
-  and then decayed geometrically to 0.0005 by generation 1000 instead of holding a 0.01 floor;
-- a generation every 402 optimizer steps with replay reuse 3 (was 500 and 4), generation-keyed schedules left as
+  and then decayed geometrically to 0.002 (50x) by generation 1000 instead of holding a 0.01 floor;
+- a generation every 360 optimizer steps with replay reuse 3 (was 500 and 4), generation-keyed schedules left as
   they are;
 - the candidate trained from scratch and started at 20 Elo/h, with V98's catch-up floor (0.1 -> 0.03), and the
   progressive-candidate promotion match restored: the final recipe's evaluation list lacks it, so as written

@@ -29,27 +29,27 @@ training:
     quantization:
       kind: disabled
     # AlphaZero's 0.2 at batch 4,096 is 0.1 at our 2,048 under linear scaling. Held through the early climb,
-    # then a constant ratio per generation down to 1/200 of the peak by generation 1000, where the final recipe
-    # held a 0.01 floor. A smooth decay rather than AlphaZero's three tenfold steps; KataGo's own schedule is
-    # nine to fifteen smaller steps with a 16x to 240x total decay, Lc0's example 40x, AlphaZero's 1000x.
+    # then a constant ratio per generation down to 1/50 of the peak by generation 1000, where the final recipe
+    # held a 0.01 floor. A smooth decay rather than AlphaZero's three tenfold steps; at our batch KataGo's
+    # automatic schedules run 0.49 -> 0.031 or 0.74 -> 0.0031, Lc0's example decays 40x, AlphaZero's 1000x.
     learning_rate:
       kind: geometric
       start_generation: 100
       end_generation: 1000
       start_value: 0.1
-      end_value: 0.0005
+      end_value: 0.002
       rounding: none
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
   lifecycle:
-    # A generation every 402 optimizer steps instead of 500, and each position presented three times instead of
+    # A generation every 360 optimizer steps instead of 500, and each position presented three times instead of
     # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model
-    # nearer the data it trains on. 402 rather than 400 because reuse 3 needs a whole number of new positions per
-    # generation (274,432). Generation-keyed schedules are deliberately left as they are, so their boundaries
-    # arrive after 0.8x the optimizer steps.
+    # nearer the data it trains on. 245,760 new positions per generation against the final recipe's 256,000.
+    # Generation-keyed schedules are deliberately left as they are, so their boundaries arrive after 0.72x the
+    # optimizer steps.
     credit:
       replay_ratio: '3'
-      optimizer_steps_per_quantum: 402
+      optimizer_steps_per_quantum: 360
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
       self_play_backpressure_quanta: 5
