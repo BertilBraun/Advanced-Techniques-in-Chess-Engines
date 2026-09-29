@@ -2,7 +2,7 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `ede663f847376bf221b45827fae26741554e217f4a9cdb3868df99d73c70cfb0`). Not started;
+(`experiment_configuration_sha256` `9137a456d1c02bbbffb207befa728f0acf41a827f5dccdad45f9b5741599ca36`). Not started;
 waiting for a node.
 
 ## Why this run
@@ -53,6 +53,8 @@ The final recipe (`chess-final-config.yaml`) with only these changes:
 | Optimizer | SGD, Nesterov 0.9, weight decay 1e-4 | same | as AlphaZero, KataGo and Lc0 |
 | Learning rate | linear 0.2 -> 0.01 floor | 0.1 to generation 100, then geometric to 0.002 by generation 1000 | AlphaZero's 0.2 at batch 4,096 scaled to 2,048; annealed 50x, near KataGo's automatic schedules at our batch |
 | Generation | 500 steps, replay reuse 4 | 360 steps, reuse 3 | fewer positions an hour from the slower network; 245,760 new positions per generation against 256,000; generation-keyed schedules unchanged, so they arrive after 0.72x the steps |
+| Value discount | 0.998 per remaining ply on targets, 0.99 per ply in search | none in either | AlphaZero, KataGo and Lc0 do not discount; evaluation search changes with it |
+| Replay window | 600K -> 20M rows in ten stages by generation 1000 | the same endpoints along a square root | smooth growth; up to 4.9M more rows just before generation 400, where the stages held 8M for 300 generations |
 | Candidate | — | from scratch, starts at 20 Elo/h, catch-up 0.1 -> 0.03 (V98), promoted after two consecutive candidate matches at 0.48 or better | |
 | Dependency lock | `bffc5dad...` | same, inherited | the lock with the lc0 and publication extras and ModelOpt's ONNX dependencies; the run checks it at start |
 
@@ -93,6 +95,9 @@ FP8 can be tested. Needs at least 80 effective CPUs and 200 GiB RAM **as granted
 
 ## Risks
 
+- **The ladder is not measured under the baseline's search.** Evaluation matches inherit the self-play search
+  discount, so removing it changes the yardstick's search as well as the network. The effect of a 0.99 backup
+  discount at 64 searches is unmeasured; the comparison with the convolutional curve carries it.
 - **SGD on a post-norm transformer is untested here**; every attention network in this project trained with AdamW.
   The 1,000-step warm-up and gradient clipping at 1.0 mitigate it. Watch the first 20 generations' losses; AdamW is
   the fallback.

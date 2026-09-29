@@ -13,9 +13,11 @@
 #   same factor as the convolutional 12x128 -> 14x160;
 # - INT8 QAT off: it is defined only for post-activation convolutional models, so both stages serve TensorRT
 #   float16 engines (the attention network gains only 1.12x from weight-only INT8 anyway);
-# - SGD as AlphaZero, KataGo and Lc0 train, at AlphaZero's rate scaled to our batch, with tenfold drops instead
-#   of a floor: every distillation run gained most of its strength while its rate fell, and the convolutional
-#   lineage sat on its 0.01 floor for 130+ generations while the ladder was flat.
+# - SGD as AlphaZero, KataGo and Lc0 train, at AlphaZero's rate scaled to our batch, annealed smoothly instead
+#   of held at a floor: every distillation run gained most of its strength while its rate fell, and the
+#   convolutional lineage sat on its 0.01 floor for 130+ generations while the ladder was flat;
+# - no value discounting in search or in the training targets, as AlphaZero, KataGo and Lc0;
+# - the replay window grows along a square root between the final recipe's endpoints instead of in ten steps.
 # Everything else - search, replay, objective, auxiliary targets, evaluation - is the final recipe unchanged.
 extends: chess-final-config.yaml
 
@@ -42,6 +44,19 @@ training:
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
   lifecycle:
+    # The final recipe's 600,000 -> 20,000,000 rows by generation 1000, along a square root rather than ten
+    # stages. Against the stages it keeps every game a few generations longer at the start, holds up to 1.3M
+    # fewer rows around generation 100, and up to 4.9M more just before 400, where the stages sat at 8M for
+    # 300 generations.
+    replay:
+      capacity:
+        kind: power
+        start_generation: 0
+        end_generation: 1000
+        start_value: 600000
+        end_value: 20000000
+        exponent: 0.5
+        rounding: nearest
     # A generation every 360 optimizer steps instead of 500, and each position presented three times instead of
     # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model
     # nearer the data it trains on. 245,760 new positions per generation against the final recipe's 256,000.
@@ -174,6 +189,11 @@ evaluation:
     search: *searched_ladder_search
 
 chess:
+  # Undiscounted: the final recipe shrank targets by 0.998 per remaining ply and search backups by 0.99 per ply.
+  # Evaluation matches use the search setting too, so the ladder is not measured under the baseline's search.
+  objective:
+    value_discount_per_ply: 1.0
+    search_value_discount_per_ply: 1.0
   self_play:
     inference:
       backend:
