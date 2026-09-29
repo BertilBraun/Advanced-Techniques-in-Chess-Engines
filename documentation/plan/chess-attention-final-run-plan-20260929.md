@@ -2,7 +2,7 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `8ba24d1b27945751c8d6377dc2ae621a1238487d51cf041e43ab4df9207743b0`). Not started;
+(`experiment_configuration_sha256` `ede663f847376bf221b45827fae26741554e217f4a9cdb3868df99d73c70cfb0`). Not started;
 waiting for a node.
 
 ## Why this run
@@ -54,7 +54,7 @@ The final recipe (`chess-final-config.yaml`) with only these changes:
 | Learning rate | linear 0.2 -> 0.01 floor | 0.1 to generation 100, then geometric to 0.002 by generation 1000 | AlphaZero's 0.2 at batch 4,096 scaled to 2,048; annealed 50x, near KataGo's automatic schedules at our batch |
 | Generation | 500 steps, replay reuse 4 | 360 steps, reuse 3 | fewer positions an hour from the slower network; 245,760 new positions per generation against 256,000; generation-keyed schedules unchanged, so they arrive after 0.72x the steps |
 | Candidate | — | from scratch, starts at 20 Elo/h, catch-up 0.1 -> 0.03 (V98), promoted after two consecutive candidate matches at 0.48 or better | |
-| Dependency lock | `a09c3c96...` | `1369b578...` (adds the lc0 and publication extras) | the run checks the lock at start |
+| Dependency lock | `bffc5dad...` | same, inherited | the lock with the lc0 and publication extras and ModelOpt's ONNX dependencies; the run checks it at start |
 
 The medium model trains from scratch on the shared replay, on its own generation clock, with 1.5x the active
 model's steps. After promotion it follows the main learning rate at the run's generation.
@@ -73,13 +73,17 @@ FP8 can be tested. Needs at least 80 effective CPUs and 200 GiB RAM **as granted
 1. Provision with `deployment/setup_remote.sh`; record the cgroup CPU and memory grant and confirm the native
    extension has TensorRT.
 2. **Throughput matrix**, forward-only engines at batch 320 and native self-play at the live settings for the
-   leaders: 8x160, 10x192, 12x192 and 10x224 in float16 and FP8, against the 14x160 CNN in INT8. Also the CNN in
-   the default build against its previous throughput: this branch maintains a board-placement history on every
-   move in every build, which has not been measured for search speed.
-3. **FP8 fidelity** on the trained 10x192 (`evidence-lc0arch-and-throughput.tgz`): policy KL, top-move agreement and
-   WDL difference against float16 on evaluation positions; a 100-game FP8-against-float16 match at 64 searches if
-   those are close. FP8 is worth building into production (a new template kind, per-publication scale
-   calibration and refit) only at 1.2x or better with no measurable strength loss.
+   leaders: 8x160, 10x192, 12x192 and 10x224 in float16 and FP8, against the 14x160 CNN in INT8. The standard
+   build no longer records Lc0's board history (it is behind `-DCHESS_LC0_HISTORY=ON`), so no search-speed check
+   of it is needed.
+3. **FP8 fidelity** on the trained 10x192 (`evidence-lc0arch-and-throughput.tgz`) with
+   `tools/compare_tensorrt_low_precision.py --precision fp8 --precision int8`: float16, FP8 and weight-only INT8
+   engines from one TorchScript model, forward throughput at batch 320, and policy KL, top-move agreement and WDL
+   difference against float16 on evaluation positions. Only activation-by-weight products are quantized, so the
+   fused attention kernel survives; the heads stay float16. Its FP8 path has not yet run on hardware. A 100-game
+   FP8-against-float16 match at 64 searches follows if the metrics are close. FP8 is worth building into
+   production (a new template kind, per-publication scale calibration and refit) only at 1.2x or better with no
+   measurable strength loss.
 4. **Choose the medium size and precision**; update the configuration and record its new hash.
 5. **Engines:** build the four templates (both sizes at batch 320 and 64) with
    `tools/build_tensorrt_refit_template.py` and test a refit with different weights; the attention engines are
