@@ -22,9 +22,6 @@ extends: chess-final-config.yaml
 run:
   run_name: vast-chess-8gpu-final-attention
   tensorboard_run_directory: vast-chess-8gpu-final-attention
-  environment:
-    # The lock with both the lc0 and publication extras; a run refuses to start on any other.
-    dependency_lock_sha256: 1369b5785315bbb6f9b7d0f979e42fa2200de95cefc83092a09f4011244eaf69
 
 training:
   save_path: py/training_data/production/vast-chess-8gpu-final-attention
