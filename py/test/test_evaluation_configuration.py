@@ -20,6 +20,7 @@ from src.evaluation.contracts import (
     RandomOpponent,
     StockfishFixedNodesOpponent,
 )
+from src.evaluation.match import _definition_search
 from src.evaluation.process import PROJECT_ROOT, stockfish_fixed_nodes_executable_path
 from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
@@ -79,18 +80,16 @@ def test_resolved_match_opponent_must_match_its_definition() -> None:
         )
 
 
-def test_progressive_candidate_match_accepts_the_active_checkpoint_as_opponent() -> None:
+def _progressive_candidate_job() -> MatchEvaluationJob:
     experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
-    stockfish_definition = experiment.evaluation.definitions[-1]
     definition = ProgressiveCandidateEvaluationDefinition(
         kind='progressive_candidate',
         definition_id='progressive-candidate',
         opening_pair_count=1,
         maximum_game_plies=40,
-        search=stockfish_definition.search,
+        search=experiment.evaluation.definitions[-1].search,
     )
-
-    job = MatchEvaluationJob(
+    return MatchEvaluationJob(
         kind='match',
         job_id='candidate',
         definition=definition,
@@ -103,7 +102,15 @@ def test_progressive_candidate_match_accepts_the_active_checkpoint_as_opponent()
         result_path=Path('result.json'),
     )
 
-    assert job.opponent.kind == 'checkpoint'
+
+def test_progressive_candidate_match_accepts_the_active_checkpoint_as_opponent() -> None:
+    assert _progressive_candidate_job().opponent.kind == 'checkpoint'
+
+
+def test_progressive_candidate_match_plays_with_its_own_search() -> None:
+    job = _progressive_candidate_job()
+
+    assert _definition_search(job) == job.definition.search
 
 
 def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opponent(tmp_path: Path) -> None:

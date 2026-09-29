@@ -11,6 +11,7 @@ from src.evaluation.configuration import (
     KataGoEvaluationDefinition,
     PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
+    ProgressiveCandidateEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
     StockfishAdaptiveNodesEvaluationDefinition,
@@ -110,6 +111,8 @@ def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration
         case PreviousCheckpointEvaluationDefinition(search=search):
             return search
         case ReferenceCheckpointEvaluationDefinition(search=search):
+            return search
+        case ProgressiveCandidateEvaluationDefinition(search=search):
             return search
         case StockfishEvaluationDefinition(search=search):
             return search
