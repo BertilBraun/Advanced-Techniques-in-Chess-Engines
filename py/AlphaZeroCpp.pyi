@@ -7,7 +7,6 @@ from __future__ import annotations
 import typing
 
 import numpy
-import torch
 
 __all__: list[str] = [
     'ActionAnalysisCandidate',
@@ -19,6 +18,7 @@ __all__: list[str] = [
     'BatchedSearchParameters',
     'CHESS_ACTION_SIZE',
     'CHESS_INPUT_CHANNEL_COUNT',
+    'CHESS_LC0_HISTORY',
     'CandidateAnalysis',
     'ChessAnalysis',
     'ChessAnalysisSession',
@@ -58,10 +58,10 @@ __all__: list[str] = [
     'InferenceConfiguration',
     'InferenceDevice',
     'InferenceDimensions',
-    'InferenceRunner',
     'InferenceExecutionOptions',
     'InferenceMemoryFormat',
     'InferencePrecision',
+    'InferenceRunner',
     'InferenceStatistics',
     'OutcomeProbabilities',
     'SEARCH_PHASE_TIMING_ENABLED',
@@ -215,10 +215,6 @@ class ChessPosition:
     def action_uci(self, action_id: int) -> str: ...
     def approximate_result_score(self) -> float: ...
     def child(self, action_id: int) -> ChessPosition: ...
-    def lc0_packed_encoding(self) -> bytes:
-        """
-        Lc0's 112-plane input for this position and its recorded history, whichever layout the search uses.
-        """
     def legal_actions(self) -> list[int]: ...
     def packed_encoding(self) -> bytes: ...
     def terminal_value(self) -> float: ...
@@ -1026,25 +1022,6 @@ class InferenceDimensions:
     @property
     def rows(self) -> int: ...
 
-class InferenceRunner:
-    def __init__(
-        self,
-        model_path: str,
-        device: InferenceDevice,
-        device_id: int,
-        maximum_batch_size: int,
-        use_dedicated_cuda_stream: bool,
-        dimensions: InferenceDimensions,
-        execution_options: InferenceExecutionOptions = ...,
-        backend: InferenceBackend = ...,
-    ) -> None: ...
-    def forward(
-        self, encoded_boards: numpy.ndarray[typing.Any, numpy.dtype[numpy.int8]]
-    ) -> tuple[
-        numpy.ndarray[typing.Any, numpy.dtype[numpy.float32]],
-        numpy.ndarray[typing.Any, numpy.dtype[numpy.float32]],
-    ]: ...
-
 class InferenceExecutionOptions:
     cudnn_benchmark: bool
     memory_format: InferenceMemoryFormat
@@ -1118,6 +1095,20 @@ class InferencePrecision:
     def name(self) -> str: ...
     @property
     def value(self) -> int: ...
+
+class InferenceRunner:
+    def __init__(
+        self,
+        model_path: str,
+        device: InferenceDevice,
+        device_id: int,
+        maximum_batch_size: int,
+        use_dedicated_cuda_stream: bool,
+        dimensions: InferenceDimensions,
+        execution_options: InferenceExecutionOptions = ...,
+        backend: InferenceBackend = ...,
+    ) -> None: ...
+    def forward(self, encoded_boards: numpy.ndarray[numpy.int8]) -> tuple: ...
 
 class InferenceStatistics:
     def __init__(self) -> None: ...
@@ -1315,5 +1306,6 @@ def search_parallelism(additional_visits: int) -> int: ...
 
 CHESS_ACTION_SIZE: int = 1880
 CHESS_INPUT_CHANNEL_COUNT: int = 52
+CHESS_LC0_HISTORY: bool = False
 SEARCH_PHASE_TIMING_ENABLED: bool = False
 OutcomeProbabilities = WdlPrediction
