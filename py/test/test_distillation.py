@@ -29,6 +29,13 @@ from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
 from src.training.configuration import AdamWOptimizerConfiguration
+from src.training.network import (
+    DisabledResidualContext,
+    Lc0AttentionNetworkParams,
+    PostActivationResidualBlockConfiguration,
+    ScaledPostActivationResidualBlockConfiguration,
+    ScaledPreActivationResidualBlockConfiguration,
+)
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.util.hashing import file_sha256
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
@@ -47,6 +54,9 @@ from tools.distill_train_student import (
     OptimizerKind,
     PolicyHeadKind,
     ProductionReplayInput,
+    ResidualBlockKind,
+    ResidualContextKind,
+    accumulate_gradients,
     auxiliary_head_layouts,
     close_training_dataset,
     dataset_split,
@@ -76,10 +86,14 @@ STUDENT_ARGUMENTS = Arguments(
     smolgen_generated_size=32,
     num_value_channels=2,
     value_fc_size=48,
+    residual_block_kind=ResidualBlockKind.POST_ACTIVATION,
+    activation_cap=6.0,
+    residual_context_kind=ResidualContextKind.GLOBAL_POOLING,
     optimizer_kind=OptimizerKind.ADAMW,
     floor_fraction=0.1,
     policy_bottleneck_rank=16,
     batch_size=64,
+    gradient_accumulation_steps=1,
     steps=1000,
     learning_rate=0.002,
     learning_rate_schedule=LearningRateSchedule.COSINE,
@@ -94,6 +108,9 @@ STUDENT_ARGUMENTS = Arguments(
     device_ids=(0,),
     random_seed=1,
     generation=0,
+    initial_checkpoint=None,
+    value_anchor_checkpoint=None,
+    architecture_checkpoint=None,
 )
 
 
@@ -467,6 +484,35 @@ def overfit_observation() -> OverfitObservation:
     )
 
 
+def test_two_accumulated_half_batches_give_the_full_batch_gradient() -> None:
+    torch.manual_seed(20260927)
+    records = _synthetic_records(8, seed=9)
+    # The from-to head keeps the network free of batch normalization, whose statistics depend on the batch.
+    architecture = student_architecture(
+        replace(
+            STUDENT_ARGUMENTS,
+            network_kind=NetworkKind.LC0_ATTENTION,
+            layers=1,
+            hidden_size=16,
+            heads=2,
+            policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
+            policy_key_size=16,
+        )
+    )
+    model = create_model(architecture, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    objective = distillation_objective()
+
+    def gradients(micro_batches: tuple[TrainingBatch, ...]) -> list[torch.Tensor]:
+        model.zero_grad(set_to_none=True)
+        accumulate_gradients(model.training_output, objective, micro_batches, torch.device('cpu'))
+        return [parameter.grad.clone() for parameter in model.parameters() if parameter.grad is not None]
+
+    whole = gradients((_batch(records),))
+    halves = gradients((_batch(records[:4]), _batch(records[4:])))
+
+    assert all(torch.allclose(full, split, atol=1e-6) for full, split in zip(whole, halves, strict=True))
+
+
 def test_training_loss_falls_well_below_its_starting_value(overfit_observation: OverfitObservation) -> None:
     assert overfit_observation.final.total < 0.8 * overfit_observation.initial.total
 
@@ -555,6 +601,20 @@ def test_the_cosine_schedule_is_the_default() -> None:
     )
 
     assert learning_rate_at(60, total_steps=100, peak_learning_rate=0.1, warmup_steps=20) == explicit
+
+
+@pytest.mark.parametrize(('step', 'expected'), ((20, 0.082), (60, 0.046), (100, 0.01)))
+def test_the_linear_floor_schedule_falls_linearly_to_its_floor(step: int, expected: float) -> None:
+    rate = learning_rate_at(
+        step,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=10,
+        schedule=LearningRateSchedule.LINEAR_FLOOR,
+        floor_fraction=0.1,
+    )
+
+    assert rate == pytest.approx(expected)
 
 
 @pytest.mark.parametrize('anneal_fraction', (0.1, 0.2, 0.5))
@@ -913,3 +973,67 @@ def test_student_value_head_takes_the_configured_geometry() -> None:
 
     assert architecture.num_value_channels == 32
     assert architecture.value_fc_size == 64
+
+
+@pytest.mark.parametrize(
+    ('kind', 'configuration'),
+    (
+        (ResidualBlockKind.POST_ACTIVATION, PostActivationResidualBlockConfiguration),
+        (ResidualBlockKind.SCALED_POST_ACTIVATION, ScaledPostActivationResidualBlockConfiguration),
+        (ResidualBlockKind.SCALED_PRE_ACTIVATION, ScaledPreActivationResidualBlockConfiguration),
+    ),
+)
+def test_student_residual_block_takes_the_configured_kind(kind: ResidualBlockKind, configuration: type) -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, residual_block_kind=kind))
+
+    assert isinstance(architecture.residual_block, configuration)
+
+
+def test_scaled_student_blocks_scale_each_branch_by_the_inverse_root_of_depth() -> None:
+    architecture = student_architecture(
+        replace(STUDENT_ARGUMENTS, layers=16, residual_block_kind=ResidualBlockKind.SCALED_POST_ACTIVATION)
+    )
+
+    assert architecture.residual_block.branch_scale == pytest.approx(0.25)
+
+
+def test_lc0_attention_student_takes_the_configured_sizes() -> None:
+    architecture = student_architecture(
+        replace(STUDENT_ARGUMENTS, network_kind=NetworkKind.LC0_ATTENTION, layers=10, hidden_size=192, heads=6)
+    )
+
+    assert isinstance(architecture, Lc0AttentionNetworkParams)
+    assert (architecture.num_layers, architecture.embedding_size, architecture.num_heads) == (10, 192, 6)
+
+
+def test_student_residual_context_can_be_disabled() -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, residual_context_kind=ResidualContextKind.DISABLED))
+
+    assert isinstance(architecture.residual_context, DisabledResidualContext)
+
+
+@pytest.mark.parametrize(
+    ('residual_block_kind', 'residual_context_kind'),
+    (
+        (ResidualBlockKind.POST_ACTIVATION, ResidualContextKind.DISABLED),
+        (ResidualBlockKind.SCALED_POST_ACTIVATION, ResidualContextKind.GLOBAL_POOLING),
+        (ResidualBlockKind.SCALED_PRE_ACTIVATION, ResidualContextKind.GLOBAL_POOLING),
+    ),
+)
+def test_every_student_block_variant_builds_and_runs(
+    residual_block_kind: ResidualBlockKind, residual_context_kind: ResidualContextKind
+) -> None:
+    architecture = student_architecture(
+        replace(
+            STUDENT_ARGUMENTS,
+            layers=4,
+            hidden_size=32,
+            residual_block_kind=residual_block_kind,
+            residual_context_kind=residual_context_kind,
+        )
+    )
+    model = create_model(architecture, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    dimensions = CHESS_NETWORK_DIMENSIONS
+    states = torch.zeros((2, dimensions.channels, dimensions.rows, dimensions.columns))
+
+    assert model.training_output(states).policy_logits.shape == (2, dimensions.actions)

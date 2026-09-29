@@ -18,6 +18,7 @@ __all__: list[str] = [
     'BatchedInferenceParameters',
     'BatchedSearchParameters',
     'CHESS_ACTION_SIZE',
+    'CHESS_INPUT_CHANNEL_COUNT',
     'CandidateAnalysis',
     'ChessAnalysis',
     'ChessAnalysisSession',
@@ -214,6 +215,10 @@ class ChessPosition:
     def action_uci(self, action_id: int) -> str: ...
     def approximate_result_score(self) -> float: ...
     def child(self, action_id: int) -> ChessPosition: ...
+    def lc0_packed_encoding(self) -> bytes:
+        """
+        Lc0's 112-plane input for this position and its recorded history, whichever layout the search uses.
+        """
     def legal_actions(self) -> list[int]: ...
     def packed_encoding(self) -> bytes: ...
     def terminal_value(self) -> float: ...
@@ -1309,5 +1314,6 @@ def new_root_with_history(starting_fen: str, moves_uci: list[str], arena_capacit
 def search_parallelism(additional_visits: int) -> int: ...
 
 CHESS_ACTION_SIZE: int = 1880
+CHESS_INPUT_CHANNEL_COUNT: int = 52
 SEARCH_PHASE_TIMING_ENABLED: bool = False
 OutcomeProbabilities = WdlPrediction

@@ -13,12 +13,20 @@ from src.distillation.dataset import (
     MAXIMUM_LEGAL_ACTIONS,
     MAXIMUM_POLICY_ENTRIES,
     DistillationDatasetManifest,
+    DistillationRecordLayout,
     record_dtype,
     write_dataset,
 )
+from src.distillation.lc0_teacher import Lc0Teacher, load_lc0_teacher, sampling_temperature_at
+from src.distillation.stockfish_moves import StockfishMovePool, sample_scored_move
 from src.distillation.teacher import LoadedTeacher, load_teacher, read_network_definition
 from src.evaluation.inference import decode_packed_inputs
-from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT, ChessPosition
+from src.games.chess.contract import (
+    CHESS_NETWORK_DIMENSIONS,
+    CHESS_STATE_CONTRACT,
+    ChessPosition,
+    decode_lc0_planes,
+)
 from src.games.representation import PackedPlanePayload
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path
 from src.training.network import (
@@ -37,10 +45,19 @@ PROGRESS_INTERVAL_SECONDS = 10.0
 
 @dataclass(frozen=True)
 class BuilderArguments:
-    teacher_run_state: Path
+    teacher_run_state: Path | None
     teacher_generation: int
     teacher_layers: int
     teacher_hidden_size: int
+    lc0_teacher: Path | None
+    lc0_teacher_parameter_count: int | None
+    stockfish_executable: Path | None
+    stockfish_nodes: int
+    stockfish_multi_pv: int
+    stockfish_temperature: float
+    stockfish_engines: int
+    greedy_after_ply: int | None
+    final_temperature: float
     output: Path
     positions: int
     parallel_games: int
@@ -232,13 +249,15 @@ def report_progress(recorded: int, total: int, completed_games: int, elapsed_sec
 
 
 def generate_records(
-    teacher: LoadedTeacher,
+    teacher: LoadedTeacher | Lc0Teacher,
     arguments: BuilderArguments,
     device: torch.device,
     head_indices: AuxiliaryHeadIndices,
+    record_layout: DistillationRecordLayout,
+    stockfish: StockfishMovePool | None,
 ) -> npt.NDArray:
     generator = np.random.default_rng(arguments.random_seed)
-    records = np.zeros(arguments.positions, dtype=record_dtype(CHESS_PAYLOAD_BYTES))
+    records = np.zeros(arguments.positions, dtype=record_dtype(CHESS_PAYLOAD_BYTES, record_layout))
     slots = [
         GameSlot(position=open_game(generator, arguments.random_opening_plies), ply=arguments.random_opening_plies)
         for _ in range(arguments.parallel_games)
@@ -250,16 +269,22 @@ def generate_records(
     reported_at = started_at
 
     while recorded < arguments.positions:
+        stockfish_analyses = None if stockfish is None else stockfish.analyse_async([slot.position for slot in slots])
         packed_states = tuple(CHESS_STATE_CONTRACT.encode_network_input(slot.position) for slot in slots)
         legal_action_ids = tuple(
             np.asarray(CHESS_STATE_CONTRACT.legal_action_ids(slot.position), dtype=np.int64) for slot in slots
         )
-        decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, packed_states)
+        if isinstance(teacher, Lc0Teacher):
+            # The teacher reads Lc0's planes; the record keeps the project's, which the student trains on.
+            decoded = decode_lc0_planes(tuple(slot.position.lc0_packed_encoding() for slot in slots)).astype(np.float32)
+        else:
+            decoded = decode_packed_inputs(CHESS_STATE_CONTRACT, packed_states)
         with torch.inference_mode():
             output = teacher.network.training_output(torch.from_numpy(decoded).to(device))
             policy_logits = output.policy_logits.float().cpu().numpy()
             wdl_probabilities = torch.softmax(output.wdl_logits.float(), dim=1).cpu().numpy()
             auxiliary = capture_auxiliary_outputs(output.auxiliary_logits, head_indices)
+        stockfish_moves = None if stockfish_analyses is None else [analysis.result() for analysis in stockfish_analyses]
 
         for row, slot in enumerate(slots):
             if recorded == arguments.positions:
@@ -280,10 +305,21 @@ def generate_records(
                 )
                 recorded += 1
             if generator.random() < arguments.random_perturbation_probability:
-                chosen = int(generator.integers(len(legal)))
+                action_id = int(legal[generator.integers(len(legal))])
+            elif stockfish_moves is not None:
+                # Stockfish chooses the move; the teacher only labelled the position above.
+                action_id = sample_scored_move(stockfish_moves[row], arguments.stockfish_temperature, generator)
+            elif arguments.greedy_after_ply is not None and slot.ply >= arguments.greedy_after_ply:
+                action_id = int(legal[np.argmax(legal_logits)])
             else:
-                chosen = int(generator.choice(len(legal), p=softmax(legal_logits / arguments.sampling_temperature)))
-            slot.position = CHESS_STATE_CONTRACT.child_position(slot.position, int(legal[chosen]))
+                temperature = sampling_temperature_at(
+                    slot.ply,
+                    arguments.sampling_temperature,
+                    arguments.final_temperature,
+                    arguments.greedy_after_ply,
+                )
+                action_id = int(legal[generator.choice(len(legal), p=softmax(legal_logits / temperature))])
+            slot.position = CHESS_STATE_CONTRACT.child_position(slot.position, action_id)
             slot.ply += 1
             game_over = CHESS_STATE_CONTRACT.natural_terminal_wdl(slot.position) is not None
             if game_over or slot.ply >= arguments.maximum_game_plies:
@@ -304,19 +340,58 @@ def parse_arguments() -> BuilderArguments:
     parser = argparse.ArgumentParser(
         description='Generate diverse chess positions and label them with the raw head outputs of a teacher network.'
     )
-    parser.add_argument('--teacher-run-state', type=Path, required=True, help='Run-state directory holding model_N.pt.')
-    parser.add_argument('--teacher-generation', type=int, required=True, help='Generation of the teacher checkpoint.')
+    parser.add_argument('--teacher-run-state', type=Path, help='Run-state directory holding model_N.pt.')
+    parser.add_argument('--teacher-generation', type=int, default=0, help='Generation of the teacher checkpoint.')
     parser.add_argument(
         '--teacher-layers',
         type=int,
-        required=True,
+        default=0,
         help='Residual block count; used only when the checkpoint manifest carries no network definition.',
     )
     parser.add_argument(
         '--teacher-hidden-size',
         type=int,
-        required=True,
+        default=0,
         help='Trunk width; used only when the checkpoint manifest carries no network definition.',
+    )
+    parser.add_argument(
+        '--lc0-teacher',
+        type=Path,
+        help='Scripted Lc0 teacher from build_lc0_teacher_model.py, used instead of a project checkpoint.',
+    )
+    parser.add_argument(
+        '--stockfish-executable',
+        type=Path,
+        help='Stockfish chooses every move (sampled from its MultiPV by expected score); the teacher only labels.',
+    )
+    parser.add_argument('--stockfish-nodes', type=int, default=1000, help='Nodes per Stockfish move choice.')
+    parser.add_argument('--stockfish-multipv', type=int, default=4, help='Candidate moves Stockfish scores.')
+    parser.add_argument(
+        '--stockfish-temperature',
+        type=float,
+        default=0.05,
+        help='Temperature over expected scores in [0, 1]; a move 0.05 worse is chosen e^-1 as often as the best.',
+    )
+    parser.add_argument(
+        '--stockfish-engines', type=int, default=4, help='Single-threaded Stockfish processes per builder.'
+    )
+    parser.add_argument(
+        '--lc0-teacher-parameter-count',
+        type=int,
+        help='Recorded in the manifest. A traced ONNX conversion holds its weights as graph constants, so counting '
+        'the scripted module sees only a fraction of them; pass the count from inspect_lc0_network.py.',
+    )
+    parser.add_argument(
+        '--greedy-after-ply',
+        type=int,
+        help='Interpolate temperature to --final-temperature across this ply and play the argmax beyond it. '
+        'Without it the fixed --sampling-temperature applies at every ply, which is the older behaviour.',
+    )
+    parser.add_argument(
+        '--final-temperature',
+        type=float,
+        default=0.1,
+        help='Temperature reached at --greedy-after-ply; ignored when that is unset.',
     )
     parser.add_argument('--output', type=Path, required=True, help='Dataset file to write; manifest sits beside it.')
     parser.add_argument('--positions', type=int, required=True, help='Number of labelled positions to collect.')
@@ -339,11 +414,24 @@ def parse_arguments() -> BuilderArguments:
     parser.add_argument('--random-seed', type=int, required=True, help='Seed of the position-generation sampler.')
     parser.add_argument('--device-id', type=int, default=0, help='CUDA device index; CPU when CUDA is unavailable.')
     parsed = parser.parse_args()
+    if (parsed.lc0_teacher is None) == (parsed.teacher_run_state is None):
+        parser.error('Pass exactly one of --lc0-teacher or --teacher-run-state.')
+    if parsed.teacher_run_state is not None and not (parsed.teacher_layers and parsed.teacher_hidden_size):
+        parser.error('--teacher-layers and --teacher-hidden-size are required with --teacher-run-state.')
     return BuilderArguments(
         teacher_run_state=parsed.teacher_run_state,
         teacher_generation=parsed.teacher_generation,
         teacher_layers=parsed.teacher_layers,
         teacher_hidden_size=parsed.teacher_hidden_size,
+        lc0_teacher=parsed.lc0_teacher,
+        lc0_teacher_parameter_count=parsed.lc0_teacher_parameter_count,
+        stockfish_executable=parsed.stockfish_executable,
+        stockfish_nodes=parsed.stockfish_nodes,
+        stockfish_multi_pv=parsed.stockfish_multipv,
+        stockfish_temperature=parsed.stockfish_temperature,
+        stockfish_engines=parsed.stockfish_engines,
+        greedy_after_ply=parsed.greedy_after_ply,
+        final_temperature=parsed.final_temperature,
         output=parsed.output,
         positions=parsed.positions,
         parallel_games=parsed.parallel_games,
@@ -360,20 +448,47 @@ def parse_arguments() -> BuilderArguments:
 def main() -> None:
     arguments = parse_arguments()
     device = torch.device('cuda', arguments.device_id) if torch.cuda.is_available() else torch.device('cpu')
-    definition = resolve_teacher_definition(arguments)
-    head_indices = locate_auxiliary_heads(definition.auxiliary_heads)
-    weights_path = model_save_path(arguments.teacher_generation, arguments.teacher_run_state)
-    teacher = load_teacher(
-        weights_path=weights_path,
-        architecture=definition.architecture,
-        dimensions=definition.dimensions,
-        auxiliary_heads=definition.auxiliary_heads,
-        device=device,
-        generation=arguments.teacher_generation,
-    )
+    if arguments.lc0_teacher is not None:
+        # Lc0 exposes only a policy and a WDL head, so nothing auxiliary is captured for this arm.
+        auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = ()
+        head_indices = locate_auxiliary_heads(auxiliary_heads)
+        weights_path = arguments.lc0_teacher
+        teacher = load_lc0_teacher(arguments.lc0_teacher, device)
+        record_layout = DistillationRecordLayout.CORE
+    else:
+        definition = resolve_teacher_definition(arguments)
+        auxiliary_heads = definition.auxiliary_heads
+        head_indices = locate_auxiliary_heads(auxiliary_heads)
+        weights_path = model_save_path(arguments.teacher_generation, arguments.teacher_run_state)
+        teacher = load_teacher(
+            weights_path=weights_path,
+            architecture=definition.architecture,
+            dimensions=definition.dimensions,
+            auxiliary_heads=definition.auxiliary_heads,
+            device=device,
+            generation=arguments.teacher_generation,
+        )
+        record_layout = DistillationRecordLayout.WITH_AUXILIARY
     print(f'Teacher {weights_path} on {device}: {teacher.parameter_count} parameters', flush=True)
 
-    records = generate_records(teacher, arguments, device, head_indices)
+    stockfish = None
+    if arguments.stockfish_executable is not None:
+        stockfish = StockfishMovePool(
+            arguments.stockfish_executable,
+            arguments.stockfish_engines,
+            arguments.stockfish_nodes,
+            arguments.stockfish_multi_pv,
+        )
+        print(
+            f'Stockfish chooses moves: {arguments.stockfish_engines} engines, {arguments.stockfish_nodes} nodes, '
+            f'MultiPV {arguments.stockfish_multi_pv}, temperature {arguments.stockfish_temperature}',
+            flush=True,
+        )
+    try:
+        records = generate_records(teacher, arguments, device, head_indices, record_layout, stockfish)
+    finally:
+        if stockfish is not None:
+            stockfish.close()
 
     revision = read_source_revision()
     manifest = DistillationDatasetManifest(
@@ -385,7 +500,7 @@ def main() -> None:
         maximum_legal_actions=MAXIMUM_LEGAL_ACTIONS,
         teacher_generation=arguments.teacher_generation,
         teacher_weights_sha256=file_sha256(weights_path),
-        teacher_parameter_count=teacher.parameter_count,
+        teacher_parameter_count=arguments.lc0_teacher_parameter_count or teacher.parameter_count,
         random_seed=arguments.random_seed,
         random_opening_plies=arguments.random_opening_plies,
         sampling_temperature=arguments.sampling_temperature,
@@ -393,7 +508,8 @@ def main() -> None:
         random_perturbation_probability=arguments.random_perturbation_probability,
         maximum_game_plies=arguments.maximum_game_plies,
         builder_source_revision=revision.commit + ('-dirty' if revision.dirty else ''),
-        captured_auxiliary_heads=tuple(head.kind for head in definition.auxiliary_heads),
+        captured_auxiliary_heads=tuple(head.kind for head in auxiliary_heads),
+        record_layout=record_layout,
     )
     write_dataset(arguments.output, records, manifest)
     print(f'Wrote {arguments.positions} positions to {arguments.output}', flush=True)

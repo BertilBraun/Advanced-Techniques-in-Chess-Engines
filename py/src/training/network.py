@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -122,6 +122,9 @@ POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS = 32
 CHESS_POLICY_PLANE_COUNT = 76
 SMALL_OUTPUT_INITIALIZATION_STD = 0.01
 ATTENTION_LINEAR_INITIALIZATION_STD = 0.02
+# Lc0 uses these epsilons for networks with a mapped positional input embedding, T1 included.
+LC0_ENCODER_NORMALIZATION_EPSILON = 1e-6
+LC0_SMOLGEN_NORMALIZATION_EPSILON = 1e-3
 
 
 class NetworkHeadParams(FrozenModel):
@@ -182,19 +185,38 @@ class AttentionNetworkParams(NetworkHeadParams):
         return self
 
 
-NetworkConfigurationInput: TypeAlias = NetworkParams | AttentionNetworkParams | dict[str, JsonValue]
+class Lc0AttentionNetworkParams(NetworkHeadParams):
+    """An attention body constructed like Lc0's T1 networks; only the sizes are configured."""
+
+    kind: Literal['lc0_attention'] = 'lc0_attention'
+    num_layers: int = Field(gt=0)
+    embedding_size: int = Field(gt=0)
+    num_heads: int = Field(gt=0)
+    feedforward_size: int = Field(gt=0)
+    smolgen: SmolgenAttentionBiasConfiguration
+
+    @model_validator(mode='after')
+    def validate_attention_dimensions(self) -> Lc0AttentionNetworkParams:
+        if self.embedding_size % self.num_heads:
+            raise ValueError('Attention embedding size must be divisible by the number of heads.')
+        return self
+
+
+NetworkConfigurationInput: TypeAlias = (
+    NetworkParams | AttentionNetworkParams | Lc0AttentionNetworkParams | dict[str, JsonValue]
+)
 
 
 def _normalize_network_discriminator(configuration: NetworkConfigurationInput) -> NetworkConfigurationInput:
     match configuration:
         case dict() if 'kind' not in configuration:
             return {**configuration, 'kind': 'convolutional'}
-        case NetworkParams() | AttentionNetworkParams() | dict():
+        case NetworkParams() | AttentionNetworkParams() | Lc0AttentionNetworkParams() | dict():
             return configuration
 
 
 NetworkConfiguration: TypeAlias = Annotated[
-    NetworkParams | AttentionNetworkParams,
+    NetworkParams | AttentionNetworkParams | Lc0AttentionNetworkParams,
     Field(discriminator='kind'),
     BeforeValidator(_normalize_network_discriminator),
 ]
@@ -286,24 +308,65 @@ class Network(nn.Module):
                     nn.LayerNorm(hidden_size),
                     AttentionOutput(row_count, column_count),
                 )
+            case Lc0AttentionNetworkParams():
+                hidden_size = args.embedding_size
+                square_count = row_count * column_count
+                self.start_block = Lc0AttentionInput(encoding_channels, row_count, column_count, hidden_size)
+                lc0_template_bank = SmolgenTemplateBank(args.smolgen.generated_size, square_count)
+                residual_scale = (2.0 * args.num_layers) ** -0.25
+                self.backbone = nn.ModuleList(
+                    [
+                        Lc0EncoderBlock(
+                            hidden_size,
+                            args.num_heads,
+                            args.feedforward_size,
+                            residual_scale,
+                            SmolgenAttentionBias(
+                                hidden_size,
+                                args.num_heads,
+                                square_count,
+                                args.smolgen,
+                                lc0_template_bank,
+                                activation=nn.SiLU,
+                                normalization_epsilon=LC0_SMOLGEN_NORMALIZATION_EPSILON,
+                            ),
+                        )
+                        for _ in range(args.num_layers)
+                    ]
+                )
+                # Post-norm encoders already end normalized, so the heads read the last block directly.
+                self.finish_block = AttentionOutput(row_count, column_count)
 
-        self.policy_head = _build_policy_head(
-            hidden_size,
-            row_count,
-            column_count,
-            action_size,
-            args.policy_head,
-        )
-
-        self.value_head = nn.Sequential(
-            nn.Conv2d(hidden_size, args.num_value_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(args.num_value_channels),
-            nn.ReLU(inplace=True),
-            nn.Flatten(),
-            nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
-            nn.ReLU(inplace=True),
-            nn.Linear(args.value_fc_size, dimensions.outcomes),
-        )
+        match args:
+            case Lc0AttentionNetworkParams():
+                self.policy_head = _build_policy_head(
+                    hidden_size, row_count, column_count, action_size, args.policy_head, from_to_activation=nn.Mish
+                )
+                self.value_head = nn.Sequential(
+                    nn.Conv2d(hidden_size, args.num_value_channels, kernel_size=1),
+                    nn.Mish(),
+                    nn.Flatten(),
+                    nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
+                    nn.Mish(),
+                    nn.Linear(args.value_fc_size, dimensions.outcomes),
+                )
+            case NetworkParams() | AttentionNetworkParams():
+                self.policy_head = _build_policy_head(
+                    hidden_size,
+                    row_count,
+                    column_count,
+                    action_size,
+                    args.policy_head,
+                )
+                self.value_head = nn.Sequential(
+                    nn.Conv2d(hidden_size, args.num_value_channels, kernel_size=1, bias=False),
+                    nn.BatchNorm2d(args.num_value_channels),
+                    nn.ReLU(inplace=True),
+                    nn.Flatten(),
+                    nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(args.value_fc_size, dimensions.outcomes),
+                )
         self.auxiliary_head_modules = nn.ModuleList(
             _build_auxiliary_head(
                 hidden_size,
@@ -331,6 +394,8 @@ class Network(nn.Module):
         match args:
             case AttentionNetworkParams(num_layers=num_layers):
                 _initialize_attention_trunk(self.start_block, self.backbone, num_layers)
+            case Lc0AttentionNetworkParams(num_layers=num_layers):
+                _initialize_lc0_attention_trunk(self.start_block, self.backbone, num_layers)
             case NetworkParams():
                 pass
         _initialize_small_policy_output(self.policy_head, args.policy_head)
@@ -680,6 +745,8 @@ class SmolgenAttentionBias(nn.Module):
         square_count: int,
         configuration: SmolgenAttentionBiasConfiguration,
         template_bank: SmolgenTemplateBank,
+        activation: Callable[[], nn.Module] = nn.GELU,
+        normalization_epsilon: float = 1e-5,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -687,13 +754,13 @@ class SmolgenAttentionBias(nn.Module):
         self.compression = nn.Linear(embedding_size, configuration.compressed_size, bias=False)
         self.hidden = nn.Sequential(
             nn.Linear(square_count * configuration.compressed_size, configuration.hidden_size),
-            nn.GELU(),
-            nn.LayerNorm(configuration.hidden_size),
+            activation(),
+            nn.LayerNorm(configuration.hidden_size, eps=normalization_epsilon),
         )
         self.generator = nn.Sequential(
             nn.Linear(configuration.hidden_size, num_heads * configuration.generated_size),
-            nn.GELU(),
-            nn.LayerNorm(num_heads * configuration.generated_size),
+            activation(),
+            nn.LayerNorm(num_heads * configuration.generated_size, eps=normalization_epsilon),
         )
         self.template_bank = template_bank
 
@@ -742,14 +809,21 @@ class ChessFromToAttentionPolicyHead(nn.Module):
     promotion offset covers the whole action space with one gather.
     """
 
-    def __init__(self, input_channels: int, key_size: int, rows: int, columns: int) -> None:
+    def __init__(
+        self,
+        input_channels: int,
+        key_size: int,
+        rows: int,
+        columns: int,
+        activation: Callable[[], nn.Module] = nn.GELU,
+    ) -> None:
         super().__init__()
         self.key_size = key_size
         self.square_count = rows * columns
         self.last_rank_start = self.square_count - columns
         self.knight_promotion_index = KNIGHT_PROMOTION_INDEX
         self.token_projection = nn.Linear(input_channels, key_size)
-        self.activation = nn.GELU()
+        self.activation = activation()
         self.query_projection = nn.Linear(key_size, key_size)
         self.key_projection = nn.Linear(key_size, key_size)
         self.promotion_projection = nn.Linear(key_size, PROMOTION_PIECE_COUNT, bias=False)
@@ -797,6 +871,7 @@ def _build_policy_head(
     action_size: int,
     configuration: PolicyHeadConfiguration,
     plane_hidden_channels: int = POLICY_PLANE_PRIMARY_HIDDEN_CHANNELS,
+    from_to_activation: Callable[[], nn.Module] = nn.GELU,
 ) -> nn.Module:
     match configuration:
         case Chess76PlaneDirectPolicyHeadConfiguration():
@@ -814,7 +889,9 @@ def _build_policy_head(
                     f'{CHESS_FROM_TO_ACTION_TABLE.action_count} actions, not {action_size} over '
                     f'{row_count}x{column_count}.'
                 )
-            return ChessFromToAttentionPolicyHead(input_channels, key_size, row_count, column_count)
+            return ChessFromToAttentionPolicyHead(
+                input_channels, key_size, row_count, column_count, activation=from_to_activation
+            )
         case DensePolicyHeadConfiguration():
             return _build_dense_policy_head(input_channels, row_count, column_count, action_size, configuration)
         case GoPointPassPolicyHeadConfiguration():
@@ -921,6 +998,35 @@ def _initialize_attention_trunk(
                         _initialize_small_projection(template_bank.projection)
                     case _:
                         pass
+
+
+def _initialize_lc0_attention_trunk(start_block: nn.Module, back_bone: nn.ModuleList, num_layers: int) -> None:
+    # DeepNet initialization for post-norm encoders: the value and residual-output projections start scaled
+    # by (8N)^-1/4, the queries and keys at unit gain.
+    residual_gain = (8.0 * num_layers) ** -0.25
+    match start_block:
+        case Lc0AttentionInput(projection=projection):
+            nn.init.xavier_normal_(projection.weight)
+            nn.init.zeros_(projection.bias)
+    for block in back_bone:
+        assert isinstance(block, Lc0EncoderBlock), 'An Lc0 attention trunk holds only Lc0 encoder blocks.'
+        embedding_size = block.embedding_size
+        query_key_value = block.query_key_value_projection
+        with torch.no_grad():
+            for part, gain in ((0, 1.0), (1, 1.0), (2, residual_gain)):
+                rows = query_key_value.weight[part * embedding_size : (part + 1) * embedding_size]
+                rows.copy_(nn.init.xavier_normal_(torch.empty_like(rows), gain=gain))
+        nn.init.zeros_(query_key_value.bias)
+        for residual_projection in (block.attention_output_projection, block.feedforward[0], block.feedforward[2]):
+            nn.init.xavier_normal_(residual_projection.weight, gain=residual_gain)
+            nn.init.zeros_(residual_projection.bias)
+        smolgen = block.attention_bias
+        for linear in (smolgen.compression, smolgen.hidden[0], smolgen.generator[0]):
+            nn.init.xavier_normal_(linear.weight)
+            if linear.bias is not None:
+                nn.init.zeros_(linear.bias)
+        # A full-gain template bank would swamp the attention logits it is added to.
+        _initialize_small_projection(smolgen.template_bank.projection)
 
 
 def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHeadConfiguration) -> None:
@@ -1146,6 +1252,78 @@ class AttentionEncoderBlock(nn.Module):
         residual = inputs + self.attention_dropout(attended)
         feedforward = self.feedforward(self.feedforward_normalization(residual))
         return residual + self.feedforward_dropout(feedforward)
+
+
+class SquaredReLU(nn.Module):
+    def forward(self, inputs: Tensor) -> Tensor:
+        # Equal to relu(x)^2, but TensorRT fuses this form into the preceding matmul: 14% faster engines.
+        return inputs * functional.relu(inputs)
+
+
+class Lc0AttentionInput(nn.Module):
+    """Embeds each square's input planes together with a fixed code for the square, then gates them per square."""
+
+    def __init__(self, input_channels: int, rows: int, columns: int, embedding_size: int) -> None:
+        super().__init__()
+        self.rows = rows
+        self.columns = columns
+        square_count = rows * columns
+        # Any full-rank code gives the projection the freedom to learn an arbitrary vector per square.
+        self.register_buffer('square_code', torch.eye(square_count), persistent=False)
+        self.projection = nn.Linear(input_channels + square_count, embedding_size)
+        self.activation = nn.Mish()
+        self.multiplicative_gate = nn.Parameter(torch.ones(square_count, embedding_size))
+        self.additive_gate = nn.Parameter(torch.zeros(square_count, embedding_size))
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        batch_size = inputs.shape[0]
+        tokens = inputs.permute(0, 2, 3, 1).reshape(batch_size, self.rows * self.columns, -1)
+        square_code = self.square_code.to(tokens.dtype).unsqueeze(0).expand(batch_size, -1, -1)
+        embedded = self.activation(self.projection(torch.cat((tokens, square_code), dim=2)))
+        return embedded * self.multiplicative_gate + self.additive_gate
+
+
+class Lc0EncoderBlock(nn.Module):
+    """A post-norm encoder whose residual branches are scaled by (2N)^-1/4, with a generated attention bias."""
+
+    def __init__(
+        self,
+        embedding_size: int,
+        num_heads: int,
+        feedforward_size: int,
+        residual_scale: float,
+        attention_bias: SmolgenAttentionBias,
+    ) -> None:
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.num_heads = num_heads
+        self.head_size = embedding_size // num_heads
+        self.residual_scale = residual_scale
+        self.attention_bias = attention_bias
+        self.query_key_value_projection = nn.Linear(embedding_size, embedding_size * 3)
+        self.attention_output_projection = nn.Linear(embedding_size, embedding_size)
+        self.attention_normalization = nn.LayerNorm(embedding_size, eps=LC0_ENCODER_NORMALIZATION_EPSILON)
+        self.feedforward = nn.Sequential(
+            nn.Linear(embedding_size, feedforward_size),
+            SquaredReLU(),
+            nn.Linear(feedforward_size, embedding_size),
+        )
+        self.feedforward_normalization = nn.LayerNorm(embedding_size, eps=LC0_ENCODER_NORMALIZATION_EPSILON)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        batch_size, square_count, _ = inputs.shape
+        query_key_value = self.query_key_value_projection(inputs).reshape(
+            batch_size, square_count, 3, self.num_heads, self.head_size
+        )
+        query, key, value = query_key_value.permute(2, 0, 3, 1, 4).unbind(0)
+        attended = functional.scaled_dot_product_attention(
+            query, key, value, attn_mask=self.attention_bias(inputs).to(query.dtype)
+        )
+        attended = attended.transpose(1, 2).reshape(batch_size, square_count, self.embedding_size)
+        features = self.attention_normalization(
+            inputs + self.residual_scale * self.attention_output_projection(attended)
+        )
+        return self.feedforward_normalization(features + self.residual_scale * self.feedforward(features))
 
 
 class AttentionOutput(nn.Module):

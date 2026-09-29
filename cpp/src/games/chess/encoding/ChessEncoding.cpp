@@ -27,8 +27,8 @@ constexpr Bitboard flipRanks(const Bitboard bits) noexcept {
            ((bits & 0x00FF'0000'0000'0000ULL) >> 40) | ((bits & 0xFF00'0000'0000'0000ULL) >> 56);
 }
 
-CompressedEncodedBoard encodeBoard(const Board &board) {
-    CompressedEncodedBoard out{};
+ProjectEncodedBoard encodeProjectBoard(const Board &board) {
+    ProjectEncodedBoard out{};
 
     // Canonical chess inputs are always encoded from the side-to-move perspective.
     const Position &position = board.position();
@@ -83,7 +83,7 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
                                         pieceCount(bishops & checkerboard) == 1;
     out.binaryPlanes[ch++] = canonicalBits(allSquares * oppositeColoredBishops);
 
-    assert(ch == ChessRepresentationDimensions::binaryChannelCount);
+    assert(ch == ProjectInputDimensions::binaryChannelCount);
 
     for (const int i : range(6)) {
         const Color whiteSource = flipForBlack ? BLACK : WHITE;
@@ -99,6 +99,76 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     }
 
     return out;
+}
+
+Lc0EncodedBoard encodeLc0Board(const Board &board) {
+    Lc0EncodedBoard out{};
+
+    // Lc0's INPUT_CLASSICAL_112_PLANE layout. Every plane is written from the side to move's
+    // perspective: ranks are mirrored for Black and the two colours swap, which is the same
+    // canonical convention this project already used.
+    const Position &position = board.position();
+    const bool flipForBlack = position.side_to_move() == BLACK;
+    const auto canonicalBits = [flipForBlack](const Bitboard bits) {
+        return BitBoard<ChessRepresentationDimensions::boardLength>(
+            {flipForBlack ? flipRanks(bits) : bits});
+    };
+
+    int ch = 0;
+    const auto writePlacement = [&](const std::array<std::uint64_t, 12> &pieces,
+                                    const bool repeated) {
+        // Indices 0-5 are White's pieces and 6-11 are Black's; "ours" comes first for the
+        // side to move, so Black's planes lead when Black is to move.
+        const int ownBase = flipForBlack ? 6 : 0;
+        const int opponentBase = flipForBlack ? 0 : 6;
+        for (const int offset : range(6)) {
+            out.binaryPlanes[ch++] = canonicalBits(pieces[ownBase + offset]);
+        }
+        for (const int offset : range(6)) {
+            out.binaryPlanes[ch++] = canonicalBits(pieces[opponentBase + offset]);
+        }
+        out.binaryPlanes[ch++] = canonicalBits(repeated ? allSquares : 0ULL);
+    };
+
+    writePlacement(Board::placementOf(position).pieces, board.repetitionCount() >= 1);
+    for (const Board::PiecePlacement &placement : board.previousPlacements()) {
+        if (placement.occupied) {
+            writePlacement(placement.pieces, placement.repeated);
+        } else {
+            // Before the start of the recorded game Lc0 leaves the history planes at zero.
+            ch += Lc0InputDimensions::planesPerHistoryPosition;
+        }
+    }
+
+    const Color ownColor = position.side_to_move();
+    const Color opponentColor = ~ownColor;
+    const auto castlingPlane = [&](const Color color, const CastlingRights side) {
+        return canonicalBits(allSquares * (position.can_castle(color & side) != 0));
+    };
+    out.binaryPlanes[ch++] = castlingPlane(ownColor, QUEEN_SIDE);
+    out.binaryPlanes[ch++] = castlingPlane(ownColor, KING_SIDE);
+    out.binaryPlanes[ch++] = castlingPlane(opponentColor, QUEEN_SIDE);
+    out.binaryPlanes[ch++] = castlingPlane(opponentColor, KING_SIDE);
+    out.binaryPlanes[ch++] =
+        BitBoard<ChessRepresentationDimensions::boardLength>({flipForBlack ? allSquares : 0ULL});
+
+    assert(ch == Lc0InputDimensions::binaryChannelCount);
+
+    // The wrapper module divides this by 99; it is kept as a raw count because the input tensor
+    // reaching the network is int8.
+    out.scalarPlanes[0] = static_cast<std::int8_t>(std::min(position.rule50_count(), 100));
+    out.scalarPlanes[1] = 0;
+    out.scalarPlanes[2] = 1;
+
+    return out;
+}
+
+CompressedEncodedBoard encodeBoard(const Board &board) {
+#ifdef CHESS_LC0_INPUT
+    return encodeLc0Board(board);
+#else
+    return encodeProjectBoard(board);
+#endif
 }
 
 torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed) {

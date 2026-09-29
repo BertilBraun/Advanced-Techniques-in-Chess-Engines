@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
 import socket
 import time
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Literal, TypeAlias
@@ -17,13 +19,14 @@ import torch
 import torch.distributed as distributed
 from pydantic import Field
 from src.distillation.dataset import build_replay_training_batch, build_training_batch, open_dataset, read_manifest
+from src.distillation.teacher import read_network_definition
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore, ReplayStoreState
-from src.training.batch import TrainingBatch
+from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.checkpoint.contracts import CheckpointManifest, read_checkpoint_manifest
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.checkpoint.persistence import create_model
@@ -33,14 +36,21 @@ from src.training.network import (
     ChessFromToAttentionPolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
     DisabledAttentionBiasConfiguration,
+    DisabledResidualContext,
     GlobalPoolingResidualContext,
     InferenceNetwork,
+    Lc0AttentionNetworkParams,
     Network,
     NetworkConfiguration,
     NetworkParams,
     PolicyHeadConfiguration,
+    PostActivationResidualBlockConfiguration,
     RelativeAttentionBiasConfiguration,
+    ResidualBlockConfiguration,
+    ResidualContextConfiguration,
     ResidualContextPlacement,
+    ScaledPostActivationResidualBlockConfiguration,
+    ScaledPreActivationResidualBlockConfiguration,
     SmolgenAttentionBiasConfiguration,
 )
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective, resolve_auxiliary_losses
@@ -74,6 +84,7 @@ class LearningRateSchedule(str, Enum):
     PRODUCTION_FLAT = 'production_flat'
     STAGED_DECAY = 'staged_decay'
     COSINE_FLOOR = 'cosine_floor'
+    LINEAR_FLOOR = 'linear_floor'
 
 
 class OptimizerKind(str, Enum):
@@ -84,11 +95,23 @@ class OptimizerKind(str, Enum):
 class NetworkKind(str, Enum):
     CONVOLUTIONAL = 'convolutional'
     ATTENTION = 'attention'
+    LC0_ATTENTION = 'lc0_attention'
 
 
 class PolicyHeadKind(str, Enum):
     DENSE = 'dense'
     FROM_TO_ATTENTION = 'from_to_attention'
+
+
+class ResidualBlockKind(str, Enum):
+    POST_ACTIVATION = 'post_activation'
+    SCALED_POST_ACTIVATION = 'scaled_post_activation'
+    SCALED_PRE_ACTIVATION = 'scaled_pre_activation'
+
+
+class ResidualContextKind(str, Enum):
+    GLOBAL_POOLING = 'global_pooling'
+    DISABLED = 'disabled'
 
 
 class AttentionBiasKind(str, Enum):
@@ -127,10 +150,14 @@ class Arguments:
     smolgen_generated_size: int
     num_value_channels: int
     value_fc_size: int
+    residual_block_kind: ResidualBlockKind
+    activation_cap: float
+    residual_context_kind: ResidualContextKind
     optimizer_kind: OptimizerKind
     floor_fraction: float
     policy_bottleneck_rank: int
     batch_size: int
+    gradient_accumulation_steps: int
     steps: int
     learning_rate: float
     learning_rate_schedule: LearningRateSchedule
@@ -145,6 +172,9 @@ class Arguments:
     device_ids: tuple[int, ...]
     random_seed: int
     generation: int
+    initial_checkpoint: Path | None
+    value_anchor_checkpoint: Path | None
+    architecture_checkpoint: Path | None
 
 
 @dataclass(frozen=True)
@@ -253,13 +283,64 @@ def student_attention_bias(arguments: Arguments):
             )
 
 
+def initial_checkpoint_architecture(manifest_path: Path) -> NetworkConfiguration:
+    definition = read_network_definition(manifest_path)
+    if definition is None:
+        raise SystemExit(f'{manifest_path} carries no network definition to continue from.')
+    return definition.architecture
+
+
+def load_initial_weights(model: torch.nn.Module, manifest_path: Path, device: torch.device) -> None:
+    """Continues a trained checkpoint rather than starting from scratch.
+
+    Auxiliary heads are dropped because this student trains only policy and WDL, and QAT quantizer
+    ranges are dropped because the student trains in float; every remaining tensor must match exactly.
+    """
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    state = torch.load(manifest_path.parent / manifest['model_path'], map_location=device, weights_only=True)
+    kept = {
+        key: value
+        for key, value in state.items()
+        if not key.startswith('auxiliary_head_modules.') and '_quantizer.' not in key
+    }
+    model.load_state_dict(kept, strict=True)
+    log(f'Initialised from {manifest_path}: {len(kept)} tensors, {len(state) - len(kept)} auxiliary or QAT dropped.')
+
+
+def student_residual_context(arguments: Arguments) -> ResidualContextConfiguration:
+    match arguments.residual_context_kind:
+        case ResidualContextKind.GLOBAL_POOLING:
+            return GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK)
+        case ResidualContextKind.DISABLED:
+            return DisabledResidualContext()
+
+
+def student_residual_block(arguments: Arguments) -> ResidualBlockConfiguration:
+    # The scaled blocks follow production: each branch is scaled by 1/sqrt(depth).
+    branch_scale = 1.0 / math.sqrt(arguments.layers)
+    match arguments.residual_block_kind:
+        case ResidualBlockKind.POST_ACTIVATION:
+            return PostActivationResidualBlockConfiguration()
+        case ResidualBlockKind.SCALED_POST_ACTIVATION:
+            return ScaledPostActivationResidualBlockConfiguration(
+                branch_scale=branch_scale, activation_cap=arguments.activation_cap
+            )
+        case ResidualBlockKind.SCALED_PRE_ACTIVATION:
+            return ScaledPreActivationResidualBlockConfiguration(
+                branch_scale=branch_scale,
+                activation_cap=arguments.activation_cap,
+                final_activation_cap=arguments.activation_cap,
+            )
+
+
 def student_architecture(arguments: Arguments) -> NetworkConfiguration:
     match arguments.network_kind:
         case NetworkKind.CONVOLUTIONAL:
             return NetworkParams(
                 num_layers=arguments.layers,
                 hidden_size=arguments.hidden_size,
-                residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+                residual_context=student_residual_context(arguments),
+                residual_block=student_residual_block(arguments),
                 policy_head=student_policy_head(arguments),
                 num_value_channels=arguments.num_value_channels,
                 value_fc_size=arguments.value_fc_size,
@@ -272,6 +353,21 @@ def student_architecture(arguments: Arguments) -> NetworkConfiguration:
                 feedforward_size=arguments.feedforward,
                 dropout=0.0,
                 attention_bias=student_attention_bias(arguments),
+                policy_head=student_policy_head(arguments),
+                num_value_channels=arguments.num_value_channels,
+                value_fc_size=arguments.value_fc_size,
+            )
+        case NetworkKind.LC0_ATTENTION:
+            return Lc0AttentionNetworkParams(
+                num_layers=arguments.layers,
+                embedding_size=arguments.hidden_size,
+                num_heads=arguments.heads,
+                feedforward_size=arguments.feedforward,
+                smolgen=SmolgenAttentionBiasConfiguration(
+                    compressed_size=arguments.smolgen_compressed_size,
+                    hidden_size=arguments.smolgen_hidden_size,
+                    generated_size=arguments.smolgen_generated_size,
+                ),
                 policy_head=student_policy_head(arguments),
                 num_value_channels=arguments.num_value_channels,
                 value_fc_size=arguments.value_fc_size,
@@ -369,6 +465,8 @@ def learning_rate_at(
         case LearningRateSchedule.COSINE_FLOOR:
             shape = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
             return peak_learning_rate * (floor_fraction + (1.0 - floor_fraction) * shape)
+        case LearningRateSchedule.LINEAR_FLOOR:
+            return peak_learning_rate * (1.0 - (1.0 - floor_fraction) * min(progress, 1.0))
         case LearningRateSchedule.COSINE:
             anneal_start = warmup_steps
         case LearningRateSchedule.PLATEAU:
@@ -386,6 +484,22 @@ def observed_losses(loss: ObjectiveLoss) -> LossValues:
         auxiliary=tuple(float(value.detach()) for value in loss.auxiliary),
         total=float(loss.total.detach()),
     )
+
+
+def accumulate_gradients(
+    step_model: Callable[[torch.Tensor], TrainingModelOutput],
+    objective: ResolvedTrainingObjective,
+    micro_batches: tuple[TrainingBatch, ...],
+    device: torch.device,
+) -> LossValues:
+    # Equal to one step on the concatenated batch only for networks without batch normalization.
+    observed: list[LossValues] = []
+    for micro_batch in micro_batches:
+        with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
+            loss = objective.calculate_loss(step_model(micro_batch.states), micro_batch)
+        (loss.total / len(micro_batches)).backward()
+        observed.append(observed_losses(loss))
+    return mean_loss_values(tuple(observed))
 
 
 def mean_loss_values(values: tuple[LossValues, ...]) -> LossValues:
@@ -639,13 +753,29 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
     torch.cuda.manual_seed_all(arguments.random_seed)
 
     auxiliary_heads = arguments.distil_auxiliary_heads
-    architecture = student_architecture(arguments)
+    architecture_source = arguments.initial_checkpoint or arguments.architecture_checkpoint
+    if architecture_source is None:
+        architecture = student_architecture(arguments)
+    else:
+        architecture = initial_checkpoint_architecture(architecture_source)
     model = create_model(
         architecture,
         device,
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(auxiliary_heads, dataset.action_size),
     )
+    if arguments.initial_checkpoint is not None:
+        load_initial_weights(model, arguments.initial_checkpoint, device)
+    value_anchor = None
+    if arguments.value_anchor_checkpoint is not None:
+        value_anchor = create_model(
+            initial_checkpoint_architecture(arguments.value_anchor_checkpoint), device, CHESS_NETWORK_DIMENSIONS, ()
+        )
+        load_initial_weights(value_anchor, arguments.value_anchor_checkpoint, device)
+        value_anchor.eval()
+        for parameter in value_anchor.parameters():
+            parameter.requires_grad_(False)
+        log(f'WDL targets come from the frozen {arguments.value_anchor_checkpoint}, not the dataset.')
     optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
     # One step path for both: the production trainer's shim routes DDP's forward to training_output,
     # and wrapping in it unconditionally keeps single-GPU and data-parallel runs on the same call.
@@ -683,6 +813,11 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         f' auxiliary{auxiliary_loss_report(auxiliary_heads, floor) or " (none)"}.'
     )
     log('Headline metric is the held-out policy gap above the policy floor, excluding value and auxiliary losses.')
+    initial_loss = evaluate(model, evaluation_batches, objective, device)
+    log(
+        f'step 0 held-out policy {initial_loss.policy:.4f} | headline policy gap above floor '
+        f'{initial_loss.policy - floor.policy:.4f}'
+    )
 
     generator = np.random.default_rng(arguments.random_seed + rank)
     model.train()
@@ -704,21 +839,31 @@ def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) ->
         )
         for parameter_group in optimizer.param_groups:
             parameter_group['lr'] = step_learning_rate
-        batch = source_training_batch(
-            dataset,
-            split.training_row_count,
-            local_batch_size,
-            generator,
-            device,
-            auxiliary_heads,
-        )
+        micro_batches: list[TrainingBatch] = []
+        for _ in range(arguments.gradient_accumulation_steps):
+            batch = source_training_batch(
+                dataset,
+                split.training_row_count,
+                local_batch_size // arguments.gradient_accumulation_steps,
+                generator,
+                device,
+                auxiliary_heads,
+            )
+            if value_anchor is not None:
+                # Policy learns from the teacher while value is held to the anchor: retraining the value head on
+                # the teacher's WDL cost the first pilot about 75 Elo in search with an unchanged raw policy.
+                with (
+                    torch.no_grad(),
+                    torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'),
+                ):
+                    anchor_wdl = torch.softmax(value_anchor.training_output(batch.states).wdl_logits.float(), dim=1)
+                batch = replace(batch, wdl_targets=anchor_wdl.to(batch.wdl_targets.dtype))
+            micro_batches.append(batch)
         optimizer.zero_grad(set_to_none=True)
-        with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
-            loss = objective.calculate_loss(step_model(batch.states), batch)
-        loss.total.backward()
+        step_losses = accumulate_gradients(step_model, objective, tuple(micro_batches), device)
         torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.max_grad_norm)
         optimizer.step()
-        recent_training_losses.append(observed_losses(loss))
+        recent_training_losses.append(step_losses)
         window_steps += 1
         if rank != 0:
             if step % arguments.evaluate_every == 0 or step == arguments.steps:
@@ -831,6 +976,17 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--num-value-channels', default=2, type=int)
     parser.add_argument('--value-fc-size', default=48, type=int)
     parser.add_argument(
+        '--residual-block',
+        default=ResidualBlockKind.POST_ACTIVATION.value,
+        choices=tuple(kind.value for kind in ResidualBlockKind),
+    )
+    parser.add_argument('--activation-cap', default=6.0, type=float, help='Upper bound of the scaled blocks.')
+    parser.add_argument(
+        '--residual-context',
+        default=ResidualContextKind.GLOBAL_POOLING.value,
+        choices=tuple(kind.value for kind in ResidualContextKind),
+    )
+    parser.add_argument(
         '--optimizer',
         default=OptimizerKind.ADAMW.value,
         choices=tuple(kind.value for kind in OptimizerKind),
@@ -843,6 +999,12 @@ def parse_arguments() -> Arguments:
         help='Zero removes the bottleneck, which is the dense head production runs.',
     )
     parser.add_argument('--batch-size', default=1024, type=int)
+    parser.add_argument(
+        '--gradient-accumulation-steps',
+        default=1,
+        type=int,
+        help='Micro-batches per optimizer step; the batch size stays the whole step.',
+    )
     parser.add_argument('--steps', required=True, type=int)
     parser.add_argument('--learning-rate', default=0.002, type=float)
     parser.add_argument(
@@ -862,6 +1024,21 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--devices', nargs='+', type=int, help='Data-parallel device IDs; overrides --device-id.')
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
+    parser.add_argument(
+        '--architecture-checkpoint',
+        type=Path,
+        help='checkpoint_N.json whose architecture a from-scratch student uses; its weights are not loaded.',
+    )
+    parser.add_argument(
+        '--value-anchor-checkpoint',
+        type=Path,
+        help='checkpoint_N.json whose frozen WDL output replaces the dataset WDL target, training policy only.',
+    )
+    parser.add_argument(
+        '--initial-checkpoint',
+        type=Path,
+        help='checkpoint_N.json to continue from; its architecture replaces the architecture flags.',
+    )
     namespace = parser.parse_args()
     if namespace.replay_store is None:
         if namespace.replay_experiment is not None or namespace.orchestrator_recorded_replay_sha256 is not None:
@@ -892,10 +1069,14 @@ def parse_arguments() -> Arguments:
         smolgen_generated_size=namespace.smolgen_generated_size,
         num_value_channels=namespace.num_value_channels,
         value_fc_size=namespace.value_fc_size,
+        residual_block_kind=ResidualBlockKind(namespace.residual_block),
+        activation_cap=namespace.activation_cap,
+        residual_context_kind=ResidualContextKind(namespace.residual_context),
         optimizer_kind=OptimizerKind(namespace.optimizer),
         floor_fraction=namespace.floor_fraction,
         policy_bottleneck_rank=namespace.policy_bottleneck_rank,
         batch_size=namespace.batch_size,
+        gradient_accumulation_steps=namespace.gradient_accumulation_steps,
         steps=namespace.steps,
         learning_rate=namespace.learning_rate,
         learning_rate_schedule=LearningRateSchedule(namespace.learning_rate_schedule),
@@ -910,6 +1091,9 @@ def parse_arguments() -> Arguments:
         device_ids=tuple(namespace.devices) if namespace.devices else (namespace.device_id,),
         random_seed=namespace.random_seed,
         generation=namespace.generation,
+        initial_checkpoint=namespace.initial_checkpoint,
+        value_anchor_checkpoint=namespace.value_anchor_checkpoint,
+        architecture_checkpoint=namespace.architecture_checkpoint,
     )
     match arguments.dataset_input:
         case DistillationFileInput(path=path):
@@ -932,11 +1116,19 @@ def parse_arguments() -> Arguments:
                 )
     if min(arguments.layers, arguments.hidden_size) <= 0:
         raise ValueError('Layers and hidden size must be positive.')
+    local_batch_size = arguments.batch_size // len(arguments.device_ids)
+    if arguments.gradient_accumulation_steps <= 0 or local_batch_size % arguments.gradient_accumulation_steps:
+        raise ValueError(
+            f'Gradient accumulation of {arguments.gradient_accumulation_steps} does not divide the per-device '
+            f'batch of {local_batch_size}.'
+        )
     if arguments.policy_bottleneck_rank < 0:
         raise ValueError('Policy bottleneck rank must be nonnegative; zero removes the bottleneck.')
     if min(arguments.heads, arguments.feedforward, arguments.policy_key_size) <= 0:
         raise ValueError('Head count, feedforward size and policy key size must be positive.')
-    if arguments.network_kind is NetworkKind.ATTENTION and arguments.hidden_size % arguments.heads:
+    if arguments.network_kind in (NetworkKind.ATTENTION, NetworkKind.LC0_ATTENTION) and (
+        arguments.hidden_size % arguments.heads
+    ):
         raise ValueError(f'An embedding size of {arguments.hidden_size} is not divisible by {arguments.heads} heads.')
     # The from-to head reads the trunk output as 64 square tokens, which a convolutional trunk also
     # produces, so it is allowed on both: separating the head's contribution from the trunk's needs it.

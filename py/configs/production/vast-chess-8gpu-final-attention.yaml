@@ -1,0 +1,188 @@
+# The final recipe with the network built like Lc0's T1 instead of the convolutional ladder.
+#
+# Distillation on 47M Lc0-labelled positions measured the architecture as the lever: at equal compute per
+# position and identical data and schedule, a 10x192 student built like T1 beat the 14x160 convolutional student
+# by about 200 Elo and checkpoint 1026 by about 150 at 64 searches, while no convolutional variant moved at all
+# (documentation/benchmarks/lc0-teacher-diagnostic-rtx3070-20260926). This run asks whether self-play, without a
+# teacher and at the attention network's lower serving rate, gets past the convolutional plateau. The CNN
+# lineage's ladder curve on the same hardware is the baseline, so only one run is needed.
+#
+# Changed from chess-final-config.yaml, each because the architecture requires it or the distillation work
+# measured it:
+# - a two-stage ladder of T1-shaped networks, 8x160 (207M MAC per position) then 10x192 (366M), stepping by the
+#   same factor as the convolutional 12x128 -> 14x160;
+# - INT8 QAT off: it is defined only for post-activation convolutional models, so both stages serve TensorRT
+#   float16 engines (the attention network gains only 1.12x from weight-only INT8 anyway);
+# - SGD as AlphaZero, KataGo and Lc0 train, at AlphaZero's rate scaled to our batch, with tenfold drops instead
+#   of a floor: every distillation run gained most of its strength while its rate fell, and the convolutional
+#   lineage sat on its 0.01 floor for 130+ generations while the ladder was flat.
+# Everything else - search, replay, objective, auxiliary targets, evaluation - is the final recipe unchanged.
+extends: chess-final-config.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention
+  tensorboard_run_directory: vast-chess-8gpu-final-attention
+  environment:
+    # The lock with both the lc0 and publication extras; a run refuses to start on any other.
+    dependency_lock_sha256: 1369b5785315bbb6f9b7d0f979e42fa2200de95cefc83092a09f4011244eaf69
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-final-attention
+  trainer:
+    quantization:
+      kind: disabled
+    # AlphaZero's 0.2 at batch 4,096 is 0.1 at our 2,048 under linear scaling. Held through the early climb,
+    # then a constant ratio per generation down to 1/50 of the peak by generation 1000, where the final recipe
+    # held a 0.01 floor. A smooth decay rather than AlphaZero's three tenfold steps; at our batch KataGo's
+    # automatic schedules run 0.49 -> 0.031 or 0.74 -> 0.0031, Lc0's example decays 40x, AlphaZero's 1000x.
+    learning_rate:
+      kind: geometric
+      start_generation: 100
+      end_generation: 1000
+      start_value: 0.1
+      end_value: 0.002
+      rounding: none
+    warmup_optimizer_steps: 1000
+    warmup_start_learning_rate: 0.0
+  lifecycle:
+    # A generation every 360 optimizer steps instead of 500, and each position presented three times instead of
+    # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model
+    # nearer the data it trains on. 245,760 new positions per generation against the final recipe's 256,000.
+    # Generation-keyed schedules are deliberately left as they are, so their boundaries arrive after 0.72x the
+    # optimizer steps.
+    credit:
+      replay_ratio: '3'
+      optimizer_steps_per_quantum: 360
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 6
+      self_play_backpressure_quanta: 5
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention.stop
+  progressive_model_sizing:
+    kind: progressive
+    models:
+    - model_id: chess-lc0-attention-8x160
+      network:
+        kind: lc0_attention
+        num_layers: 8
+        embedding_size: 160
+        num_heads: 5
+        feedforward_size: 640
+        smolgen: {kind: smolgen, compressed_size: 32, hidden_size: 160, generated_size: 160}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 160}
+        num_value_channels: 32
+        value_fc_size: 128
+    - model_id: chess-lc0-attention-10x192
+      network:
+        kind: lc0_attention
+        num_layers: 10
+        embedding_size: 192
+        num_heads: 6
+        feedforward_size: 768
+        smolgen: {kind: smolgen, compressed_size: 32, hidden_size: 192, generated_size: 192}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 192}
+        num_value_channels: 32
+        value_fc_size: 128
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-lc0-attention-10x192
+        minimum_worthwhile_gain_per_hour: 20.0
+    # The candidate trains from scratch on the shared replay, on its own generation clock, and is promoted
+    # after two consecutive progressive-candidate matches scoring at least 0.48 against the active model.
+    # Once promoted it follows the main learning rate at the run's generation.
+    promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.48
+        consecutive_evaluations: 2
+      candidate_step_multiplier: 1.5
+      # V98's floor: a catch-up rate that ends at the active model's level surrenders the candidate's advantage
+      # while it still has to overtake.
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 600
+        start_value: 0.1
+        end_value: 0.03
+        rounding: none
+
+evaluation:
+  # Lists replace wholesale. The final recipe's list lacks the progressive-candidate match its promotion gate
+  # names, so the gate would never see a result and no candidate would ever be promoted; V98 carried it, and it
+  # is restored here at the searched ladder's budget.
+  definitions:
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search: &searched_ladder_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          templates:
+          - {kind: float, model_id: chess-lc0-attention-8x160, engine_path: /workspace/tensorrt/lc0-attention-8x160-fp16-b64.engine}
+          - {kind: float, model_id: chess-lc0-attention-10x192, engine_path: /workspace/tensorrt/lc0-attention-10x192-fp16-b64.engine}
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          templates:
+          - {kind: float, model_id: chess-lc0-attention-8x160, engine_path: /workspace/tensorrt/lc0-attention-8x160-fp16-b64.engine}
+          - {kind: float, model_id: chess-lc0-attention-10x192, engine_path: /workspace/tensorrt/lc0-attention-10x192-fp16-b64.engine}
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: progressive_candidate
+    definition_id: progressive-candidate
+    search: *searched_ladder_search
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        templates:
+        - {kind: float, model_id: chess-lc0-attention-8x160, engine_path: /workspace/tensorrt/lc0-attention-8x160-fp16-b320.engine}
+        - {kind: float, model_id: chess-lc0-attention-10x192, engine_path: /workspace/tensorrt/lc0-attention-10x192-fp16-b320.engine}
+        bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true

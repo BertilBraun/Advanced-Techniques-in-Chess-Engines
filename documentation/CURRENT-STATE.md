@@ -2,6 +2,17 @@
 
 As of **2026-09-24**. This page separates completed work from evidence that still has to be frozen for publication.
 
+## Since then: the architecture, and one more run (2026-09-29)
+
+An Lc0 teacher diagnostic found what held the lineage at its plateau: the network's construction. Lc0's T1 in this
+project's unchanged search plays at least 360 Elo above the final checkpoint at 64 searches, and a student built
+like T1 at equal compute, trained from scratch on 47M teacher-labelled positions, beat the final checkpoint by
+about 150 Elo where no convolutional variant moved. It serves at 0.4-0.6x the CNN's rate.
+[Summary](analysis/plateau-investigation-v100-onwards-20260928.md) and
+[measurements](benchmarks/lc0-teacher-diagnostic-rtx3070-20260926/README.md). A final self-play run with that
+architecture is configured and waiting for a node:
+[plan](plan/chess-attention-final-run-plan-20260929.md). The results below are unchanged by it.
+
 ## Project status
 
 The final chess training lineage is complete. The selected model is a 14-block, 160-channel convolutional network

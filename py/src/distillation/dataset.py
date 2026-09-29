@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mmap
 from enum import Enum
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from pydantic import Field
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_plane_bytes_into
 from src.replay.columnar import ReplayColumnViews
@@ -16,7 +18,9 @@ from src.util.frozen_model import FrozenModel
 
 MAXIMUM_POLICY_ENTRIES = 64
 MAXIMUM_LEGAL_ACTIONS = 218
-CHESS_PAYLOAD_BYTES = 183
+# Derived rather than pinned: the Lc0 teacher branch changes the plane layout, and a stale literal
+# here silently mis-strides every record.
+CHESS_PAYLOAD_BYTES = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
 
 
 class DistillationRecordLayout(str, Enum):
@@ -98,6 +102,10 @@ def open_dataset(dataset_path: Path) -> tuple[npt.NDArray, DistillationDatasetMa
     records = np.memmap(dataset_path, dtype=record_dtype(manifest.payload_bytes, manifest.record_layout), mode='r')
     if len(records) != manifest.position_count:
         raise ValueError(f'Dataset holds {len(records)} rows but its manifest declares {manifest.position_count}.')
+    # Training gathers random rows. With the kernel's default readahead each 1.2 KB row pulled in ~128 KB, so a
+    # dataset larger than memory ran at 16% GPU on disk reads; random advice keeps it to one page per row.
+    if hasattr(mmap, 'MADV_RANDOM'):
+        records._mmap.madvise(mmap.MADV_RANDOM)
     return records, manifest
 
 
