@@ -2,7 +2,7 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `850a81aade0056d1b160da81e0518873cb8c7f3407fbd8ecd65a04d31702b2d3`). Not started;
+(`experiment_configuration_sha256` `be317a46fbcc3ab42dadfaf164adbc0cbe4ac6c0baf60ea7d0fc45928870dbf7`). Not started;
 waiting for a node.
 
 ## Why this run
@@ -54,7 +54,7 @@ The final recipe (`chess-final-config.yaml`) with only these changes:
 | Learning rate | linear 0.2 -> 0.01 floor | 0.1 to generation 100, then geometric to 0.002 by generation 1000 | AlphaZero's 0.2 at batch 4,096 scaled to 2,048; annealed 50x, near KataGo's automatic schedules at our batch |
 | Generation | 500 steps, replay reuse 4 | 360 steps, reuse 3 | fewer positions an hour from the slower network; 245,760 new positions per generation against 256,000; generation-keyed schedules unchanged, so they arrive after 0.72x the steps |
 | Value discount | 0.998 per remaining ply on targets, 0.99 per ply in search | none in either | AlphaZero, KataGo and Lc0 do not discount; evaluation search changes with it |
-| Replay window | 600K -> 20M rows in ten stages by generation 1000 | the same endpoints along progress^0.55, the best single-curve fit to the stages | continuous growth; up to 1.9M fewer rows near generation 100 and 4.5M more just before the 400 and 700 steps |
+| Replay window | 600K -> 20M rows in ten stages by generation 1000 | the same endpoints along ln(1 + generation / 50) | continuous growth; within 12% of the stages at their generations up to 100, then above the flat 8M stretch: 14.6M against 12M at 400, 17.9M against 16M at 700 |
 | Candidate | — | from scratch, starts at 20 Elo/h, catch-up 0.1 -> 0.03 (V98), promoted after two consecutive candidate matches at 0.48 or better | |
 | Dependency lock | `bffc5dad...` | same, inherited | the lock with the lc0 and publication extras and ModelOpt's ONNX dependencies; the run checks it at start |
 

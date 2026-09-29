@@ -17,7 +17,8 @@
 #   of held at a floor: every distillation run gained most of its strength while its rate fell, and the
 #   convolutional lineage sat on its 0.01 floor for 130+ generations while the ladder was flat;
 # - no value discounting in search or in the training targets, as AlphaZero, KataGo and Lc0;
-# - the replay window grows along a square root between the final recipe's endpoints instead of in ten steps.
+# - the replay window grows continuously, logarithmically, between the final recipe's endpoints instead of in
+#   ten steps.
 # Everything else - search, replay, objective, auxiliary targets, evaluation - is the final recipe unchanged.
 extends: chess-final-config.yaml
 
@@ -45,17 +46,17 @@ training:
     warmup_start_learning_rate: 0.0
   lifecycle:
     # The final recipe's 600,000 -> 20,000,000 rows by generation 1000 as one continuous curve instead of ten
-    # stages; 0.55 is the exponent that fits those stages best (about 15% RMS at their start points). The stages
-    # are not one power law - steep to 100, flat at 8M to 400, then linear - so the curve holds up to 1.9M fewer
-    # rows around generation 100 and up to 4.5M more just before each of the 400 and 700 steps.
+    # stages, growing with ln(1 + generation / 50). At the stage generations up to 100 it is within 12% of them,
+    # and then keeps rising where they held 8M from 100 to 400: 14.6M against 12M at 400, 17.9M against 16M
+    # at 700.
     replay:
       capacity:
-        kind: power
+        kind: logarithmic
         start_generation: 0
         end_generation: 1000
         start_value: 600000
         end_value: 20000000
-        exponent: 0.55
+        knee_generations: 50.0
         rounding: nearest
     # A generation every 360 optimizer steps instead of 500, and each position presented three times instead of
     # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model

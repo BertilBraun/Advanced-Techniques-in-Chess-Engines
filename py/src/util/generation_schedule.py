@@ -146,26 +146,26 @@ class GeometricSchedule(FrozenModel, Generic[NumericScheduleValueT]):
                 return math.ceil(interpolated)
 
 
-class PowerSchedule(FrozenModel, Generic[NumericScheduleValueT]):
-    """Interpolates along progress ** exponent; 0.5 grows like a square root, fast early and slower later."""
+class LogarithmicSchedule(FrozenModel, Generic[NumericScheduleValueT]):
+    """Interpolates along ln(1 + elapsed / knee): close to linear before the knee, flattening after it."""
 
-    kind: Literal['power'] = 'power'
+    kind: Literal['logarithmic'] = 'logarithmic'
     start_generation: int = Field(ge=0)
     end_generation: int = Field(ge=0)
     start_value: NumericScheduleValueT
     end_value: NumericScheduleValueT
-    exponent: float = Field(gt=0.0)
+    knee_generations: float = Field(gt=0.0)
     rounding: ScheduleRounding
 
     @model_validator(mode='after')
-    def validate_interpolation(self) -> PowerSchedule[NumericScheduleValueT]:
+    def validate_interpolation(self) -> LogarithmicSchedule[NumericScheduleValueT]:
         if self.end_generation <= self.start_generation:
-            raise ValueError('Power schedule end generation must be greater than its start generation.')
+            raise ValueError('Logarithmic schedule end generation must be greater than its start generation.')
         integer_values = isinstance(self.start_value, int) and isinstance(self.end_value, int)
         if integer_values and self.rounding is ScheduleRounding.NONE:
-            raise ValueError('Integer power schedules require floor, nearest, or ceiling rounding.')
+            raise ValueError('Integer logarithmic schedules require floor, nearest, or ceiling rounding.')
         if not integer_values and self.rounding is not ScheduleRounding.NONE:
-            raise ValueError('Float power schedules require rounding mode none.')
+            raise ValueError('Float logarithmic schedules require rounding mode none.')
         return self
 
     def value_at(self, model_generation: int) -> NumericScheduleValueT:
@@ -174,10 +174,10 @@ class PowerSchedule(FrozenModel, Generic[NumericScheduleValueT]):
             return self.start_value
         if model_generation >= self.end_generation:
             return self.end_value
-        progress = (model_generation - self.start_generation) / (self.end_generation - self.start_generation)
-        interpolated = float(self.start_value) + (float(self.end_value) - float(self.start_value)) * (
-            progress**self.exponent
+        progress = math.log1p((model_generation - self.start_generation) / self.knee_generations) / math.log1p(
+            (self.end_generation - self.start_generation) / self.knee_generations
         )
+        interpolated = float(self.start_value) + (float(self.end_value) - float(self.start_value)) * progress
         match self.rounding:
             case ScheduleRounding.NONE:
                 return interpolated
@@ -194,10 +194,14 @@ FloatScheduleModel: TypeAlias = (
     | StagedSchedule[float]
     | LinearSchedule[float]
     | GeometricSchedule[float]
-    | PowerSchedule[float]
+    | LogarithmicSchedule[float]
 )
 IntegerScheduleModel: TypeAlias = (
-    ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int] | GeometricSchedule[int] | PowerSchedule[int]
+    ConstantSchedule[int]
+    | StagedSchedule[int]
+    | LinearSchedule[int]
+    | GeometricSchedule[int]
+    | LogarithmicSchedule[int]
 )
 DecimalScheduleModel: TypeAlias = ConstantSchedule[Decimal] | StagedSchedule[Decimal]
 
@@ -259,8 +263,8 @@ def defined_schedule_values(
     | LinearSchedule[float]
     | GeometricSchedule[int]
     | GeometricSchedule[float]
-    | PowerSchedule[int]
-    | PowerSchedule[float],
+    | LogarithmicSchedule[int]
+    | LogarithmicSchedule[float],
 ) -> tuple[ScheduleValueT | int | float, ...]:
     match schedule:
         case ConstantSchedule(value=value):
@@ -271,7 +275,7 @@ def defined_schedule_values(
             return (start_value, end_value)
         case GeometricSchedule(start_value=start_value, end_value=end_value):
             return (start_value, end_value)
-        case PowerSchedule(start_value=start_value, end_value=end_value):
+        case LogarithmicSchedule(start_value=start_value, end_value=end_value):
             return (start_value, end_value)
 
 
@@ -282,8 +286,8 @@ def schedule_change_generations(
     | LinearSchedule[float]
     | GeometricSchedule[int]
     | GeometricSchedule[float]
-    | PowerSchedule[int]
-    | PowerSchedule[float],
+    | LogarithmicSchedule[int]
+    | LogarithmicSchedule[float],
 ) -> tuple[int, ...]:
     match schedule:
         case ConstantSchedule():
@@ -294,5 +298,5 @@ def schedule_change_generations(
             return (0, *range(start_generation, end_generation + 1))
         case GeometricSchedule(start_generation=start_generation, end_generation=end_generation):
             return (0, *range(start_generation, end_generation + 1))
-        case PowerSchedule(start_generation=start_generation, end_generation=end_generation):
+        case LogarithmicSchedule(start_generation=start_generation, end_generation=end_generation):
             return (0, *range(start_generation, end_generation + 1))

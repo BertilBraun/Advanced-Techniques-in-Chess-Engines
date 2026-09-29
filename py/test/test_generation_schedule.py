@@ -9,7 +9,7 @@ from src.util.generation_schedule import (
     GeometricSchedule,
     IntegerGenerationSchedule,
     LinearSchedule,
-    PowerSchedule,
+    LogarithmicSchedule,
     ScheduleRounding,
     StagedSchedule,
 )
@@ -247,46 +247,46 @@ def test_schedule_evaluation_rejects_negative_generation(generation: int) -> Non
         ConstantSchedule[int](value=1).value_at(generation)
 
 
-def test_square_root_power_schedule_covers_most_of_its_range_early() -> None:
-    schedule = PowerSchedule[float](
-        start_generation=0, end_generation=100, start_value=0.0, end_value=1.0, exponent=0.5, rounding='none'
+def test_logarithmic_schedule_reaches_the_log_fraction_of_its_range() -> None:
+    schedule = LogarithmicSchedule[float](
+        start_generation=0, end_generation=150, start_value=0.0, end_value=2.0, knee_generations=50.0, rounding='none'
     )
 
-    assert tuple(schedule.value_at(generation) for generation in (0, 1, 25, 100, 200)) == pytest.approx(
-        (0.0, 0.1, 0.5, 1.0, 1.0)
+    assert tuple(schedule.value_at(generation) for generation in (0, 50, 150, 300)) == pytest.approx(
+        (0.0, 1.0, 2.0, 2.0)
     )
 
 
-def test_power_schedule_with_exponent_one_matches_linear() -> None:
+def test_logarithmic_schedule_is_nearly_linear_with_a_distant_knee() -> None:
     endpoints = dict(start_generation=10, end_generation=50, start_value=2.0, end_value=0.5, rounding='none')
-    power = PowerSchedule[float](exponent=1.0, **endpoints)
+    logarithmic = LogarithmicSchedule[float](knee_generations=1e9, **endpoints)
     linear = LinearSchedule[float](**endpoints)
 
-    assert [power.value_at(generation) for generation in range(60)] == pytest.approx(
+    assert [logarithmic.value_at(generation) for generation in range(60)] == pytest.approx(
         [linear.value_at(generation) for generation in range(60)]
     )
 
 
-def test_integer_power_schedule_rounds() -> None:
-    schedule = PowerSchedule[int](
-        start_generation=0, end_generation=4, start_value=100, end_value=300, exponent=0.5, rounding='nearest'
+def test_integer_logarithmic_schedule_rounds() -> None:
+    schedule = LogarithmicSchedule[int](
+        start_generation=0, end_generation=3, start_value=0, end_value=200, knee_generations=1.0, rounding='nearest'
     )
 
-    assert tuple(schedule.value_at(generation) for generation in range(5)) == (100, 200, 241, 273, 300)
+    assert tuple(schedule.value_at(generation) for generation in range(4)) == (0, 100, 158, 200)
 
 
-def test_power_schedule_parses_through_the_integer_discriminator() -> None:
+def test_logarithmic_schedule_parses_through_the_integer_discriminator() -> None:
     schedule = TypeAdapter(IntegerGenerationSchedule).validate_python(
         {
-            'kind': 'power',
+            'kind': 'logarithmic',
             'start_generation': 0,
             'end_generation': 1000,
             'start_value': 600_000,
             'end_value': 20_000_000,
-            'exponent': 0.5,
+            'knee_generations': 50.0,
             'rounding': 'nearest',
         }
     )
 
-    assert isinstance(schedule, PowerSchedule)
-    assert schedule.value_at(100) == 6_734_819
+    assert isinstance(schedule, LogarithmicSchedule)
+    assert schedule.value_at(100) == 7_600_467
