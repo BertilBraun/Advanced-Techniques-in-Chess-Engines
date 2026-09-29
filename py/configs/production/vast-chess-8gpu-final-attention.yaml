@@ -44,10 +44,10 @@ training:
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
   lifecycle:
-    # The final recipe's 600,000 -> 20,000,000 rows by generation 1000, along a square root rather than ten
-    # stages. Against the stages it keeps every game a few generations longer at the start, holds up to 1.3M
-    # fewer rows around generation 100, and up to 4.9M more just before 400, where the stages sat at 8M for
-    # 300 generations.
+    # The final recipe's 600,000 -> 20,000,000 rows by generation 1000 as one continuous curve instead of ten
+    # stages; 0.55 is the exponent that fits those stages best (about 15% RMS at their start points). The stages
+    # are not one power law - steep to 100, flat at 8M to 400, then linear - so the curve holds up to 1.9M fewer
+    # rows around generation 100 and up to 4.5M more just before each of the 400 and 700 steps.
     replay:
       capacity:
         kind: power
@@ -55,7 +55,7 @@ training:
         end_generation: 1000
         start_value: 600000
         end_value: 20000000
-        exponent: 0.5
+        exponent: 0.55
         rounding: nearest
     # A generation every 360 optimizer steps instead of 500, and each position presented three times instead of
     # four: the slower attention network makes fewer positions an hour, so less reuse keeps the published model
