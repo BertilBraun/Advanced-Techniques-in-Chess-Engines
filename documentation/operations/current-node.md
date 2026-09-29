@@ -1,36 +1,27 @@
 # Current node
 
-Verified 2026-09-18 for the V79 FP16 control run authorized by the user.
+Provisioned 2026-09-29 for the attention run
+([plan](../plan/chess-attention-final-run-plan-20260929.md)).
 
-- Destination: `root@38.49.42.120:53893`.
+- Destination: `root@137.175.22.196:17886`.
 - Local key: `C:/Users/berti/.ssh/vast-ssh`; never copy it to the node or repository.
-- Vast instance: `48571853`.
-- GPUs: 8 x NVIDIA GeForce RTX 4070 SUPER, 12,282 MiB each, devices 0-7.
-- Driver: `595.71.05`; driver maximum CUDA: `13.2`.
-- Locked runtime: PyTorch `2.12.1+cu126`, CUDA `12.6`, cuDNN `91002` (9.10.2).
-- CPU: 80 logical CPUs visible; cgroup quota 76.8 CPU equivalents.
-- RAM: 251 GiB total, 190 GiB available at preflight.
-- Disk: 150 GiB overlay, 47 GiB available; ephemeral container storage.
-- Control checkout: `/workspace/alphazero-engine`.
+- Vast instance: `53401154`. `/workspace` is container storage, not a volume: nothing survives a destroy.
+- GPUs: 8 x NVIDIA GeForce RTX 4070 SUPER, 12,282 MiB each, devices 0-7, **power limit 160 W** (card maximum
+  220 W; not adjustable from the unprivileged container).
+- Driver: `580.159.03`; driver maximum CUDA: `13.0`.
+- Locked runtime: PyTorch `2.12.1+cu126`, CUDA `12.6`, cuDNN `91002` (9.10.2); Python TensorRT `10.14.1.48.post1`;
+  native `libnvinfer10 10.14.1.48-1+cuda12.9` (pinned in `setup_remote.sh`; apt offers 11.3 for CUDA 13.4 here).
+- CPU: Intel Xeon E5-2673 v4, 80 logical CPUs visible; cgroup v2 quota **76.8 CPUs**.
+- RAM: **120 GiB** cgroup limit; the host reports 125 GiB.
+- Disk: 200 GiB overlay, 177 GiB free after provisioning.
+- Downloads measured at provisioning: 13-16 MB/s per stream from PyPI, pypi.nvidia.com, download.pytorch.org and
+  the NVIDIA apt mirror, 38 MB/s over four parallel PyPI streams, 6 MB/s from GitHub. Provisioning took 934 s.
+- Control checkout: `/workspace/alphazero-engine` (shallow clone of `master`).
 - Locked environment: `/workspace/alphazero-engine-venv`, shared by every checkout.
-- Evaluation engines: `/workspace/alphazero-engine/engines`; KataGo installation records
-  `cuda12.8-cudnn9.8.0`, version 1.17.1.
-
-The V79 run executes from `/workspace/alphazero-engine-calibration-diagnostic` at revision
-`8cb256182a3330a33583db174cdbe9474131d7ee`, whose `py/AlphaZeroCpp.so` is a symlink into
-`/workspace/alphazero-engine-v75-v35-small-prefold-int8`; V79 changes configuration only, so that
-Release build still applies.
-
-Disk is the binding constraint on this node. One progressive run's `replay.bin` reaches about 25 GiB
-at the 6M-sample capacity stage, and the capacity schedule continues to 9M at generation 400. Before
-starting a run, free space and preserve first: `run_control.sh preserve` archives the resolved
-configuration, logs, TensorBoard and run state, but not model weights, so deleting a run directory
-discards its checkpoints permanently. Space for V79 was reclaimed by deleting the V77 `replay.bin`,
-`completed-games` and `resignation` after preserving that run, which the user authorized.
+- Evaluation engines: `/workspace/alphazero-engine/engines`: Stockfish 18 and 13, KataGo 1.17.1
+  `cuda12.8-cudnn9.8.0`; the smoke checks passed.
+- The Vast image sets `UV_NO_CACHE=1`; set `UV_CACHE_DIR` and unset it when a reusable uv cache is wanted.
 
 Use `deployment/remote_command.sh` for every remote command and `deployment/run_control.sh`
-for run start/stop/status/preserve/fetch. Note that `run_control.sh` runs on the node; only `fetch`
-runs from the workstation. `/etc/vast-agents-guide.md` was read for the earlier provisioning.
-
-Outstanding: no archive of the V77/V78 or V79 evidence has been copied off the node yet, and a
-`test_trainer_group.py` pytest process (pid 1328777) has been hung for 20 days without holding a GPU.
+for run start/stop/status/preserve/fetch. `run_control.sh` runs on the node; only `fetch`
+runs from the workstation. `/etc/vast-agents-guide.md` was read for this provisioning.

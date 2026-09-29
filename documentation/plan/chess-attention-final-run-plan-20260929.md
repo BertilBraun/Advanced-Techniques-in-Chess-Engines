@@ -2,7 +2,7 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `be317a46fbcc3ab42dadfaf164adbc0cbe4ac6c0baf60ea7d0fc45928870dbf7`). Not started;
+(`experiment_configuration_sha256` `b4fa2bc453b80e56664a2450995d4e0c2f36b0337a4766b9682944ce0794c2b7`). Not started;
 waiting for a node.
 
 ## Why this run

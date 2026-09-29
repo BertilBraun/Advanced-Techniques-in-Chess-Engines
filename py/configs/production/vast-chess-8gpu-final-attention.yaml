@@ -25,6 +25,10 @@ extends: chess-final-config.yaml
 run:
   run_name: vast-chess-8gpu-final-attention
   tensorboard_run_directory: vast-chess-8gpu-final-attention
+  # 8x RTX 4070 SUPER at a 160 W cap. The container is granted 120 GiB of RAM; the host reports 125.
+  hardware:
+    offer_id: '53401154'
+    minimum_ram_gib: 120
 
 training:
   save_path: py/training_data/production/vast-chess-8gpu-final-attention
