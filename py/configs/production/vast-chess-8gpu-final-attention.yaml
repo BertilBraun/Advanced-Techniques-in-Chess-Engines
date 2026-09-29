@@ -48,6 +48,14 @@ training:
       rounding: none
     warmup_optimizer_steps: 1000
     warmup_start_learning_rate: 0.0
+    # The generation-0 prior calibration scales this network's policy head by about 75x to reach 95% top-3 mass.
+    # Baked into the trainable weights, that fails the trainer's initialization guard (logit std 3.3 against a
+    # 1.5 ceiling, entropy ratio 0.43 against 0.6) because, unlike the CNN, there is no batch normalization to
+    # blunt it in the training forward. The scale applies to inference only and fades out over 10 generations,
+    # as V49 ran it; the trained head keeps its small initialization.
+    bootstrap_initialization:
+      policy_scale_application: inference_only
+      policy_scale_fade_generations: 10
   lifecycle:
     # The final recipe's 600,000 -> 20,000,000 rows by generation 1000 as one continuous curve instead of ten
     # stages, growing with ln(1 + generation / 50). At the stage generations up to 100 it is within 12% of them,
