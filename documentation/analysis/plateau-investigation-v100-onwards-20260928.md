@@ -18,8 +18,10 @@ self-play reaches the same level.
   (10x192 attention with smolgen, 366M MAC per position against 396M) trained from scratch on the 47M teacher
   labels beats the convolutional student trained identically by about 200 Elo, and passes checkpoint 1026 by
   about 150 Elo at 64 searches (0.68-0.695 at steps 90,000-110,000). No convolutional variant came close.
-- **Cost:** served through TensorRT float16 it runs at 0.55x the CNN's positions per second (0.71x in self-play on
-  TorchScript); production's INT8 CNN is faster still.
+- **Cost:** served through TensorRT float16 it runs at 0.61x the CNN's positions per second after fusing its
+  squared ReLU (0.55x before; 0.71x in self-play on TorchScript). INT8 buys the CNN 1.70x but the attention
+  network only 1.12x (weight matmuls only), so with both in INT8 it serves at 0.40x the CNN's rate. At equal
+  time that is about 2.5x fewer searches, worth roughly 75-185 Elo, against about 150 gained at equal searches.
 - **Open:** whether self-play with this architecture, at its lower throughput, climbs past the convolutional
   plateau without a teacher. T1 itself is distilled from much larger networks, so its level is not a self-play
   target at this size. Our self-play also never anneals below a 0.01 learning rate, where Lc0 ends at 0.0005.
@@ -132,10 +134,22 @@ On branch `worktree-lc0-teacher`:
 - `grow_student_checkpoint.py`: function-preserving growth of a distilled student.
 - A fix that lets TorchScript-served checkpoints be matched even when their architecture is not a configured model.
 
+## Next experiment
+
+[`vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
+(sha256 `d967f52643409bae72366946acdecc4229c6f18cbbf880aea3ed0328d720d175`) is the final recipe with a two-stage
+ladder of T1-shaped networks (8x160 at 207M MAC per position, then 10x192 at 366M, the same step as the CNN's
+12x128 -> 14x160), float16 TensorRT, AdamW and a learning rate annealed from 1e-3 to 5e-5 by generation 1000.
+Everything else is the final recipe, so the CNN lineage's ladder curve on the same hardware is the baseline.
+
+Before it can start, on a node: build and refit-test the four float16 templates (both sizes at batch 320 and
+64); the attention engines are Myelin-compiled and their refit has not been exercised. Build the production
+network with its seven auxiliary heads and export it once. Rebuild the native extension with TensorRT.
+
 ## What is still open
 
 1. **Does self-play with the T1-shaped network beat the convolutional plateau at equal time?** Answered only in
-   distillation so far. It needs the network kind in the production configuration, a TensorRT float16 serving
+   distillation so far; the next experiment above is the test. It needs the network kind in the production configuration, a TensorRT float16 serving
    path for it (INT8 QAT does not exist for attention) and either a small attention-against-CNN A/B or a rerun
    of the final training run. The 0.55x serving rate costs about 1.8x fewer searches at equal time, worth roughly
    50-120 Elo against a gain of about 150 at equal searches.
