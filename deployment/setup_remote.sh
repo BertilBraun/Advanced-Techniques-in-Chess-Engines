@@ -13,6 +13,9 @@ open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
 install_ccache="${ENGINE_INSTALL_CCACHE:-1}"
 enable_tensorrt="${ENGINE_ENABLE_TENSORRT:-0}"
 uv_extras="${ENGINE_UV_EXTRAS:-}"
+# Must match tensorrt-cu12 in pyproject.toml: engines only load in the TensorRT version that built them, and the
+# repository's newest build can target a CUDA newer than the host driver supports.
+tensorrt_apt_version="${ENGINE_TENSORRT_APT_VERSION:-10.14.1.48-1+cuda12.9}"
 
 # Vast.ai containers see the host's nproc but are throttled to a cgroup quota, often a quarter of it,
 # and a bare `--parallel` lets make start unbounded jobs; each libtorch unit needs gigabytes of RAM.
@@ -75,7 +78,10 @@ if [[ "${enable_tensorrt}" == 1 ]]; then
         exit 1
     fi
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libnvinfer-dev
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+        libnvinfer10="${tensorrt_apt_version}" \
+        libnvinfer-headers-dev="${tensorrt_apt_version}" \
+        libnvinfer-dev="${tensorrt_apt_version}"
 fi
 
 if ! [[ "${open_file_soft_limit}" =~ ^[1-9][0-9]*$ ]]; then
