@@ -48,7 +48,7 @@ training:
     # Generation-keyed schedules are deliberately left as they are, so their boundaries arrive after 0.72x the
     # optimizer steps.
     credit:
-      replay_ratio: '3'
+      replay_ratio: 3
       optimizer_steps_per_quantum: 360
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6

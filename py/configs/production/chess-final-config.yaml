@@ -202,7 +202,7 @@ training:
       materialization_rejection_window_games: 512
       materialization_rejection_rate_ceiling: 0.05
     credit:
-      replay_ratio: '4'
+      replay_ratio: 4
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
