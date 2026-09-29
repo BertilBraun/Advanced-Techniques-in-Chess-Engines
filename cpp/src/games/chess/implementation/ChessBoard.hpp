@@ -15,15 +15,18 @@ class Board {
 public:
     static constexpr std::uint16_t MAX_REVERSIBLE_HISTORY_PLIES = 100;
     static constexpr std::size_t RECENT_MOVE_COUNT = 8;
+#ifdef CHESS_LC0_HISTORY
     // Lc0 conditions on the current position plus seven predecessors; only the predecessors are
     // stored, and unlike the repetition chain this window survives pawn moves and captures.
     static constexpr std::size_t PREVIOUS_POSITION_COUNT = 7;
+#endif
 
     struct RecentMove {
         Stockfish::Square from;
         Stockfish::Square to;
     };
 
+#ifdef CHESS_LC0_HISTORY
     struct PiecePlacement {
         std::array<std::uint64_t, 12> pieces{};
         bool occupied = false;
@@ -33,6 +36,7 @@ public:
     struct PlacementWindow {
         std::array<PiecePlacement, PREVIOUS_POSITION_COUNT> placements{};
     };
+#endif
 
     explicit Board(
         const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
@@ -92,12 +96,14 @@ public:
     }
     [[nodiscard]] std::size_t recentMoveCount() const { return m_recentMoveCount; }
 
+#ifdef CHESS_LC0_HISTORY
     /// The seven positions preceding this one, most recent first, for Lc0's history planes.
     [[nodiscard]] const std::array<PiecePlacement, PREVIOUS_POSITION_COUNT> &
     previousPlacements() const {
         return m_placementWindow->placements;
     }
     [[nodiscard]] static PiecePlacement placementOf(const Stockfish::Position &position);
+#endif
 
     /**
      * Produces an ASCII representation of the board similar to the Python version:
@@ -132,8 +138,10 @@ private:
 
     Stockfish::Position m_pos;
     std::shared_ptr<const PositionHistory> m_history;
+#ifdef CHESS_LC0_HISTORY
     // Shared and immutable: the tree keeps one Board per node, so copying must stay a refcount bump.
     std::shared_ptr<const PlacementWindow> m_placementWindow;
+#endif
     std::array<RecentMove, RECENT_MOVE_COUNT> m_recentMoves{};
     std::size_t m_recentMoveCount = 0;
     mutable std::optional<std::vector<Stockfish::Move>> m_validMoves;

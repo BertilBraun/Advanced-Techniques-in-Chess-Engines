@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from src.distillation.lc0_teacher import teacher_input_dtype
-from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes
+from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes, ensure_native_lc0_history
 
 MOVE_PRIOR_PATTERN = re.compile(r'^info string\s+(?P<move>[a-h][1-8][a-h][1-8][qrbn]?)\s.*\(P:\s*(?P<prior>[0-9.]+)%\)')
 WDL_PATTERN = re.compile(r'\bwdl\s+(\d+)\s+(\d+)\s+(\d+)\b')
@@ -238,6 +238,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     arguments = parse_arguments()
+    ensure_native_lc0_history()
     device = torch.device(arguments.device)
     model = torch.jit.load(str(arguments.teacher_model), map_location=device).eval()
     opening_lines = read_opening_lines(arguments.openings, arguments.positions)

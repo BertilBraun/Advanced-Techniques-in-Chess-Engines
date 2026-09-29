@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from src.distillation.lc0_teacher import teacher_fixed_batch, teacher_input_dtype
-from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes
+from src.games.chess.contract import CHESS_STATE_CONTRACT, decode_lc0_planes, ensure_native_lc0_history
 from tools.measure_teacher_agreement import legal_softmax, match_positions
 
 
@@ -64,6 +64,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     arguments = parse_arguments()
+    ensure_native_lc0_history()
     device = torch.device(arguments.device)
     reference = torch.jit.load(str(arguments.reference), map_location=device).eval()
     candidate = torch.jit.load(str(arguments.candidate), map_location=device).eval()

@@ -32,6 +32,7 @@ static constexpr int BOARD_LENGTH = 8;
 static constexpr std::array PIECE_TYPES = {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP,
                                            PieceType::ROOK, PieceType::QUEEN,  PieceType::KING};
 
+#ifdef CHESS_LC0_HISTORY
 Board::PiecePlacement Board::placementOf(const Position &position) {
     PiecePlacement placement{};
     int channel = 0;
@@ -43,6 +44,7 @@ Board::PiecePlacement Board::placementOf(const Position &position) {
     placement.occupied = true;
     return placement;
 }
+#endif
 
 [[nodiscard]] static Square boardSquare(const int file, const int rank) {
     assert(file >= 0 && file < BOARD_LENGTH);
@@ -57,14 +59,18 @@ Board::Board(const std::string &fen) {
 
 Board::Board(const Board &other)
     : m_pos(other.m_pos), m_history(other.m_history),
-      m_placementWindow(other.m_placementWindow), m_recentMoves(other.m_recentMoves),
-      m_recentMoveCount(other.m_recentMoveCount) {}
+#ifdef CHESS_LC0_HISTORY
+      m_placementWindow(other.m_placementWindow),
+#endif
+      m_recentMoves(other.m_recentMoves), m_recentMoveCount(other.m_recentMoveCount) {}
 
 Board &Board::operator=(const Board &other) {
     if (this != &other) {
         m_pos = other.m_pos;
         m_history = other.m_history;
+#ifdef CHESS_LC0_HISTORY
         m_placementWindow = other.m_placementWindow;
+#endif
         m_recentMoves = other.m_recentMoves;
         m_recentMoveCount = other.m_recentMoveCount;
         m_validMoves.reset();
@@ -96,6 +102,7 @@ void Board::makeMove(Move m) {
                           : m.to_sq();
     m_recentMoves[0] = RecentMove{.from = from, .to = to};
     m_recentMoveCount = std::min(m_recentMoveCount + 1, RECENT_MOVE_COUNT);
+#ifdef CHESS_LC0_HISTORY
     PiecePlacement placementBeforeMove = placementOf(m_pos);
     placementBeforeMove.repeated = repetitionCount() >= 1;
     auto window = std::make_shared<PlacementWindow>();
@@ -103,6 +110,7 @@ void Board::makeMove(Move m) {
     std::copy_n(m_placementWindow->placements.begin(), PREVIOUS_POSITION_COUNT - 1,
                 window->placements.begin() + 1);
     m_placementWindow = std::move(window);
+#endif
     m_pos.do_move(m);
     const bool castlingRightsChanged = castlingRightsMask() != castlingRightsBeforeMove;
     const bool resetsRepetitionHistory = pawnMove || capture || castlingRightsChanged;
@@ -122,7 +130,9 @@ void Board::setFen(const std::string &fen) {
     position.set(fen, false);
     m_pos = std::move(position);
     m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
+#ifdef CHESS_LC0_HISTORY
     m_placementWindow = std::make_shared<const PlacementWindow>();
+#endif
     m_recentMoves = {};
     m_recentMoveCount = 0;
     m_validMoves.reset();

@@ -1,6 +1,7 @@
 #include "TestRunner.hpp"
 #include "games/chess/encoding/ChessEncoding.hpp"
 
+#ifdef CHESS_LC0_HISTORY
 namespace {
 // Lc0 INPUT_CLASSICAL_112_PLANE: history position h (0 = current) owns planes 13h..13h+12, ours
 // P N B R Q K, theirs P N B R Q K, then repetition.
@@ -26,48 +27,8 @@ Board afterMoves(std::initializer_list<const char *> moves) {
     }
     return board;
 }
-} // namespace
 
-int runChessEncodingTests() {
-    Stockfish::Bitboards::init();
-    Stockfish::Position::init();
-
-    const Board midgame("r3k2r/ppp2ppp/2n1bn2/3qp3/3P4/2N1BN2/PPP2PPP/R2Q1RK1 w kq - 7 11");
-    const torch::Tensor expected = tensorEncoding(encodeBoard(midgame));
-    std::vector<std::int8_t> actual(static_cast<size_t>(expected.numel()));
-    ChessEncoding::encodeInputInto(midgame, actual.data());
-    const torch::Tensor actualTensor = torch::from_blob(actual.data(), expected.sizes(),
-                                                        torch::TensorOptions().dtype(torch::kInt8));
-    if (!torch::equal(expected, actualTensor)) {
-        return 1;
-    }
-
-    Board historyBoard;
-    historyBoard.makeMove(historyBoard.legalMoveFromUci("e2e4"));
-    const ProjectEncodedBoard blackHistory = encodeProjectBoard(historyBoard);
-    if (!blackHistory.binaryPlanes[22].test(52) || !blackHistory.binaryPlanes[23].test(36)) {
-        return 1;
-    }
-    historyBoard.makeMove(historyBoard.legalMoveFromUci("c7c5"));
-    const ProjectEncodedBoard whiteHistory = encodeProjectBoard(historyBoard);
-    if (!whiteHistory.binaryPlanes[22].test(50) || !whiteHistory.binaryPlanes[23].test(34) ||
-        !whiteHistory.binaryPlanes[24].test(12) || !whiteHistory.binaryPlanes[25].test(28)) {
-        return 1;
-    }
-    if (whiteHistory.binaryPlanes[38].word(0) != 0xAA55'AA55'AA55'AA55ULL) {
-        return 1;
-    }
-    const Board oppositeBishops("2b3k1/8/8/8/8/8/8/2B3K1 w - - 0 1");
-    if (encodeProjectBoard(oppositeBishops).binaryPlanes[39].count() != 64) {
-        return 1;
-    }
-    const ProjectEncodedBoard projectInitial = encodeProjectBoard(Board{});
-    if (projectInitial.scalarPlanes[7] != 8 || projectInitial.scalarPlanes[8] != 2 ||
-        projectInitial.scalarPlanes[9] != 2 || projectInitial.scalarPlanes[10] != 2 ||
-        projectInitial.scalarPlanes[11] != 1) {
-        return 1;
-    }
-
+int runLc0EncodingTests() {
     const Lc0EncodedBoard initial = encodeLc0Board(Board{});
     if (initial.binaryPlanes[ownPawns].word(0) != rankTwo ||
         initial.binaryPlanes[opponentPawns].word(0) != rankSeven) {
@@ -140,4 +101,53 @@ int runChessEncodingTests() {
         return 1;
     }
     return 0;
+}
+} // namespace
+#endif
+
+int runChessEncodingTests() {
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
+
+    const Board midgame("r3k2r/ppp2ppp/2n1bn2/3qp3/3P4/2N1BN2/PPP2PPP/R2Q1RK1 w kq - 7 11");
+    const torch::Tensor expected = tensorEncoding(encodeBoard(midgame));
+    std::vector<std::int8_t> actual(static_cast<size_t>(expected.numel()));
+    ChessEncoding::encodeInputInto(midgame, actual.data());
+    const torch::Tensor actualTensor = torch::from_blob(actual.data(), expected.sizes(),
+                                                        torch::TensorOptions().dtype(torch::kInt8));
+    if (!torch::equal(expected, actualTensor)) {
+        return 1;
+    }
+
+    Board historyBoard;
+    historyBoard.makeMove(historyBoard.legalMoveFromUci("e2e4"));
+    const ProjectEncodedBoard blackHistory = encodeProjectBoard(historyBoard);
+    if (!blackHistory.binaryPlanes[22].test(52) || !blackHistory.binaryPlanes[23].test(36)) {
+        return 1;
+    }
+    historyBoard.makeMove(historyBoard.legalMoveFromUci("c7c5"));
+    const ProjectEncodedBoard whiteHistory = encodeProjectBoard(historyBoard);
+    if (!whiteHistory.binaryPlanes[22].test(50) || !whiteHistory.binaryPlanes[23].test(34) ||
+        !whiteHistory.binaryPlanes[24].test(12) || !whiteHistory.binaryPlanes[25].test(28)) {
+        return 1;
+    }
+    if (whiteHistory.binaryPlanes[38].word(0) != 0xAA55'AA55'AA55'AA55ULL) {
+        return 1;
+    }
+    const Board oppositeBishops("2b3k1/8/8/8/8/8/8/2B3K1 w - - 0 1");
+    if (encodeProjectBoard(oppositeBishops).binaryPlanes[39].count() != 64) {
+        return 1;
+    }
+    const ProjectEncodedBoard projectInitial = encodeProjectBoard(Board{});
+    if (projectInitial.scalarPlanes[7] != 8 || projectInitial.scalarPlanes[8] != 2 ||
+        projectInitial.scalarPlanes[9] != 2 || projectInitial.scalarPlanes[10] != 2 ||
+        projectInitial.scalarPlanes[11] != 1) {
+        return 1;
+    }
+
+#ifdef CHESS_LC0_HISTORY
+    return runLc0EncodingTests();
+#else
+    return 0;
+#endif
 }

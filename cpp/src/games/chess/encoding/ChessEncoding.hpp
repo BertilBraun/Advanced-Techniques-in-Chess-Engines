@@ -18,10 +18,12 @@ enum class ChessActionEncoding {
 
 inline constexpr ChessActionEncoding chessActionEncoding = ChessActionEncoding::Reduced;
 
-// Two input layouts exist side by side. The project's own 52 planes feed its networks; Lc0's
-// INPUT_CLASSICAL_112_PLANE layout feeds an Lc0 teacher. Both encoders are always compiled, so a
-// teacher can be queried while a project network is trained. CHESS_LC0_INPUT only chooses which one
-// the search and the inference pipeline use.
+// Two input layouts. The project's own 52 planes feed its networks; Lc0's INPUT_CLASSICAL_112_PLANE
+// layout feeds an Lc0 teacher and exists only with CHESS_LC0_HISTORY, because it needs a board
+// history recorded on every move. CHESS_LC0_INPUT, which implies it, makes the search use Lc0's.
+#if defined(CHESS_LC0_INPUT) && !defined(CHESS_LC0_HISTORY)
+#error "CHESS_LC0_INPUT requires CHESS_LC0_HISTORY"
+#endif
 #ifdef CHESS_LC0_INPUT
 inline constexpr bool chessSearchUsesLc0Input = true;
 #else
@@ -94,6 +96,8 @@ using CompressedEncodedBoard = EncodedPlanes<ChessRepresentationDimensions::boar
                                              ChessRepresentationDimensions::scalarChannelCount>;
 
 [[nodiscard]] ProjectEncodedBoard encodeProjectBoard(const Board &board);
+#ifdef CHESS_LC0_HISTORY
 [[nodiscard]] Lc0EncodedBoard encodeLc0Board(const Board &board);
+#endif
 [[nodiscard]] CompressedEncodedBoard encodeBoard(const Board &board);
 [[nodiscard]] torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed);

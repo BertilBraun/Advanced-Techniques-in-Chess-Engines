@@ -2,7 +2,9 @@
 
 **Merged into master on 2026-09-29.** The branch ended up keeping both chess input layouts: the project's own
 52 planes by default and Lc0's classical 112 planes only in a build with `-DCHESS_LC0_INPUT=ON`, so this
-project's networks run unchanged. Results: [summary](../analysis/plateau-investigation-v100-onwards-20260928.md);
+project's networks run unchanged. The board placement history those planes need is compiled only with
+`-DCHESS_LC0_HISTORY=ON` (implied by `CHESS_LC0_INPUT`); standard builds record no history and have no
+`lc0_packed_encoding()`, so the teacher tools below need an extension built with it. Results: [summary](../analysis/plateau-investigation-v100-onwards-20260928.md);
 the run it led to: [final run with a T1-shaped network](chess-attention-final-run-plan-20260929.md).
 
 ## Question
@@ -100,7 +102,7 @@ note.
 
 ### 2. Build and run the native tests
 
-    cmake -S cpp -B ~/advanced-chess-compile-check       -DCMAKE_BUILD_TYPE=CompileCheck -DBUILD_TESTING=OFF       -DBUILD_BENCHMARKS=OFF -DENABLE_NATIVE_ARCHITECTURE=OFF
+    cmake -S cpp -B ~/advanced-chess-compile-check       -DCMAKE_BUILD_TYPE=CompileCheck -DBUILD_TESTING=OFF       -DBUILD_BENCHMARKS=OFF -DENABLE_NATIVE_ARCHITECTURE=OFF -DCHESS_LC0_HISTORY=ON
     cmake --build ~/advanced-chess-compile-check --target AlphaZeroCpp --parallel "${EFFECTIVE_CPUS}"
 
 Then a Release build with `NativeTests` enabled, since anything measured or deployed needs Release.

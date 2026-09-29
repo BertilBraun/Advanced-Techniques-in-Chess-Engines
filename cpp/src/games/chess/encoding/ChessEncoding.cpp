@@ -101,6 +101,7 @@ ProjectEncodedBoard encodeProjectBoard(const Board &board) {
     return out;
 }
 
+#ifdef CHESS_LC0_HISTORY
 Lc0EncodedBoard encodeLc0Board(const Board &board) {
     Lc0EncodedBoard out{};
 
@@ -162,6 +163,7 @@ Lc0EncodedBoard encodeLc0Board(const Board &board) {
 
     return out;
 }
+#endif
 
 CompressedEncodedBoard encodeBoard(const Board &board) {
 #ifdef CHESS_LC0_INPUT

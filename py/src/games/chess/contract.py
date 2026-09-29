@@ -28,8 +28,8 @@ LC0_BINARY_CHANNEL_COUNT = 109
 
 # The layout the search feeds its network. `lc0` must be paired with an extension built with
 # -DCHESS_LC0_INPUT=ON; ensure_native_input_layout() checks the pairing. Lc0 planes are available
-# through `lc0_packed_encoding()` in either build, so a teacher can be queried while a project network
-# is trained.
+# through `lc0_packed_encoding()` only in an extension built with -DCHESS_LC0_HISTORY=ON (implied by
+# CHESS_LC0_INPUT), which records the board history they need on every move; standard builds do not.
 CHESS_SEARCH_INPUT = os.environ.get('ENGINE_CHESS_INPUT', 'project')
 if CHESS_SEARCH_INPUT not in {'project', 'lc0'}:
     raise ValueError(f"ENGINE_CHESS_INPUT must be 'project' or 'lc0', got {CHESS_SEARCH_INPUT!r}.")
@@ -53,6 +53,16 @@ def ensure_native_input_layout() -> None:
         raise RuntimeError(
             f'The loaded extension feeds its search {native} planes but ENGINE_CHESS_INPUT={CHESS_SEARCH_INPUT} '
             f'expects {CHESS_CHANNEL_COUNT}. Load the extension built for this layout.'
+        )
+
+
+def ensure_native_lc0_history() -> None:
+    import AlphaZeroCpp
+
+    if not AlphaZeroCpp.CHESS_LC0_HISTORY:
+        raise RuntimeError(
+            'Lc0 input planes need an extension built with -DCHESS_LC0_HISTORY=ON; the loaded one records no '
+            'board history.'
         )
 
 

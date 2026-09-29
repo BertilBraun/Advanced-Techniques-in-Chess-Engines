@@ -135,3 +135,9 @@ def test_policy_shaped_auxiliary_heads_reject_a_mismatched_action_space() -> Non
             DensePolicyHeadConfiguration(channels=BOTTLENECK_CHANNELS),
             (NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_ACTION_SIZE + 1, ply_offset=1),),
         )
+
+
+@pytest.mark.native
+def test_native_chess_exposes_lc0_planes_only_when_built_with_board_history() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    assert hasattr(native.ChessPosition(), 'lc0_packed_encoding') == native.CHESS_LC0_HISTORY

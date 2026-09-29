@@ -27,7 +27,7 @@ import torch
 from src.distillation.dataset import open_dataset
 from src.distillation.lc0_teacher import teacher_input_dtype
 from src.evaluation.inference import decode_packed_inputs
-from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, decode_lc0_planes
+from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, decode_lc0_planes, ensure_native_lc0_history
 from src.games.representation import PackedPlanePayload
 
 TEACHER_BATCH = 64
@@ -192,6 +192,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     arguments = parse_arguments()
+    ensure_native_lc0_history()
     device = torch.device(arguments.device)
     teacher = torch.jit.load(str(arguments.teacher_model), map_location=device).eval()
     networks = {

@@ -26,6 +26,7 @@ from src.games.chess.contract import (
     CHESS_STATE_CONTRACT,
     ChessPosition,
     decode_lc0_planes,
+    ensure_native_lc0_history,
 )
 from src.games.representation import PackedPlanePayload
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path
@@ -449,6 +450,7 @@ def main() -> None:
     arguments = parse_arguments()
     device = torch.device('cuda', arguments.device_id) if torch.cuda.is_available() else torch.device('cpu')
     if arguments.lc0_teacher is not None:
+        ensure_native_lc0_history()
         # Lc0 exposes only a policy and a WDL head, so nothing auxiliary is captured for this arm.
         auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = ()
         head_indices = locate_auxiliary_heads(auxiliary_heads)
