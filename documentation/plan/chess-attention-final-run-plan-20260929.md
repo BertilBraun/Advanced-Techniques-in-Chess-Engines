@@ -2,8 +2,8 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `b4fa2bc453b80e56664a2450995d4e0c2f36b0337a4766b9682944ce0794c2b7`). Not started;
-waiting for a node.
+(`experiment_configuration_sha256` `895c540a6cba7f1e240f5fb1a1896214ee6cecf251d33d7e463d19e7f700f647`). Not started;
+the node is provisioned and the pre-start checks are below.
 
 ## Why this run
 
@@ -48,13 +48,14 @@ The final recipe (`chess-final-config.yaml`) with only these changes:
 | Setting | Final recipe | This run | Why |
 |---|---|---|---|
 | Model ladder | 12x128 -> 14x160 -> 19x176 CNN | 8x160 (208M MAC per position) -> medium T1-shaped | T1's construction; the same step factor as the CNN's first promotion |
-| Medium model | — | 10x192 (366M), 12x192 (437M) or 10x224 (494M), chosen on the node by throughput | |
+| Medium model | — | 10x192 (366M) | 12x192 and 10x224 search 13% and 19% slower, and only 10x192's strength was measured ([throughput](../benchmarks/attention-final-run-throughput-rtx4070s-20260929/README.md)) |
 | Quantization | INT8 QAT | off, TensorRT float16 templates | QAT exists only for post-activation CNNs |
 | Optimizer | SGD, Nesterov 0.9, weight decay 1e-4 | same | as AlphaZero, KataGo and Lc0 |
 | Learning rate | linear 0.2 -> 0.01 floor | 0.1 to generation 100, then geometric to 0.002 by generation 1000 | AlphaZero's 0.2 at batch 4,096 scaled to 2,048; annealed 50x, near KataGo's automatic schedules at our batch |
 | Generation | 500 steps, replay reuse 4 | 360 steps, reuse 3 | fewer positions an hour from the slower network; 245,760 new positions per generation against 256,000; generation-keyed schedules unchanged, so they arrive after 0.72x the steps |
 | Value discount | 0.998 per remaining ply on targets, 0.99 per ply in search | none in either | AlphaZero, KataGo and Lc0 do not discount; evaluation search changes with it |
 | Replay window | 600K -> 20M rows in ten stages by generation 1000 | the same endpoints along ln(1 + generation / 50) | continuous growth; within 12% of the stages at their generations up to 100, then above the flat 8M stretch: 14.6M against 12M at 400, 17.9M against 16M at 700 |
+| Bootstrap prior | calibrated scale baked into the trainable head | the same scale at inference only, fading over 10 generations (V49) | baked in, the 75x scale this network needs fails the trainer's initialization guard |
 | Candidate | — | from scratch, starts at 20 Elo/h, catch-up 0.1 -> 0.03 (V98), promoted after two consecutive candidate matches at 0.48 or better | |
 | Dependency lock | `bffc5dad...` | same, inherited | the lock with the lc0 and publication extras and ModelOpt's ONNX dependencies; the run checks it at start |
 
@@ -70,7 +71,16 @@ FP8 can be tested. Needs at least 80 effective CPUs and 200 GiB RAM **as granted
 
 8x RTX 3060 is cheaper but slower, cannot run FP8, and would need its own CNN baseline.
 
+Rented: instance `53401154` ([node note](../operations/current-node.md)), 8x RTX 4070 SUPER **capped at 160 W**,
+76.8 CPUs and **120 GiB RAM** granted. The run's RAM floor is lowered to 120 GiB; the power cap likely costs some
+throughput against the baseline node, which biases the equal-time comparison slightly against this run.
+
 ## Before the start, on the node
+
+Status on 2026-09-29: steps 1-5 done ([measurements](../benchmarks/attention-final-run-throughput-rtx4070s-20260929/README.md)).
+FP8 is rejected (1.11x, top-move agreement 0.842 against float16), the medium model stays 10x192, and a
+random-weight template refit with new weights matches a direct build exactly. The first smoke found the
+bootstrap-prior failure above; the second runs with the fix.
 
 1. Provision with `deployment/setup_remote.sh`; record the cgroup CPU and memory grant and confirm the native
    extension has TensorRT.
