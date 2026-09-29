@@ -229,6 +229,7 @@ class MatchEvaluationJob(FrozenModel):
             'random': 'random',
             'policy_random': 'random',
             'previous_checkpoint': 'checkpoint',
+            'progressive_candidate': 'checkpoint',
             'reference_checkpoint': 'checkpoint',
             'stockfish': 'stockfish',
             'stockfish_fixed_nodes': 'stockfish_fixed_nodes',

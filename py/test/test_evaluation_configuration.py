@@ -7,11 +7,13 @@ from pydantic import TypeAdapter, ValidationError
 from src.evaluation.configuration import (
     EvaluationConfiguration,
     EvaluationSearchConfiguration,
+    ProgressiveCandidateEvaluationDefinition,
     StockfishEngineConfiguration,
     StockfishFixedNodesEvaluationDefinition,
     alphazero_exploration_constant,
 )
 from src.evaluation.contracts import (
+    CheckpointOpponent,
     EvaluationJob,
     MatchEvaluationJob,
     OpeningLine,
@@ -75,6 +77,33 @@ def test_resolved_match_opponent_must_match_its_definition() -> None:
             random_seed=0,
             result_path=Path('result.json'),
         )
+
+
+def test_progressive_candidate_match_accepts_the_active_checkpoint_as_opponent() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    stockfish_definition = experiment.evaluation.definitions[-1]
+    definition = ProgressiveCandidateEvaluationDefinition(
+        kind='progressive_candidate',
+        definition_id='progressive-candidate',
+        opening_pair_count=1,
+        maximum_game_plies=40,
+        search=stockfish_definition.search,
+    )
+
+    job = MatchEvaluationJob(
+        kind='match',
+        job_id='candidate',
+        definition=definition,
+        boundary_seconds=1200,
+        candidate=checkpoint_reference(),
+        opponent=CheckpointOpponent(kind='checkpoint', checkpoint=checkpoint_reference()),
+        device_id=0,
+        deadline_seconds=60,
+        random_seed=0,
+        result_path=Path('result.json'),
+    )
+
+    assert job.opponent.kind == 'checkpoint'
 
 
 def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opponent(tmp_path: Path) -> None:
