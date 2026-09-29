@@ -1,0 +1,29 @@
+{
+  "timestamp_utc": "20260929T192038Z",
+  "source_revision": "ce04f219304bd1c806fc6d83f48a0bc2c5b3baba",
+  "game": "chess",
+  "model": {
+    "path": "/workspace/matrix/models/attention-8x160.fp16.onnx",
+    "sha256": "ae23b70c04f925572a17377a99b9ca1f6983dd59eef82e1e33024e7df1fdc1b3"
+  },
+  "run_config": "/workspace/alphazero-engine/py/configs/production/vast-chess-8gpu-final-attention.yaml",
+  "checkpoint_manifest": null,
+  "topology": {
+    "gpu_count": 1,
+    "processes_per_gpu": 4,
+    "parallel_games_per_process": 512,
+    "total_parallel_games": 2048,
+    "pin_workers_to_cpus": false,
+    "cpus_per_process": 4
+  },
+  "workload": {
+    "generation": 1026,
+    "warmup_batches": 2,
+    "duration_seconds": 60
+  },
+  "inference_overrides": {
+    "precision": null,
+    "memory_format": null,
+    "cudnn_benchmark": null
+  }
+}

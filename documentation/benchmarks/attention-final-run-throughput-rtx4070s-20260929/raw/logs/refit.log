@@ -1,0 +1,11 @@
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/onnx/_internal/torchscript_exporter/utils.py:1510: UserWarning: no signature found for builtin <built-in method __call__ of pybind11_builtins.pybind11_detail_function_record_v1_system_libstdcpp_gxx_abi_1xxx_use_cxx11_abi_1 object at 0x7f08a4977c50>, skipping _decide_input_format
+  args = _decide_input_format(model, args)
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/onnx/_internal/torchscript_exporter/utils.py:1785: UserWarning: Warning: ONNX export does not support duplicated values in 'index' field, this will cause the ONNX model to be incorrect.
+  return symbolic_fn(graph_context, *inputs, **attrs)
+[09/29/2026-19:09:13] [TRT] [F] (refitOnnxWeights): REFIT_FAILED: Assertion failed: successfullyRefittedWeights == numberOfWeightsToRefit: Only successfully refitted 96 weights out of 126
+Traceback (most recent call last):
+  File "/workspace/matrix/refit_check.py", line 26, in <module>
+    refit_engine(template_engine, trained_onnx, refitted_engine)
+  File "/workspace/alphazero-engine/py/tools/publish_tensorrt_engine.py", line 175, in refit_engine
+    raise ValueError(f'TensorRT could not refit from {onnx_path}')
+ValueError: TensorRT could not refit from /workspace/matrix/refit/trained-b320-fp16.onnx

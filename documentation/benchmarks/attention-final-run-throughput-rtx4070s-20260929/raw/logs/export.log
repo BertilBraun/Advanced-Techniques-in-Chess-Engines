@@ -1,0 +1,5 @@
+attention-8x160: 7,223,971 parameters -> /workspace/matrix/models/attention-8x160.pt
+attention-10x192: 11,908,643 parameters -> /workspace/matrix/models/attention-10x192.pt
+attention-12x192: 14,047,523 parameters -> /workspace/matrix/models/attention-12x192.pt
+attention-10x224: 15,669,859 parameters -> /workspace/matrix/models/attention-10x224.pt
+cnn-14x160: 6,522,187 parameters -> /workspace/matrix/models/cnn-14x160.pt

@@ -1,0 +1,326 @@
+{
+  "manifest": {
+    "timestamp_utc": "20260929T192038Z",
+    "source_revision": "ce04f219304bd1c806fc6d83f48a0bc2c5b3baba",
+    "game": "chess",
+    "model": {
+      "path": "/workspace/matrix/models/attention-12x192.fp16.onnx",
+      "sha256": "6e9fd8333ee1264a9a67dfe16eac906c1e4c4268e2687a74dd1adacdd239af8b"
+    },
+    "run_config": "/workspace/alphazero-engine/py/configs/production/vast-chess-8gpu-final-attention.yaml",
+    "checkpoint_manifest": null,
+    "topology": {
+      "gpu_count": 1,
+      "processes_per_gpu": 4,
+      "parallel_games_per_process": 512,
+      "total_parallel_games": 2048,
+      "pin_workers_to_cpus": false,
+      "cpus_per_process": 4
+    },
+    "workload": {
+      "generation": 1026,
+      "warmup_batches": 2,
+      "duration_seconds": 60
+    },
+    "inference_overrides": {
+      "precision": null,
+      "memory_format": null,
+      "cudnn_benchmark": null
+    }
+  },
+  "measurement": {
+    "makespan_seconds": 74.28358146781102,
+    "searches_completed": 3276800,
+    "searches_per_second": 44112.03573187867,
+    "completed_games": 8,
+    "completed_positions": 28,
+    "completed_positions_per_second": 0.3769338990761117,
+    "completed_game_bytes": 22768,
+    "average_game_plies": 9.625,
+    "search_batches": 8
+  },
+  "inference": {
+    "evaluations": 3266705,
+    "model_calls": 10217,
+    "model_positions": 3266705,
+    "average_batch_size": 319.7323088969365
+  },
+  "search_thread_nanoseconds_per_simulation": {
+    "tree_selection": 0,
+    "board_encoding": 0,
+    "result_processing": 3551.609905090332,
+    "tree_backup": 0,
+    "inference_wait": 68642.75299560546,
+    "inference": 6319.052104797363
+  },
+  "resources": {
+    "aggregate_process_cpu_percent": 129.2091396982791,
+    "summed_peak_rss_mib": 10489.08984375
+  },
+  "workers": [
+    {
+      "average_game_plies": 11.5,
+      "board_encoding_nanoseconds": 0,
+      "completed_game_bytes": 5789,
+      "completed_games": 2,
+      "completed_positions": 7,
+      "cudnn_benchmark": true,
+      "device_id": 0,
+      "elapsed_seconds": 74.15714240586385,
+      "experiment_configuration_sha256": "2c4bd2820c012c58c3f2dd8aa2fb16de0ee1c2904649b977e293ba92f1a17576",
+      "game": "chess",
+      "inference_average_batch_size": 319.6340508806262,
+      "inference_backend": "tensorrt",
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 1
+        },
+        {
+          "batch_size": 134,
+          "calls": 1
+        },
+        {
+          "batch_size": 148,
+          "calls": 1
+        },
+        {
+          "batch_size": 190,
+          "calls": 1
+        },
+        {
+          "batch_size": 194,
+          "calls": 1
+        },
+        {
+          "batch_size": 319,
+          "calls": 2
+        },
+        {
+          "batch_size": 320,
+          "calls": 2548
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 816665,
+      "inference_model_calls": 2555,
+      "inference_model_positions": 816665,
+      "inference_nanoseconds": 5174957276,
+      "inference_wait_nanoseconds": 56381129169,
+      "inference_workers": 1,
+      "memory_format": "channels_last",
+      "model_generation": 1026,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 4,
+      "peak_rss_mib": 2621.734375,
+      "precision": "bfloat16",
+      "process_cpu_percent": 32.35098447928192,
+      "process_id": 43831,
+      "result_processing_nanoseconds": 2959524819,
+      "search_batches": 2,
+      "searches_completed": 819200,
+      "searches_per_second": 11046.811856860642,
+      "tree_backup_nanoseconds": 0,
+      "tree_selection_nanoseconds": 0,
+      "warmup_batches": 2,
+      "worker_id": 0
+    },
+    {
+      "average_game_plies": 0.0,
+      "board_encoding_nanoseconds": 0,
+      "completed_game_bytes": 0,
+      "completed_games": 0,
+      "completed_positions": 0,
+      "cudnn_benchmark": true,
+      "device_id": 0,
+      "elapsed_seconds": 73.910859817639,
+      "experiment_configuration_sha256": "2c4bd2820c012c58c3f2dd8aa2fb16de0ee1c2904649b977e293ba92f1a17576",
+      "game": "chess",
+      "inference_average_batch_size": 319.740234375,
+      "inference_backend": "tensorrt",
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 92,
+          "calls": 1
+        },
+        {
+          "batch_size": 140,
+          "calls": 1
+        },
+        {
+          "batch_size": 191,
+          "calls": 1
+        },
+        {
+          "batch_size": 193,
+          "calls": 1
+        },
+        {
+          "batch_size": 319,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2555
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 818535,
+      "inference_model_calls": 2560,
+      "inference_model_positions": 818535,
+      "inference_nanoseconds": 5093249821,
+      "inference_wait_nanoseconds": 57265463985,
+      "inference_workers": 1,
+      "memory_format": "channels_last",
+      "model_generation": 1026,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 4,
+      "peak_rss_mib": 2623.41015625,
+      "precision": "bfloat16",
+      "process_cpu_percent": 30.57598879888379,
+      "process_id": 43832,
+      "result_processing_nanoseconds": 2866022474,
+      "search_batches": 2,
+      "searches_completed": 819200,
+      "searches_per_second": 11083.62156821366,
+      "tree_backup_nanoseconds": 0,
+      "tree_selection_nanoseconds": 0,
+      "warmup_batches": 2,
+      "worker_id": 1
+    },
+    {
+      "average_game_plies": 9.333333333333334,
+      "board_encoding_nanoseconds": 0,
+      "completed_game_bytes": 9399,
+      "completed_games": 3,
+      "completed_positions": 12,
+      "cudnn_benchmark": true,
+      "device_id": 0,
+      "elapsed_seconds": 74.28358146781102,
+      "experiment_configuration_sha256": "2c4bd2820c012c58c3f2dd8aa2fb16de0ee1c2904649b977e293ba92f1a17576",
+      "game": "chess",
+      "inference_average_batch_size": 319.85624755189974,
+      "inference_backend": "tensorrt",
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 198,
+          "calls": 1
+        },
+        {
+          "batch_size": 219,
+          "calls": 2
+        },
+        {
+          "batch_size": 289,
+          "calls": 1
+        },
+        {
+          "batch_size": 314,
+          "calls": 2
+        },
+        {
+          "batch_size": 320,
+          "calls": 2547
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 816593,
+      "inference_model_calls": 2553,
+      "inference_model_positions": 816593,
+      "inference_nanoseconds": 5181992345,
+      "inference_wait_nanoseconds": 54782575400,
+      "inference_workers": 1,
+      "memory_format": "channels_last",
+      "model_generation": 1026,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 4,
+      "peak_rss_mib": 2624.11328125,
+      "precision": "bfloat16",
+      "process_cpu_percent": 34.4466800097516,
+      "process_id": 43833,
+      "result_processing_nanoseconds": 2934719842,
+      "search_batches": 2,
+      "searches_completed": 819200,
+      "searches_per_second": 11028.008932969668,
+      "tree_backup_nanoseconds": 0,
+      "tree_selection_nanoseconds": 0,
+      "warmup_batches": 2,
+      "worker_id": 2
+    },
+    {
+      "average_game_plies": 8.666666666666666,
+      "board_encoding_nanoseconds": 0,
+      "completed_game_bytes": 7580,
+      "completed_games": 3,
+      "completed_positions": 9,
+      "cudnn_benchmark": true,
+      "device_id": 0,
+      "elapsed_seconds": 73.82917449111119,
+      "experiment_configuration_sha256": "2c4bd2820c012c58c3f2dd8aa2fb16de0ee1c2904649b977e293ba92f1a17576",
+      "game": "chess",
+      "inference_average_batch_size": 319.69870537465675,
+      "inference_backend": "tensorrt",
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 2,
+          "calls": 1
+        },
+        {
+          "batch_size": 178,
+          "calls": 1
+        },
+        {
+          "batch_size": 192,
+          "calls": 1
+        },
+        {
+          "batch_size": 235,
+          "calls": 1
+        },
+        {
+          "batch_size": 273,
+          "calls": 2
+        },
+        {
+          "batch_size": 319,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2542
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 814912,
+      "inference_model_calls": 2549,
+      "inference_model_positions": 814912,
+      "inference_nanoseconds": 5256070495,
+      "inference_wait_nanoseconds": 56499404462,
+      "inference_workers": 1,
+      "memory_format": "channels_last",
+      "model_generation": 1026,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 4,
+      "peak_rss_mib": 2619.83203125,
+      "precision": "bfloat16",
+      "process_cpu_percent": 31.8354864103618,
+      "process_id": 43834,
+      "result_processing_nanoseconds": 2877648202,
+      "search_batches": 2,
+      "searches_completed": 819200,
+      "searches_per_second": 11095.884596388509,
+      "tree_backup_nanoseconds": 0,
+      "tree_selection_nanoseconds": 0,
+      "warmup_batches": 2,
+      "worker_id": 3
+    }
+  ]
+}

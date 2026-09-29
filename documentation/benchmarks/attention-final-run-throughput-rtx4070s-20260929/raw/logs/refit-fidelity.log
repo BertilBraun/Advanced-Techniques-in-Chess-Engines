@@ -1,0 +1,5 @@
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/onnx/_internal/torchscript_exporter/utils.py:1510: UserWarning: no signature found for builtin <built-in method __call__ of pybind11_builtins.pybind11_detail_function_record_v1_system_libstdcpp_gxx_abi_1xxx_use_cxx11_abi_1 object at 0x7f33c7577c50>, skipping _decide_input_format
+  args = _decide_input_format(model, args)
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/onnx/_internal/torchscript_exporter/utils.py:1785: UserWarning: Warning: ONNX export does not support duplicated values in 'index' field, this will cause the ONNX model to be incorrect.
+  return symbolic_fn(graph_context, *inputs, **attrs)
+REFIT_FIDELITY {"positions": 320, "policy_top1_agreement": 1.0, "mean_policy_kl_divergence": 0.0, "maximum_policy_kl_divergence": 0.0, "wdl_mean_absolute_error": 4.730224609375e-05, "wdl_maximum_absolute_error": 0.00048828125, "expected_value_mean_absolute_error": 6.9427490234375e-05, "expected_value_maximum_absolute_error": 0.00048828125}

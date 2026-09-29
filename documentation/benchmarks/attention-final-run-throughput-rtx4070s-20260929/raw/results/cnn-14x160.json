@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "source_revision": {
+    "commit": "ce04f219304bd1c806fc6d83f48a0bc2c5b3baba",
+    "dirty": false
+  },
+  "inference_model": {
+    "path": "/workspace/matrix/models/cnn-14x160.pt",
+    "sha256": "1b806aa7941c5221e3c53d611b1d05e4da3ad41b5b94aa0267e6eb94a97aa6a6"
+  },
+  "dataset": {
+    "path": "/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin",
+    "sha256": "147b525c430d2a677a6e1309ce60bf7bb22a4886726c5affae63a9f3349d96c8"
+  },
+  "fidelity_positions": 196,
+  "calibration_positions": 320,
+  "calibration_fidelity_overlap_positions": 0,
+  "batch_size": 320,
+  "hardware": {
+    "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": [
+      8,
+      9
+    ],
+    "driver_version": "580.159.03",
+    "tensorrt_version": "10.14.1.48.post1",
+    "modelopt_version": "0.46.1"
+  },
+  "fidelity_limits": {
+    "minimum_policy_top1_agreement": 0.98,
+    "maximum_mean_policy_kl_divergence": 0.005,
+    "maximum_wdl_mean_absolute_error": 0.01,
+    "maximum_expected_value_mean_absolute_error": 0.015
+  },
+  "float16": {
+    "engine": {
+      "path": "/workspace/matrix/engines/cnn-14x160/cnn-14x160-b320-fp16.engine",
+      "sha256": "b793b733ec67568748841d4a01fbad4e852a81669f26192f951d60674944a7db"
+    },
+    "timing": {
+      "repetitions": 15,
+      "iterations_per_repetition": 100,
+      "batch_size": 320,
+      "repetition_seconds": [
+        0.39758935710415244,
+        0.4216642836108804,
+        0.40444732503965497,
+        0.4098816360346973,
+        0.4158068182878196,
+        0.40415010787546635,
+        0.4213435398414731,
+        0.4061370058916509,
+        0.41672289092093706,
+        0.41329583106562495,
+        0.4082363029010594,
+        0.4197248467244208,
+        0.40845558838918805,
+        0.4187679933384061,
+        0.41190992295742035
+      ],
+      "minimum_batch_milliseconds": 3.9758935710415244,
+      "median_batch_milliseconds": 4.1190992295742035,
+      "p95_batch_milliseconds": 4.214397629722953,
+      "maximum_batch_milliseconds": 4.216642836108804,
+      "median_positions_per_second": 77686.88787647361
+    }
+  },
+  "candidates": [
+    {
+      "precision": "fp8",
+      "quantized_onnx_model": {
+        "path": "/workspace/matrix/engines/cnn-14x160/cnn-14x160-b320-fp8-weights.onnx",
+        "sha256": "67d1b599738a1f2d9f12202aa7d0f7f531e77437bc2d4b6c01efec4df334ea87"
+      },
+      "quantized_node_count": 36,
+      "quantize_linear_node_count": 72,
+      "engine": {
+        "path": "/workspace/matrix/engines/cnn-14x160/cnn-14x160-b320-fp8-weights.engine",
+        "sha256": "93283531150d5fc6a6ae6e5b2ab213e6eb461038c14a794c1b48b5b87a6b3c23"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.4163781111128628,
+          0.43053091829642653,
+          0.4216291098855436,
+          0.42472311994060874,
+          0.42882380494847894,
+          0.42125326162204146,
+          0.4323521591722965,
+          0.4232067735865712,
+          0.42880251444876194,
+          0.4279770078137517,
+          0.4260491207242012,
+          0.43128803465515375,
+          0.42525957617908716,
+          0.4314929968677461,
+          0.4264626451767981
+        ],
+        "minimum_batch_milliseconds": 4.163781111128628,
+        "median_batch_milliseconds": 4.264626451767981,
+        "p95_batch_milliseconds": 4.317507455591112,
+        "maximum_batch_milliseconds": 4.323521591722965,
+        "median_positions_per_second": 75035.88030959616
+      },
+      "speedup_over_float16": 0.9658757399177491,
+      "fidelity_against_float16": {
+        "positions": 196,
+        "policy_top1_agreement": 0.6581632653061225,
+        "mean_policy_kl_divergence": 0.00892090536289323,
+        "maximum_policy_kl_divergence": 0.03110325835482227,
+        "wdl_mean_absolute_error": 0.0062453081818664965,
+        "wdl_maximum_absolute_error": 0.02490234375,
+        "expected_value_mean_absolute_error": 0.010798863002232142,
+        "expected_value_maximum_absolute_error": 0.038818359375
+      },
+      "fidelity_failures": [
+        "policy top-1 agreement 0.658163 is below 0.98",
+        "mean policy KL 0.00892091 exceeds 0.005"
+      ]
+    },
+    {
+      "precision": "int8",
+      "quantized_onnx_model": {
+        "path": "/workspace/matrix/engines/cnn-14x160/cnn-14x160-b320-int8-weights.onnx",
+        "sha256": "370615c4a82fb03ca3c33d69743d464f94f7b618e8fc2ff737ef4bda5f04daab"
+      },
+      "quantized_node_count": 36,
+      "quantize_linear_node_count": 72,
+      "engine": {
+        "path": "/workspace/matrix/engines/cnn-14x160/cnn-14x160-b320-int8-weights.engine",
+        "sha256": "4be5f8c79a58e6f2f0c29421c7548a6f0e1028bd219870b1f77b5d2af296dfd2"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.23553578089922667,
+          0.2368025560863316,
+          0.23660799395292997,
+          0.23930622218176723,
+          0.23728062212467194,
+          0.23676953092217445,
+          0.23673746967688203,
+          0.23776130564510822,
+          0.23764529870823026,
+          0.23736404813826084,
+          0.2373029701411724,
+          0.23781028995290399,
+          0.23783049965277314,
+          0.2381477179005742,
+          0.23828889383003116
+        ],
+        "minimum_batch_milliseconds": 2.3553578089922667,
+        "median_batch_milliseconds": 2.3736404813826084,
+        "p95_batch_milliseconds": 2.38594092335552,
+        "maximum_batch_milliseconds": 2.3930622218176723,
+        "median_positions_per_second": 134814.01354159793
+      },
+      "speedup_over_float16": 1.7353509353593821,
+      "fidelity_against_float16": {
+        "positions": 196,
+        "policy_top1_agreement": 0.09693877551020408,
+        "mean_policy_kl_divergence": 0.1217599111118266,
+        "maximum_policy_kl_divergence": 1.289956254684507,
+        "wdl_mean_absolute_error": 0.03635598526519983,
+        "wdl_maximum_absolute_error": 0.130615234375,
+        "expected_value_mean_absolute_error": 0.09445439552774235,
+        "expected_value_maximum_absolute_error": 0.229736328125
+      },
+      "fidelity_failures": [
+        "policy top-1 agreement 0.0969388 is below 0.98",
+        "mean policy KL 0.12176 exceeds 0.005",
+        "WDL mean absolute error 0.036356 exceeds 0.01",
+        "expected-value mean absolute error 0.0944544 exceeds 0.015"
+      ]
+    }
+  ]
+}
