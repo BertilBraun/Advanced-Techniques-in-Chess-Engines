@@ -1,0 +1,24 @@
+# The AdamW attention run resumed at generation 290 to promote the 10x192 candidate at its next candidate match.
+# Since its catch-up rate was lowered at generation 270 it scored 0.42, 0.39, 0.40 and 0.445 against the 8x160
+# (about 40 Elo short) while its training loss sat ~0.05 below the active model's; the 0.48-twice gate would have
+# taken hours more. The gate becomes 0.40 once. After promotion the 10x192 trains on the main schedule
+# (~3.3e-4 at generation 290) and serves self-play.
+extends: vast-chess-8gpu-final-attention-adamw-resume-270.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw-resume-290
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw-resume-290
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw/checkpoint_290.json
+    generation: 290
+
+training:
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw-resume-290.stop
+  progressive_model_sizing:
+    promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.40
+        consecutive_evaluations: 1
