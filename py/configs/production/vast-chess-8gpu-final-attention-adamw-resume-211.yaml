@@ -1,0 +1,24 @@
+# The AdamW attention run resumed at generation 211 to start the 10x192 candidate now rather than when the
+# staged plateau latch fires. Its lagging Elo EMA (2,025 against a latest observation of 2,195) still reported
+# 69 Elo/h, far above the 20 Elo/h threshold, while the ladder looked flat for hours. A threshold of 1,000 Elo/h
+# latches after the usual two confirmations, so the candidate opens about 40 minutes after the resume. The
+# learning-rate schedule and everything else are unchanged from the generation-183 resume.
+extends: vast-chess-8gpu-final-attention-adamw-resume-183.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw-resume-211
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw-resume-211
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw/checkpoint_211.json
+    generation: 211
+
+training:
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw-resume-211.stop
+  progressive_model_sizing:
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-lc0-attention-10x192
+        minimum_worthwhile_gain_per_hour: 1000.0
