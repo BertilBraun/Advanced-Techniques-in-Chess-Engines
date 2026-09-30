@@ -9,11 +9,12 @@ The selected 6.32-million-parameter convolutional model reached **3,251 benchmar
 move** and **1,658 without search** in paired games against fixed-node Stockfish 13. These numbers use a
 historical Stockfish-node calibration; they are not FIDE ratings or claims against unrestricted current engines.
 The full match protocol, intervals, artifacts, and limitations are in the
-[final result record](documentation/results/final-chess-run.md) and [technical report](documentation/report/README.md).
+[final result record](documentation/results/final-chess-run.md) and the published
+[technical report (arXiv:2609.37447)](https://arxiv.org/abs/2609.37447).
 
 [Play against the model](https://chess.bertil-braun.de/) ·
 [Model repository](https://huggingface.co/BertilBraun/alphazero-chess) ·
-[Read the technical report (PDF)](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/download/final-chess-report/engineering-efficient-self-play-chess.pdf) ·
+[Read the paper on arXiv](https://arxiv.org/abs/2609.37447) ·
 [Report sources and evidence](documentation/report/README.md)
 
 ## Measured strength
