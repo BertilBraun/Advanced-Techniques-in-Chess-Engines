@@ -1,0 +1,29 @@
+# The AdamW attention run resumed after its host went offline at generation 183, with the learning rate now
+# decaying from generation 0: 1e-3 -> 2e-5 geometric over generations 0-1000, so 4.9e-4 at the resume instead of
+# the original schedule's 7.0e-4 (it held 1e-3 to generation 100). The ladder had flattened near 2,100 while the
+# rate was still at 71% of its peak, and every distillation arm gained most of its strength while its rate fell.
+extends: vast-chess-8gpu-final-attention-adamw.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw-resume-183
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw-resume-183
+  resume:
+    mode: checkpoint
+    # 183 is the newest checkpoint and keeps its weights and optimizer state; the replay buffer, the models/
+    # tree and the progressive state live in the original save path below.
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw/checkpoint_183.json
+    generation: 183
+
+training:
+  # Deliberately the original run's save path, so the replay and progressive state carry over.
+  save_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw
+  trainer:
+    learning_rate:
+      kind: geometric
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.001
+      end_value: 0.00002
+      rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw-resume-183.stop
