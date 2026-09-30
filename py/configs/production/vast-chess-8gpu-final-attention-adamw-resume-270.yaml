@@ -1,0 +1,27 @@
+# The AdamW attention run resumed at generation 270 with a lower, faster-falling catch-up rate for the 10x192
+# candidate. Its linear 1e-3 -> 3e-4 schedule over its own generations 0-600 still held 9.3e-4 at its generation
+# ~62, 2.7x the active model's 3.5e-4; the candidate matched the active loss (2.92 against 3.04) but scored a flat
+# ~0.31 in its candidate matches for over an hour. Geometric 5e-4 -> 1e-4 over its generations 0-200 puts it at
+# 3.0e-4 now, just under the active model, and at 1e-4 from its generation 200.
+extends: vast-chess-8gpu-final-attention-adamw-resume-211.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw-resume-270
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw-resume-270
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw/checkpoint_270.json
+    generation: 270
+
+training:
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw-resume-270.stop
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate:
+        kind: geometric
+        start_generation: 0
+        end_generation: 200
+        start_value: 0.0005
+        end_value: 0.0001
+        rounding: none
