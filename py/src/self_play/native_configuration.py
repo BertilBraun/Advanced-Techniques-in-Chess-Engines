@@ -122,11 +122,16 @@ def resolved_inference_model_path(
                 command += ('--probe-states', str(probe_path.resolve()))
             completed = subprocess.run(
                 command,
-                check=True,
                 capture_output=True,
                 text=True,
                 cwd=publisher.parent.parent,
             )
+            if completed.returncode != 0:
+                # The publisher's own error is otherwise lost with the captured output.
+                raise RuntimeError(
+                    f'TensorRT publication of {model_path.name} exited {completed.returncode}: '
+                    f'{completed.stderr[-4000:]}'
+                )
             payload = json.loads(completed.stdout.splitlines()[-1])
             log(
                 f'Published TensorRT inference artifact for {model_path.name} in '
