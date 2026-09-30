@@ -1,4 +1,4 @@
-# The attention run with AdamW instead of SGD, on 8x RTX 3090 with 483 GiB of RAM.
+# The attention run with AdamW instead of SGD, on 8x RTX 4080 SUPER (200 W cap) with 241 GiB of RAM.
 #
 # The SGD run (vast-chess-8gpu-final-attention, stopped at generation 116) trailed the convolutional baseline by
 # 700-770 Elo from its second hour, before its 120 GiB node stopped caching the replay and training became
@@ -12,8 +12,8 @@ run:
   run_name: vast-chess-8gpu-final-attention-adamw
   tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw
   hardware:
-    offer_id: '53479423'
-    gpu_model: NVIDIA GeForce RTX 3090
+    offer_id: '53481269'
+    gpu_model: NVIDIA GeForce RTX 4080 SUPER
     minimum_ram_gib: 200
 
 training:
@@ -45,5 +45,5 @@ training:
         rounding: none
 
 evaluation:
-  # 483 GiB leaves room for a whole evaluation round (seven jobs) at once.
+  # 241 GiB leaves room for a whole evaluation round (seven jobs) at once next to a cached replay.
   maximum_concurrent_jobs: 8
