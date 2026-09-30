@@ -1,0 +1,67 @@
+# End-to-end smoke of the AdamW attention run on the 8x RTX 3090 node, with the same compressions as the SGD
+# smokes: five generations of 36 steps, a candidate after about four minutes and a gate any nonzero score passes.
+extends: ../production/vast-chess-8gpu-final-attention-adamw.yaml
+
+run:
+  run_name: vast-chess-attention-adamw-smoke
+  tensorboard_run_directory: vast-chess-attention-adamw-smoke
+  stage: systems_pilot
+
+training:
+  save_path: py/training_data/validation/vast-chess-attention-adamw-smoke
+  lifecycle:
+    credit:
+      optimizer_steps_per_quantum: 36
+      maximum_optimizer_steps: 180
+      retained_checkpoint_interval_generations: 1
+  limits:
+    maximum_wall_time_seconds: 2700
+    manual_stop_file: /workspace/run-control/stop/vast-chess-attention-adamw-smoke.stop
+  progressive_model_sizing:
+    candidate_start:
+      kind: elapsed
+      start_days: [0.003]
+    promotion:
+      candidate_match_gate:
+        definition_id: progressive-candidate
+        minimum_score: 0.001
+        consecutive_evaluations: 1
+
+evaluation:
+  cadence_seconds: 60
+  definitions:
+  - opening_pair_count: 1
+    maximum_game_plies: 40
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100]
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 2
+    engine_executable_path: engines/stockfish-13
+    search: &smoke_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          templates:
+          - {kind: float, model_id: chess-lc0-attention-8x160, engine_path: /workspace/tensorrt/lc0-attention-8x160-fp16-b64.engine}
+          - {kind: float, model_id: chess-lc0-attention-10x192, engine_path: /workspace/tensorrt/lc0-attention-10x192-fp16-b64.engine}
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+  - opening_pair_count: 1
+    maximum_game_plies: 40
+    first_generation: 1
+    final_generation: null
+    kind: progressive_candidate
+    definition_id: progressive-candidate
+    search: *smoke_search

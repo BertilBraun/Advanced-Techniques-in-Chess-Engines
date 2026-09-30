@@ -1,0 +1,49 @@
+# The attention run with AdamW instead of SGD, on 8x RTX 3090 with 483 GiB of RAM.
+#
+# The SGD run (vast-chess-8gpu-final-attention, stopped at generation 116) trailed the convolutional baseline by
+# 700-770 Elo from its second hour, before its 120 GiB node stopped caching the replay and training became
+# disk-bound. Every attention network that reached the distillation results trained with AdamW at 1e-3 (batch
+# 1024, cosine decay), and SGD on a post-norm transformer had never been tried here, so this run tests the
+# optimizer. The rate keeps the SGD plan's shape: flat to generation 100, then a constant ratio per generation
+# down to 1/50 by generation 1000. Everything else is the attention configuration.
+extends: vast-chess-8gpu-final-attention.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw
+  hardware:
+    offer_id: '53479423'
+    gpu_model: NVIDIA GeForce RTX 3090
+    minimum_ram_gib: 200
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw
+  trainer:
+    optimizer:
+      kind: adamw
+      weight_decay: 0.0001
+      amsgrad: true
+      epsilon: 0.00001
+    learning_rate:
+      kind: geometric
+      start_generation: 100
+      end_generation: 1000
+      start_value: 0.001
+      end_value: 0.00002
+      rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw.stop
+  progressive_model_sizing:
+    promotion:
+      # The SGD catch-up rate (0.1 -> 0.03) scaled to AdamW's peak.
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 600
+        start_value: 0.001
+        end_value: 0.0003
+        rounding: none
+
+evaluation:
+  # 483 GiB leaves room for a whole evaluation round (seven jobs) at once.
+  maximum_concurrent_jobs: 8
