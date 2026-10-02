@@ -1,0 +1,27 @@
+# A warm restart of the AdamW attention run's learning rate. From generation ~500 the 10x192's policy loss stayed
+# flat (1.797 -> 1.794) while the rate decayed from 1.3e-4 to ~4.2e-5 and the ladder crept up ~3 Elo an hour. The
+# rate rises to 1.2e-4 (about 3x the rate at the stop, below the ~1.3e-4 at which the loss stopped falling), holds
+# for 50 generations and decays geometrically to the original 2e-5 floor over the next 250. A gain over the stop
+# checkpoint clearly beyond the ~+20-40 the plain decay was heading for says the plateau was schedule-bound; a
+# return to the same level says capacity-bound.
+extends: vast-chess-8gpu-final-attention-adamw-resume-ladder-20k.yaml
+
+run:
+  run_name: vast-chess-8gpu-final-attention-adamw-resume-warm-restart
+  tensorboard_run_directory: vast-chess-8gpu-final-attention-adamw-resume-warm-restart
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-final-attention-adamw/checkpoint_813.json
+    generation: 813
+
+training:
+  trainer:
+    learning_rate:
+      kind: geometric
+      start_generation: 863
+      end_generation: 1113
+      start_value: 0.00012
+      end_value: 0.00002
+      rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final-attention-adamw-resume-warm-restart.stop
