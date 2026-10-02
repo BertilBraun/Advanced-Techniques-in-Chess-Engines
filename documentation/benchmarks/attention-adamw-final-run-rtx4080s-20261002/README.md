@@ -3,8 +3,19 @@
 As of **2026-10-02**. The self-play run planned in
 [chess-attention-final-run-plan-20260929.md](../../plan/chess-attention-final-run-plan-20260929.md), with AdamW
 instead of SGD, on one 8x RTX 4080 SUPER node (200 W cap, 241 GiB RAM, Vast.ai instance 53481269, $1.60/h). It ran
-52 hours of run time from 2026-09-30 07:13 UTC to 2026-10-02 12:07 UTC and was stopped by the project owner once its
-ladder had been flat for about eight hours across two learning-rate schedules.
+56 hours of run time between 2026-09-30 07:13 UTC and 2026-10-02 17:48 UTC, to generation 950, and was stopped by
+the project owner once its ladder had been flat for about twelve hours across three learning-rate regimes.
+
+## Conclusion
+
+The T1-shaped network moved the plateau, but it is a plateau again. Self-play with the 10x192 attention network
+ended about 120 Elo above the convolutional lineage at 64 searches and about 87 above its selected checkpoint at
+100,000 searches, close to the +150 that teacher distillation had measured for the architecture at equal searches.
+The gain came from the architecture and the annealed AdamW schedule together; the run does not separate them.
+Once the rate had decayed, three regimes (the plain decay, a 3x warm restart held for 50 generations, and its
+decay) all held the ladder at 2,470-2,480 while training loss moved, and the warm restart's final checkpoint was
+indistinguishable from the one before it. The limit now is not the schedule; whether it is network capacity or
+the self-play loop at this size is untested. A 12x256 trained offline on the replay was considered and not run.
 
 ## Short answer
 
@@ -12,7 +23,8 @@ ladder had been flat for about eight hours across two learning-rate schedules.
   lineage's plateau near 2,360 and peak of 2,407.6. It reached the CNN plateau after about 28 hours of run time.
   The CNN numbers were measured on 8x RTX 4070 SUPER, so the time axis is not like-for-like; the Elo axis is.
 - **It then plateaued.** From about generation 700 the ladder stayed within 2,408-2,524, and the 10x192's policy
-  loss had been flat since generation ~500.
+  loss had been flat since generation ~500. Five more hours of decay after the warm restart (generations 896-950,
+  rate 9.5e-5 → 6.8e-5) averaged 2,474 over ten ladder points.
 - **A learning-rate warm restart changed the loss, not the strength.** Raising the rate from 4.2e-5 to 1.2e-4 at
   generation 813 lowered the training loss from 2.871 to 2.850 over 83 generations, but the final checkpoint scored
   **0.5125 [0.463, 0.563]** (+8.7 Elo [−26, +44]) over 200 games against the checkpoint from before the restart.
@@ -35,7 +47,8 @@ the progressive state and the evaluation history carry across resumes.
 | `-resume-270` | `61e7dc38` | `5d54e6a505a5` | 270-290 | candidate catch-up rate 5e-4 → 1e-4 geometric |
 | `-resume-290` | `b822f9e3` | `95795f5cad45` | 290-666 | promotion gate 0.40 once; 10x192 promoted at generation 294 |
 | `-resume-ladder-20k` | `c8379e9c` | `7c0d5e7ecce7` | 666-813 | 20,000-node rung added to the searched ladder |
-| `-resume-warm-restart` | `81f2852e` | `aa6604774018` | 813-896 | rate 1.2e-4 held to 863, geometric to 2e-5 at 1113; stopped at 896 |
+| `-resume-warm-restart` | `81f2852e` | `aa6604774018` | 813-896 | rate 1.2e-4 held to 863, geometric to 2e-5 at 1113 |
+| `-resume-896` | `ec481868` | `9390e467764c` | 896-950 | the same schedule resumed for five hours; stopped at 950 |
 
 ## Ladder trajectory
 
@@ -119,8 +132,26 @@ somewhat; the CNN record measured sixteen-way at 45 Elo below one-way at 1,000 s
 
 ## Cost
 
-52 hours of run time at $1.60/h, about **$83** of node time for the AdamW run, excluding the earlier SGD attempt on
-the 4070 SUPER node, the smokes and the post-stop matches.
+The 8x RTX 4080 SUPER node billed $1.60/h. Its figures below are accurate to within about an hour; the other nodes' prices were not
+recorded, so they are listed by use only.
+
+| Item | Hours | Cost |
+| --- | ---: | ---: |
+| AdamW run, all segments (run time, generations 0-950) | ~55.5 | **~$89** |
+| of which: to the CNN plateau level (~2,360, run time ~28 h) | ~28 | ~$45 |
+| of which: to the final level (~2,480, run time ~44 h) | ~44 | ~$70 |
+| Post-stop matches (head-to-head and the 100,000-search gauntlet) | ~1.6 | ~$2.60 |
+| 4080 SUPER node rented, 2026-09-30 ~06:30 UTC to the stop at 2026-10-02 17:48 UTC (provisioning, a ~30-minute host outage, resumes, matches) | ~59 | **~$95** |
+| Earlier: SGD attention run and smokes on 8x RTX 4070 SUPER (instance 53401154, 2026-09-29 to 2026-09-30 ~06:10 UTC), an 8x RTX 3060 node and a briefly provisioned 8x RTX 3090 (53479423) | — | not recorded |
+
+The node keeps billing $1.60/h until it is destroyed.
+
+Against the convolutional lineage's narrow figure of $43.20 (60 accepted-lineage hours at $0.72/h to its selected
+checkpoint, which excludes discarded branches and terminal evaluation), this run cost about twice as much: the 4080
+SUPER node costs 2.2x as much per hour for about 1.39x a 4070 SUPER node's throughput on this network. Measured in
+money rather than hours, it matched the CNN plateau for about the same spend (~$45 against $43.20) and bought the
+further ~120 Elo at 64 searches for roughly another $25-45. Hardware and recipe differ between the two, so this is
+a cost record, not a controlled comparison.
 
 ## Evidence
 
@@ -129,5 +160,8 @@ Preserved with `run_control.sh preserve` on the node and copied to
 `601c277996ce9a767f67f749c17396200ca390db83b9943b6cc911bcddfbe883`, with a `SHA256SUMS` inside): the complete
 warm-restart archive (logs, TensorBoard, evaluations, checkpoint manifests, generation 896 weights and optimizer,
 progressive models), the logs, TensorBoard and configurations of every earlier segment, both match results with
-their launch and export scripts, and generation 810's weights, manifest and re-exported ONNX. The replay buffer
-(about 19M samples) was not copied.
+their launch and export scripts, and generation 810's weights, manifest and re-exported ONNX. The last segment (`-resume-896`, generations 896-950)
+is in `evidence-resume-896.tar` beside it (131 MB, SHA-256
+`c5546b8c6b7e52bc5c54e53c58db285c23e7352a2fba3ca010a79ea7109799b9`): its logs, TensorBoard, configuration, new
+evaluations and generation 950's weights. The replay buffer (about 19.7M samples) was not copied, so no segment can
+be resumed with its replay.

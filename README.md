@@ -57,6 +57,19 @@ and the preceding baseline at its clean three-day endpoint. These inexpensive tr
 64 searches per move; the final model's 3,251 benchmark Elo uses 100,000 searches per move.
 [Chapter 7](documentation/report/06-final-chess-recipe.md) discusses the progression across campaigns.
 
+## Follow-up: an attention network after the paper
+
+After the paper, a teacher-distillation diagnostic pointed at the network's construction as the limit of the
+convolutional plateau, so one more self-play run used a 10-layer, 192-wide attention network built like Lc0's T1
+(with smolgen), trained with AdamW on 8x RTX 4080 SUPER. In 56 hours of run time it settled near **2,480** ladder Elo
+at 64 searches, about 120 above the convolutional plateau, and at 100,000 searches scored 65.0% against
+Stockfish 13 at 200,000 nodes: **3,338 [3,293, 3,381]** benchmark Elo against the selected model's 3,251. That row
+used eight-way rather than sixteen-way search parallelism and float16 rather than INT8 serving. It then plateaued
+again; a learning-rate warm restart lowered training loss without changing strength. The run cost about $89 of node
+time at $1.60/hour, against the CNN's narrow $43.20. The published result above is unchanged; the
+[attention run record](documentation/benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md) has the
+details and caveats.
+
 ## How it works
 
 ![Python coordination, native self-play, replay, training, and paired evaluation](documentation/report/figures/learning-loop.svg)
