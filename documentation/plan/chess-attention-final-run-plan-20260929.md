@@ -2,8 +2,9 @@
 
 As of **2026-09-29**. Configuration:
 [`py/configs/production/vast-chess-8gpu-final-attention.yaml`](../../py/configs/production/vast-chess-8gpu-final-attention.yaml)
-(`experiment_configuration_sha256` `457ae3a5774de3cf72bb5e322013d42d20c7b7840bdca103be71be246973d0cf`). Not started;
-the node is provisioned and the pre-start checks are below.
+(`experiment_configuration_sha256` `457ae3a5774de3cf72bb5e322013d42d20c7b7840bdca103be71be246973d0cf`). The run was
+carried out with AdamW on 8x RTX 4080 SUPER and stopped on 2026-10-02:
+[results](../benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md). The pre-start checks are below.
 
 ## Why this run
 

@@ -9,9 +9,15 @@ project's unchanged search plays at least 360 Elo above the final checkpoint at 
 like T1 at equal compute, trained from scratch on 47M teacher-labelled positions, beat the final checkpoint by
 about 150 Elo where no convolutional variant moved. It serves at 0.4-0.6x the CNN's rate.
 [Summary](analysis/plateau-investigation-v100-onwards-20260928.md) and
-[measurements](benchmarks/lc0-teacher-diagnostic-rtx3070-20260926/README.md). A final self-play run with that
-architecture is configured and waiting for a node:
-[plan](plan/chess-attention-final-run-plan-20260929.md). The results below are unchanged by it.
+[measurements](benchmarks/lc0-teacher-diagnostic-rtx3070-20260926/README.md).
+
+The final self-play run with that architecture ([plan](plan/chess-attention-final-run-plan-20260929.md)) ran 52 hours
+on 8x RTX 4080 SUPER with AdamW and stopped on 2026-10-02 at generation 896. Its 10x192 network settled near 2,480
+ladder Elo at 64 searches, against the convolutional lineage's plateau near 2,360, and at 100,000 searches scored
+0.650 against Stockfish 13 at 200,000 nodes: 3,338 [3,293, 3,381], against the selected CNN's 3,251 [3,206, 3,297].
+A learning-rate warm restart lowered its training loss but not its strength.
+[Results](benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md). The results below describe the
+convolutional lineage and are unchanged by it.
 
 ## Project status
 
