@@ -1,5 +1,5 @@
 # The warm-restart run resumed at its stop checkpoint 896 for about five more hours, to see whether the rest of
-# its geometric decay (about 8.4e-5 at 896, 5.5e-5 by generation ~970, 2e-5 at 1113) lifts the ladder off its
+# its geometric decay (about 9.5e-5 at 896, 5.6e-5 by generation ~970, 2e-5 at 1113) lifts the ladder off its
 # ~2,480 plateau. Only the resume target and the run's names change.
 extends: vast-chess-8gpu-final-attention-adamw-resume-warm-restart.yaml
 
