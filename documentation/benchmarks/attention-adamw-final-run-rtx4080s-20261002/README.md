@@ -17,6 +17,32 @@ decay) all held the ladder at 2,470-2,480 while training loss moved, and the war
 indistinguishable from the one before it. The limit now is not the schedule; whether it is network capacity or
 the self-play loop at this size is untested. A 12x256 trained offline on the replay was considered and not run.
 
+## The remaining gap to Lc0
+
+On the same Stockfish 13 node calibration, Marco Meloni's tests put Lc0 at about 3,600 at 100,000 nodes. This run's
+3,338 at 100,000 searches leaves a gap of roughly 250, within about 200-300 given the single-rung score (0.650) and
+that Meloni's figure comes from his own pool, network and hardware. The convolutional model's 3,251 left about 350,
+so this run closed about a quarter of it.
+
+- **The gap is network quality, not search.** Search depth is already matched at 100,000. The Lc0 diagnostic ran T1,
+  Lc0's 20M-parameter attention network, inside this project's unchanged search: 0.885 against 10,000 nodes at 64
+  searches, about 365 above checkpoint 1026 and about 245 above this run's 10x192 (~+120). A T1-class network is
+  worth about the whole gap in this search.
+- **Self-play has nearly exhausted the 10x192.** The same network distilled from 47M T1-labelled positions reached
+  about +150 over checkpoint 1026; self-play reached about +120. Labels from a far stronger engine bought only
+  ~30 more at this size.
+- **Lc0's advantage is scale, not a different algorithm.** Its main runs played hundreds of millions of self-play
+  games over years on volunteer hardware and trained much larger networks; T1 itself was distilled from them. This
+  run played about 1.2M games (~1,240 per generation, 950 generations). Lc0's training-target refinements, such as
+  tablebase rescoring and mixing search values into value targets, plausibly account for tens of Elo, not the gap.
+
+**What closing it would cost.** The step from the CNN ($43.20) to this run (~$89) was about one doubling of spend
+for about +87 Elo. Taken at face value, the remaining ~250 is three more doublings, a run of about $180, $360 and then
+$710: roughly $700-800 for the run that would close it. That is a lower bound rather than an estimate. The +87 came from a better architecture and
+schedule, not from doubling compute on the same network; at fixed size this run's last twelve hours bought nothing.
+Further doublings would have to pay for larger networks, which need more games to train and serve more slowly, and
+returns per doubling usually shrink. The project owner judged that spend not worthwhile; the run ends here.
+
 ## Short answer
 
 - **It passed the convolutional lineage.** Ladder Elo at 64 searches settled near **2,480**, against the CNN

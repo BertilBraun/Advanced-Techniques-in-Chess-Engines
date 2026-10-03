@@ -66,7 +66,14 @@ at 64 searches, about 120 above the convolutional plateau, and at 100,000 search
 Stockfish 13 at 200,000 nodes: **3,338 [3,293, 3,381]** benchmark Elo against the selected model's 3,251. That row
 used eight-way rather than sixteen-way search parallelism and float16 rather than INT8 serving. It then plateaued
 again; a learning-rate warm restart lowered training loss without changing strength. The run cost about $89 of node
-time at $1.60/hour, against the CNN's narrow $43.20. The published result above is unchanged; the
+time at $1.60/hour, against the CNN's narrow $43.20.
+
+On the same Stockfish-node calibration, Lc0 sits near 3,600 at 100,000 nodes, so the remaining gap is roughly 250
+Elo, down from about 350. Search depth is matched at that point, and Lc0's own T1 network run inside this project's
+search plays about 245 Elo above the 10x192, so what is missing is network quality, which Lc0 obtained from orders
+of magnitude more self-play and larger networks rather than a different algorithm. Extrapolating this run's one
+doubling of spend per ~87 Elo would put a run that closes the rest at roughly $700-800, and that is optimistic: the gain came from a
+better architecture, and more time on the same network bought nothing. The published result above is unchanged; the
 [attention run record](documentation/benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md) has the
 details and caveats.
 
