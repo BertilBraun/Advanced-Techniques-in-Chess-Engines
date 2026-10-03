@@ -43,6 +43,7 @@ class SummaryState:
     time_series_tag: str
     source_layout_run_name: str
     source_layout_tag: str
+    segment_index: int
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class ConsolidationOptions:
     single_run_source: bool = False
     evaluation_outcome_overlays: bool = False
     preserve_source_layout: bool = False
+    supersede_resumed_tails: bool = False
 
 
 @dataclass(frozen=True)
@@ -113,7 +115,7 @@ class SourceSegmentSummary(BaseModel):
 class ConsolidationManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 3
+    schema_version: int = 4
     generated_at_utc: datetime
     source_segments: tuple[SourceSegmentSummary, ...]
     output_root: str
@@ -124,6 +126,7 @@ class ConsolidationManifest(BaseModel):
     emitted_summary_count: int = Field(ge=0)
     unique_summary_count: int = Field(ge=0)
     replaced_summary_count: int = Field(ge=0)
+    superseded_summary_count: int = Field(ge=0)
     representative_self_play_processes: tuple[RepresentativeSelfPlayProcess, ...]
     tags: tuple[TagSummary, ...]
 
@@ -144,6 +147,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--evaluation-outcome-overlays', action='store_true')
     parser.add_argument('--preserve-source-layout', action='store_true')
     parser.add_argument('--single-run-source', action='store_true')
+    parser.add_argument('--supersede-resumed-tails', action='store_true')
     return parser.parse_args()
 
 
@@ -479,6 +483,7 @@ class TensorboardLogConsolidator:
         self.event_file_fingerprints: dict[Path, EventFileFingerprint] = {}
         self.emitted_summary_count = 0
         self.replaced_summary_count = 0
+        self.superseded_summary_count = 0
         self.excluded_text_summary_count = 0
 
     def close(self) -> None:
@@ -489,7 +494,7 @@ class TensorboardLogConsolidator:
 
     def scan(self) -> ConsolidationManifest:
         selections: list[EventFileSelection] = []
-        for source_segment in self.options.source_segments:
+        for segment_index, source_segment in enumerate(self.options.source_segments):
             selection = select_event_files(source_segment.source_root, self.options.single_run_source)
             selections.append(selection)
             for event_file in selection.event_files:
@@ -499,8 +504,10 @@ class TensorboardLogConsolidator:
                 )
                 if self.event_file_fingerprints.get(event_file) == fingerprint:
                     continue
-                self._load_event_file(source_segment, event_file)
+                self._load_event_file(segment_index, source_segment, event_file)
                 self.event_file_fingerprints[event_file] = fingerprint
+        if self.options.supersede_resumed_tails:
+            self._drop_superseded_tails()
         self._emit_changed_summaries()
         if self.writer is not None:
             scalar_tags = {identity.tag for identity in self.summary_states if identity.value_type == 'simple_value'}
@@ -517,7 +524,7 @@ class TensorboardLogConsolidator:
         )
         return manifest
 
-    def _load_event_file(self, source_segment: TensorboardSourceSegment, event_file: Path) -> None:
+    def _load_event_file(self, segment_index: int, source_segment: TensorboardSourceSegment, event_file: Path) -> None:
         loader = LegacyEventFileLoader(str(event_file))
         for event in loader.Load():
             if source_segment.minimum_wall_time is not None and event.wall_time < source_segment.minimum_wall_time:
@@ -534,10 +541,11 @@ class TensorboardLogConsolidator:
                 if _plugin_name(original_value) == 'text' and category != 'training_args' and not is_evaluation_summary:
                     self.excluded_text_summary_count += 1
                     continue
-                self._select_if_newer(source_segment, event_file, event, original_value)
+                self._select_if_newer(segment_index, source_segment, event_file, event, original_value)
 
     def _select_if_newer(
         self,
+        segment_index: int,
         source_segment: TensorboardSourceSegment,
         event_file: Path,
         event: event_pb2.Event,
@@ -584,7 +592,41 @@ class TensorboardLogConsolidator:
             time_series_tag=grouped_summary_tag,
             source_layout_run_name=source_route.run_name,
             source_layout_tag=source_route.tag,
+            segment_index=segment_index,
         )
+
+    def _drop_superseded_tails(self) -> None:
+        # A segment resumed from an earlier checkpoint owns each scalar tag from its first step on, so the abandoned
+        # tail of the previous segment goes even where the resumed segment never logs those steps again.
+        first_steps: dict[tuple[str, str, str], dict[int, int]] = {}
+        for identity, state in self.summary_states.items():
+            if identity.value_type != 'simple_value':
+                continue
+            by_segment = first_steps.setdefault((identity.tag, identity.plugin_name, identity.value_type), {})
+            by_segment[state.segment_index] = min(by_segment.get(state.segment_index, identity.step), identity.step)
+        cutoffs: dict[tuple[str, str, str], dict[int, int]] = {}
+        for key, by_segment in first_steps.items():
+            later_minimum: int | None = None
+            for segment_index in sorted(by_segment, reverse=True):
+                if later_minimum is not None:
+                    cutoffs.setdefault(key, {})[segment_index] = later_minimum
+                later_minimum = (
+                    by_segment[segment_index]
+                    if later_minimum is None
+                    else min(later_minimum, by_segment[segment_index])
+                )
+        superseded = tuple(
+            identity
+            for identity, state in self.summary_states.items()
+            if identity.value_type == 'simple_value'
+            and identity.step
+            >= cutoffs.get((identity.tag, identity.plugin_name, identity.value_type), {}).get(
+                state.segment_index, identity.step + 1
+            )
+        )
+        for identity in superseded:
+            del self.summary_states[identity]
+        self.superseded_summary_count += len(superseded)
 
     def _emit_changed_summaries(self) -> None:
         changed_summaries = tuple(
@@ -698,6 +740,7 @@ class TensorboardLogConsolidator:
             emitted_summary_count=self.emitted_summary_count,
             unique_summary_count=len(self.summary_states),
             replaced_summary_count=self.replaced_summary_count,
+            superseded_summary_count=self.superseded_summary_count,
             representative_self_play_processes=representatives,
             tags=tags,
         )
@@ -746,6 +789,7 @@ def main() -> None:
         single_run_source=arguments.single_run_source,
         evaluation_outcome_overlays=arguments.evaluation_outcome_overlays,
         preserve_source_layout=arguments.preserve_source_layout,
+        supersede_resumed_tails=arguments.supersede_resumed_tails,
     )
     if arguments.watch_interval_seconds is None:
         print(consolidate_once(options).model_dump_json(indent=2))

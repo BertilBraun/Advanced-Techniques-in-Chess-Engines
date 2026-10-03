@@ -481,3 +481,44 @@ def test_time_series_view_gives_standalone_metrics_semantic_colored_runs(tmp_pat
     run_directory = output_root / 'system' / 'gpu' / 'gpu' / '0' / 'load'
     assert scalar_values(run_directory, 'system/gpu/gpu/0/load') == (75.0,)
     assert not (output_root / 'other_metrics').exists()
+
+
+def write_resumed_segments(tmp_path: Path) -> tuple[Path, Path]:
+    first_source = tmp_path / 'first'
+    resumed_source = tmp_path / 'resumed'
+    for step in range(1, 6):
+        write_scalar(first_source / 'coordinator', 'training/loss', step, float(step), wall_time=10.0 + step)
+    for step in (3, 4):
+        write_scalar(resumed_source / 'coordinator', 'training/loss', step, 10.0 * step, wall_time=20.0 + step)
+    return first_source, resumed_source
+
+
+def resumed_options(tmp_path: Path, supersede_resumed_tails: bool) -> ConsolidationOptions:
+    first_source, resumed_source = write_resumed_segments(tmp_path)
+    return ConsolidationOptions(
+        source_segments=(TensorboardSourceSegment(first_source), TensorboardSourceSegment(resumed_source)),
+        output_root=tmp_path / 'output',
+        single_run_source=True,
+        preserve_source_layout=True,
+        supersede_resumed_tails=supersede_resumed_tails,
+    )
+
+
+def test_superseding_drops_the_tail_a_resumed_segment_never_logs_again(tmp_path: Path) -> None:
+    consolidate_once(resumed_options(tmp_path, supersede_resumed_tails=True))
+
+    assert scalar_values(tmp_path / 'output' / 'coordinator', 'training/loss') == pytest.approx((1.0, 2.0, 30.0, 40.0))
+
+
+def test_superseding_counts_the_dropped_tail_in_the_manifest(tmp_path: Path) -> None:
+    manifest = consolidate_once(resumed_options(tmp_path, supersede_resumed_tails=True))
+
+    assert manifest.superseded_summary_count == 1
+
+
+def test_consolidation_without_superseding_keeps_the_abandoned_tail(tmp_path: Path) -> None:
+    consolidate_once(resumed_options(tmp_path, supersede_resumed_tails=False))
+
+    assert scalar_values(tmp_path / 'output' / 'coordinator', 'training/loss') == pytest.approx(
+        (1.0, 2.0, 5.0, 30.0, 40.0)
+    )
