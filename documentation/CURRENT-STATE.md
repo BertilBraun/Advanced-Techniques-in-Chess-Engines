@@ -1,6 +1,7 @@
 # Current state
 
-As of **2026-09-24**. This page separates completed work from evidence that still has to be frozen for publication.
+As of **2026-10-03**. The project is complete: the published convolutional result below, and one follow-up run with an
+attention network after it.
 
 ## Since then: the architecture, and one more run (2026-09-29)
 
@@ -76,16 +77,15 @@ for the reported checkpoint rather than treating future edits to the living reci
 | Longer distilled student | **Verified** | 110,000 steps (22.528 replay epochs); 2,697 [2,640, 2,753] at 10,000 searches and an unbracketed 2,873 [2,819, 2,935] at 100,000 |
 | $43.20 training figure | **Narrow derived measure** | 60 accepted-lineage hours at $0.72/h; not total spend |
 
-## Publication work still open
+## Publication status
 
-- Reconcile wider actor/search rates, rejected data, and stage timing where the local archive permits it. The
-  selected-checkpoint games, positions, presentations, optimizer steps, replay occupancy, and training dynamics are
-  already recorded; total project spend is intentionally not claimed.
-- Add optional deployment-fidelity or mechanism figures only where they clarify a supported claim.
-- Complete the bibliography, editorial, visual, and evidence-link review of the drafted technical report, then
-  inspect a rendered edition if one is produced.
-- The public model card, aliases, checksum index, and MIT license have been checked. The project owner confirms the
-  live site's deployed artifact is current; keep that confirmation distinct from the frozen run hashes.
+Closed on 2026-10-03. The technical report is published as [arXiv:2609.37447](https://arxiv.org/abs/2609.37447),
+and the model card, aliases, checksum index and MIT license are checked. Two optional items from the publication
+checklist were not pursued: reconciling wider actor/search telemetry, rejected data and stage timing (no published
+claim depends on it; total project spend remains intentionally unclaimed), and extra deployment-fidelity or mechanism
+figures. Training curves and logs of the main runs, including stitched views of the final CNN lineage and the
+attention run, are published as the
+[run dataset](https://huggingface.co/datasets/BertilBraun/alphazero-chess-runs).
 
 ## Reader path
 

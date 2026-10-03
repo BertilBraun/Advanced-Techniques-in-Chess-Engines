@@ -181,6 +181,13 @@ a cost record, not a controlled comparison.
 
 ## Evidence
 
+Public copies: the weights of generations 896 (with its evaluated float16 ONNX) and 950 are in the
+[model repository](https://huggingface.co/BertilBraun/alphazero-chess/tree/main/production) under
+`production/attention-10x192-generation-896/` and `-950/`, archived beside the deployed CNN. TensorBoard and logs of
+every segment, and the run stitched into one TensorBoard run, are in the
+[run dataset](https://huggingface.co/datasets/BertilBraun/alphazero-chess-runs) (`raw/attention/`,
+`stitched/attention-adamw/`).
+
 Preserved with `run_control.sh preserve` on the node and copied to
 `.codex-diagnostics/vast-chess-8gpu-final-attention-adamw-20261002/evidence-20261002.tar` (1.2 GB, SHA-256
 `601c277996ce9a767f67f749c17396200ca390db83b9943b6cc911bcddfbe883`, with a `SHA256SUMS` inside): the complete

@@ -12,6 +12,11 @@ The full match protocol, intervals, artifacts, and limitations are in the
 [final result record](documentation/results/final-chess-run.md) and the published
 [technical report (arXiv:2609.37447)](https://arxiv.org/abs/2609.37447).
 
+A [follow-up run after the paper](#follow-up-an-attention-network-after-the-paper) with a 12-million-parameter
+attention network reached **3,338 [3,293, 3,381] benchmark Elo at 100,000 searches** under the same protocol, with
+eight-way search parallelism and float16 serving. The paper's result and the play site remain the convolutional
+model.
+
 [Play against the model](https://chess.bertil-braun.de/) ·
 [Model repository](https://huggingface.co/BertilBraun/alphazero-chess) ·
 [Read the paper on arXiv](https://arxiv.org/abs/2609.37447) ·
@@ -75,7 +80,9 @@ of magnitude more self-play and larger networks rather than a different algorith
 doubling of spend per ~87 Elo would put a run that closes the rest at roughly $700-800, and that is optimistic: the gain came from a
 better architecture, and more time on the same network bought nothing. The published result above is unchanged; the
 [attention run record](documentation/benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md) has the
-details and caveats.
+details and caveats. Its weights are archived in the [model repository](https://huggingface.co/BertilBraun/alphazero-chess)
+and the training curves and logs of the main runs in the
+[run dataset](https://huggingface.co/datasets/BertilBraun/alphazero-chess-runs).
 
 ## How it works
 
