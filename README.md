@@ -55,12 +55,16 @@ record covers **3.25 million ingested completed games**, about **209.15 million 
 unreconciled. The [evidence index](documentation/evidence/final-chess-20260923/README.md#training-volume-extraction)
 defines each counter.
 
-![64-search ladder Elo across five chess training campaigns](documentation/showcase/chess-ladder-progress.svg)
+![64-search ladder Elo across the main training campaigns](documentation/showcase/chess-ladder-progress-campaigns.svg)
 
-The curves show progress across major training campaigns, with the final lineage trimmed at 2.5 days
-and the preceding baseline at its clean three-day endpoint. These inexpensive training evaluations use only
-64 searches per move; the final model's 3,251 benchmark Elo uses 100,000 searches per move.
-[Chapter 7](documentation/report/06-final-chess-recipe.md) discusses the progression across campaigns.
+The curves show every main training campaign over its full run time, including the post-paper attention run
+(8x RTX 4080 SUPER; all others ran on 8x RTX 4070 SUPER). Ladder estimators and opponent brackets differ between
+campaigns, so levels compare approximately; the report's version trims the final lineage at 2.5 days and the
+preceding baseline at three days ([result record](documentation/results/final-chess-run.md)). These inexpensive
+training evaluations use only 64 searches per move; the final model's 3,251 benchmark Elo uses 100,000 searches per
+move. [Chapter 7](documentation/report/06-final-chess-recipe.md) discusses the progression across campaigns, and the
+underlying TensorBoard data and logs are in the
+[run dataset](https://huggingface.co/datasets/BertilBraun/alphazero-chess-runs).
 
 ## Follow-up: an attention network after the paper
 
@@ -136,3 +140,27 @@ history. Original project code and documentation are available under the [MIT Li
 dependencies, reference material, and externally sourced data retain their own terms; the license does not replace
 their notices. The final model artifacts are also MIT-licensed on
 [Hugging Face](https://huggingface.co/BertilBraun/alphazero-chess).
+
+## Possible follow-up: an AlphaZero-level run
+
+Not planned; recorded in case it becomes affordable. The constraint is the project's premise: self-play from random
+initialization only, with no pretrained weights and no distillation from a stronger engine.
+
+- **Hardware:** three 8-GPU nodes (24 GPUs) self-playing in parallel, with gradients synchronized across nodes and
+  all games streamed into one shared replay. The runtime does not yet support multi-node training or replay
+  ingestion, so this is engineering work before the first useful hour.
+- **Network and optimizer:** a T1-style attention network of about 50 million parameters (the follow-up model above
+  has 12 million), trained with AdamW on an annealed schedule; SGD trailed by more than 700 Elo early on with the
+  attention network.
+- **Search and volume:** 800 self-play visits per move, as in the final recipe, and about ten times the follow-up
+  run's ~1.2 million games: roughly 12 million games, a quarter of AlphaZero's 44 million for chess.
+- **Cost at 2026 prices:** a 50-million-parameter network costs about four times as much per position, so 24 GPUs
+  would produce about three quarters of the follow-up run's positions per hour, and ten times the games would take
+  about a month: roughly $3,000-4,000 of rental, less if GPU prices fall.
+- **Expected strength:** Lc0's 20-million-parameter T1 network plays about 245 Elo above the follow-up model inside
+  this project's search, so a well-trained network of this size should reach roughly 3,500-3,600 benchmark Elo at
+  100,000 searches. That is plausibly in the range of AlphaZero's 2018 published strength, though the mapping from
+  that paper's matches to this calibration is not exact, and well short of current top engines.
+
+The appeal would be matching AlphaZero's published level from self-play on a small fraction of its compute (5,000
+first-generation TPUs for self-play), not chasing the top engines.

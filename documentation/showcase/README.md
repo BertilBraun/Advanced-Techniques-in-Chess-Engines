@@ -9,6 +9,7 @@ nothing is drawn by hand, and the source archive names are printed in each figur
 | File | Content | Source |
 | --- | --- | --- |
 | `chess-ladder-progress.svg` | bias-corrected 0.95-EMA ladder Elo across five training campaigns, with the final recipe cut at 2.5 days and the previous baseline at 3.0 days | `documentation/evidence/final-chess-20260923/ladder-elo-report-trimmed.json` |
+| `chess-ladder-progress-campaigns.svg` | the same five campaigns untrimmed plus the post-paper attention run; drawn by `scripts/plot_ladder.py` in the [run dataset](https://huggingface.co/datasets/BertilBraun/alphazero-chess-runs), not by `render_showcase_plots.py` | the dataset's `raw/` and `stitched/` TensorBoard runs |
 | `chess-strength-vs-wall-clock.svg` | fitted Stockfish-ladder Elo and score vs Stockfish level 0, both against wall-clock hours | `vast-chess-comp2-adaptive-20260823T204328Z` |
 | `chess-training-loss.svg` | training policy/WDL loss vs optimizer steps, and fixed-dataset policy cross-entropy vs wall-clock | `vast-chess-comp2-adaptive-20260823T204328Z` |
 | `chess-experiment-ladder-comparison.svg` | fixed-dataset top-1 accuracy for the four 2026-08-23 ladder runs | `vast-chess-4day-cnn`, `-attention`, `-comp1`, `-comp2` archives |
