@@ -1,9 +1,14 @@
 # Current node
 
+**No node is rented** (as of 2026-10-03). The last one, described below, ran the AdamW attention run and was
+destroyed after it stopped at generation 950 on 2026-10-02; its evidence is under
+`.codex-diagnostics/vast-chess-8gpu-final-attention-adamw-20261002/`
+([results](../benchmarks/attention-adamw-final-run-rtx4080s-20261002/README.md)). Nothing on it survived.
+
 Rented 2026-09-30 for the AdamW attention run
 ([configuration](../../py/configs/production/vast-chess-8gpu-final-attention-adamw.yaml)).
 
-- Destination: `root@45.77.214.165:24803`.
+- Destination (gone): `root@45.77.214.165:24803`.
 - Local key: `C:/Users/berti/.ssh/vast-ssh`; never copy it to the node or repository.
 - Vast instance: `53481269`. `/workspace` is container storage, not a volume: nothing survives a destroy.
 - GPUs: 8 x NVIDIA GeForce RTX 4080 SUPER, 16,376 MiB each, **power limit 200 W**, mixed board vendors (VBIOS
