@@ -146,9 +146,14 @@ their notices. The final model artifacts are also MIT-licensed on
 Not planned; recorded in case it becomes affordable. The constraint is the project's premise: self-play from random
 initialization only, with no pretrained weights and no distillation from a stronger engine.
 
-- **Hardware:** three 8-GPU nodes (24 GPUs) self-playing in parallel, with gradients synchronized across nodes and
-  all games streamed into one shared replay. The runtime does not yet support multi-node training or replay
-  ingestion, so this is engineering work before the first useful hour.
+- **Hardware:** three 8-GPU nodes (24 GPUs) on a cluster with a shared file system: two run only self-play, the
+  third runs self-play, evaluation and the single trainer. Self-play workers already hand completed games to the
+  replay through files, so remote workers write into the same inbox and nothing about ingestion or training changes.
+  The engineering is the control path: the coordinator currently drives its workers through local process pipes
+  (desired state and current checkpoint), which has to reach the other nodes, and each node has to build or refit
+  its own TensorRT engines from every published checkpoint. Since this run's trainer waited for games about 110 s
+  of each ~4-minute generation and the larger network costs about four times as much per sample, the training node
+  would likely give most of its GPUs to training and evaluation.
 - **Network and optimizer:** a T1-style attention network of about 50 million parameters (the follow-up model above
   has 12 million), trained with AdamW on an annealed schedule; SGD trailed by more than 700 Elo early on with the
   attention network.
