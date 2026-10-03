@@ -15,8 +15,6 @@ graph*
 **.processed
 
 **/.vscode/**
-!/.vscode/
-!/.vscode/settings.json
 
 **/models/memory/**
 **/data/**
