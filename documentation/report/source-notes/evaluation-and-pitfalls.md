@@ -463,8 +463,8 @@ game lifecycle, tree retention, root noise, batch topology, and model-refresh re
 
 ### Sources
 
-- [Inference-cache release record](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/inference-cache-declined)
-- [Preserved cache benchmark at its release tag](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
+- [Inference-cache release record](https://github.com/BertilBraun/alphazero-chess/releases/tag/inference-cache-declined)
+- [Preserved cache benchmark at its release tag](https://github.com/BertilBraun/alphazero-chess/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
 
 ## Transferable failure study: adaptive-search proxy improved while strength did not
 
@@ -495,7 +495,7 @@ would need target-admission or weighting rules and an end-to-end strength design
 
 - [Predicted-budget negative result](../../analysis/adaptive-search-budget-negative-result-20260901.md)
 - [Learned-stopping fork conclusion](../../analysis/adaptive-search-conclusion-20260904.md)
-- [Adaptive-stopping release record](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/adaptive-stopping-final)
+- [Adaptive-stopping release record](https://github.com/BertilBraun/alphazero-chess/releases/tag/adaptive-stopping-final)
 
 ## Transferable failure study: saved search did not become wall-clock progress
 

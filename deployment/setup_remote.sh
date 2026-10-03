@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-repository_url="${ENGINE_REPOSITORY_URL:-https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git}"
+repository_url="${ENGINE_REPOSITORY_URL:-https://github.com/BertilBraun/alphazero-chess.git}"
 repository_ref="${ENGINE_REPOSITORY_REF:-master}"
 repository_depth="${ENGINE_REPOSITORY_DEPTH:-}"
 repository_directory="${ENGINE_REPOSITORY_DIRECTORY:-/workspace/alphazero-engine}"

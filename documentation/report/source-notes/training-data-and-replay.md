@@ -238,8 +238,8 @@ does not change the stored rows or their sampling probabilities.
 - [Checkpoint-zero construction](../../../py/src/experiment/run.py)
 - [Bootstrap-prior study](../../benchmarks/chess-attention-viability-rtx3060-20260827/README.md)
 - [Initialization and warmup regression audit](../../analysis/v35-v42-regression-audit-20260913.md)
-- [Trainer-construction seeding repair](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/d52949c7)
-- [Checkpoint-zero seeding repair](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/99247375)
+- [Trainer-construction seeding repair](https://github.com/BertilBraun/alphazero-chess/commit/d52949c7)
+- [Checkpoint-zero seeding repair](https://github.com/BertilBraun/alphazero-chess/commit/99247375)
 
 ## Replay capacity, freshness, and unique information
 
@@ -302,8 +302,8 @@ does not change the stored rows or their sampling probabilities.
 - [Current replay-system description](../../system/replay-and-data.md)
 - [Training-dynamics and fresh-data audit](../../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)
 - [Historical mature-loader and compaction benchmark](../../benchmarks/replay-loader-20260724/README.md)
-- [Historical deduplication/compaction implementation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/ebaef128)
-- [Targeted invalid-row pruning mechanism](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/1109739e)
+- [Historical deduplication/compaction implementation](https://github.com/BertilBraun/alphazero-chess/commit/ebaef128)
+- [Targeted invalid-row pruning mechanism](https://github.com/BertilBraun/alphazero-chess/commit/1109739e)
 
 ## Replay reuse and presentation-credit accounting
 
@@ -369,7 +369,7 @@ does not change the stored rows or their sampling probabilities.
 - [Current replay and credit configuration](../../../py/configs/production/chess-final-config.yaml)
 - [Credit and snapshot description](../../system/replay-and-data.md)
 - [Training dynamics with empirical ratio and admitted-data rate](../../benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)
-- [Preserved short-control decision record](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/713d3439)
+- [Preserved short-control decision record](https://github.com/BertilBraun/alphazero-chess/commit/713d3439)
 - [Matched-estimator and causal-bound source note](evaluation-and-pitfalls.md#retrospective-matched-estimator-audit)
 
 ## Model-publication cadence and target freshness
@@ -672,7 +672,7 @@ the two discounts interchangeable.
 - [Self-play reservation and forced-branch behavior](../../../py/src/self_play/worker.py)
 - [Current restart configuration](../../../py/configs/production/chess-final-config.yaml)
 - [Reference-recipe analysis](../../analysis/reference-recipes-for-a-compute-poor-run.md)
-- [Mixed-start and priority implementation record](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/aaeab181)
+- [Mixed-start and priority implementation record](https://github.com/BertilBraun/alphazero-chess/commit/aaeab181)
 
 ## Resignation calibration and continuation games
 
@@ -900,7 +900,7 @@ the two discounts interchangeable.
 ### Sources
 
 - [Historical reanalysis and deduplication record](../../history/v10-training-quality-implementation.md)
-- [Preserved reanalysis implementation commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/ba8b1fd7)
+- [Preserved reanalysis implementation commit](https://github.com/BertilBraun/alphazero-chess/commit/ba8b1fd7)
 - [Reanalysis decision method](../../history/historical-research-backlog-20260822.md)
 
 ## Synchronous quanta, self-play overlap, and the boundary with full asynchrony
@@ -1055,9 +1055,9 @@ the two discounts interchangeable.
 - [Mapped loader and prefetch](../../../py/src/replay/batch_loader.py)
 - [Historical loader benchmark](../../benchmarks/replay-loader-20260724/README.md)
 - [Production DDP benchmark](../../benchmarks/ddp-production-training-20260720/README.md)
-- [Vectorized batch construction commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/dc6ab37e)
-- [Mapped prefetch commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/f6af39bd)
-- [Per-worker dispatch implementation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/8d22010f)
+- [Vectorized batch construction commit](https://github.com/BertilBraun/alphazero-chess/commit/dc6ab37e)
+- [Mapped prefetch commit](https://github.com/BertilBraun/alphazero-chess/commit/f6af39bd)
+- [Per-worker dispatch implementation](https://github.com/BertilBraun/alphazero-chess/commit/8d22010f)
 
 ## Publication-safe conclusions
 

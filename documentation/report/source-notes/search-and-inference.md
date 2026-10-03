@@ -354,7 +354,7 @@ under another stage.
 
 - [Final learned-stopping conclusion](../../analysis/adaptive-search-conclusion-20260904.md)
 - [Adaptive stopping design](../../plan/adaptive-stopping-plan-20260901.md)
-- [Preserved off-main stopping implementation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/tree/adaptive-stopping-final/py/src/search_stopping)
+- [Preserved off-main stopping implementation](https://github.com/BertilBraun/alphazero-chess/tree/adaptive-stopping-final/py/src/search_stopping)
 
 ## Native MCTS mechanics and target semantics
 
@@ -615,10 +615,10 @@ states with different draw rights.
 ### Sources
 
 - [Archived production decision](../../plan/archive/chess-four-day-baseline-and-next-run-plan.md#10-transposition-graph-search-and-inference-cache-decision---rejected)
-- [Preserved MCGS design](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/architecture/monte-carlo-graph-search.md)
-- [Corrected paper audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-paper-audit-rtx4070s-20260818/README.md)
-- [Low- through high-budget graph benchmark](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-rtx4070s-20260818/README.md)
-- [Preserved native MCGS tests](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/mcgs-rejected/cpp/test/TestMonteCarloGraphSearch.cpp)
+- [Preserved MCGS design](https://github.com/BertilBraun/alphazero-chess/blob/mcgs-rejected/documentation/architecture/monte-carlo-graph-search.md)
+- [Corrected paper audit](https://github.com/BertilBraun/alphazero-chess/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-paper-audit-rtx4070s-20260818/README.md)
+- [Low- through high-budget graph benchmark](https://github.com/BertilBraun/alphazero-chess/blob/mcgs-rejected/documentation/benchmarks/monte-carlo-graph-search-rtx4070s-20260818/README.md)
+- [Preserved native MCGS tests](https://github.com/BertilBraun/alphazero-chess/blob/mcgs-rejected/cpp/test/TestMonteCarloGraphSearch.cpp)
 - [Czech, Korus, and Kersting, “Monte-Carlo Graph Search for AlphaZero”](https://arxiv.org/abs/2012.11045v1)
 
 ## Neural inference caching
@@ -712,11 +712,11 @@ without changing the basic scarcity of repeated inputs.
 ### Sources
 
 - [Implemented cache benchmark](../../benchmarks/self-play-mcts-node-arena-20260720/README.md)
-- [Preserved cache opportunity audit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
+- [Preserved cache opportunity audit](https://github.com/BertilBraun/alphazero-chess/blob/inference-cache-declined/documentation/benchmarks/inference-cache-hit-rate-20260818/README.md)
 - [Archived cache decision](../../plan/archive/chess-four-day-baseline-and-next-run-plan.md#10-transposition-graph-search-and-inference-cache-decision---rejected)
-- [Bounded sharded-cache implementation commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/837cfd49)
-- [Shared-result cache synchronization commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/fcbdb4d9)
-- [Cache-heavy topology selection commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/8914afce)
+- [Bounded sharded-cache implementation commit](https://github.com/BertilBraun/alphazero-chess/commit/837cfd49)
+- [Shared-result cache synchronization commit](https://github.com/BertilBraun/alphazero-chess/commit/fcbdb4d9)
+- [Cache-heavy topology selection commit](https://github.com/BertilBraun/alphazero-chess/commit/8914afce)
 
 ## Native inference, TorchScript, `torch.compile`, and TensorRT
 

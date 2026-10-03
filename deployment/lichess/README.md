@@ -7,7 +7,7 @@ This directory contains the runtime glue for one standard-chess Lichess BOT acco
 Rent an Ubuntu 22.04 or newer CUDA/PyTorch development instance with SSH access, connect as root, and run:
 
 ```text
-curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/lichess/setup_vast.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BertilBraun/alphazero-chess/master/deployment/lichess/setup_vast.sh | bash
 bash /workspace/alphazero-engine/deployment/lichess/smoke_vast.sh
 
 read -rsp "Lichess bot token: " LICHESS_BOT_TOKEN; echo
@@ -38,7 +38,7 @@ free -h
 The setup defaults to the latest commit on `origin/master`. Download the current script and let it clone the repository:
 
 ```text
-curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/lichess/setup_vast.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BertilBraun/alphazero-chess/master/deployment/lichess/setup_vast.sh | bash
 ```
 
 This deliberately executes the current script directly from GitHub without saving a temporary copy. Inspect or download it first instead if you want to review the exact script before execution.
@@ -46,7 +46,7 @@ This deliberately executes the current script directly from GitHub without savin
 Alternatively, clone manually and execute the checked-out script:
 
 ```text
-git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git \
+git clone https://github.com/BertilBraun/alphazero-chess.git \
   /workspace/alphazero-engine
 bash /workspace/alphazero-engine/deployment/lichess/setup_vast.sh
 ```

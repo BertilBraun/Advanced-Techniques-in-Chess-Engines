@@ -118,7 +118,7 @@ into publication text.
 - [Python representation and augmentation contract](../../../py/src/games/chess/contract.py)
 - [Mirror-augmentation regression tests](../../../py/test/test_chess_mirror_augmentation.py)
 - [Native/Python flip harness](../../../cpp/test/flip-harness/run_checks.py)
-- [History-expansion implementation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/e98d670c)
+- [History-expansion implementation](https://github.com/BertilBraun/alphazero-chess/commit/e98d670c)
 
 ## Dense reduced-action policy heads
 
@@ -178,8 +178,8 @@ into publication text.
 ### Sources
 
 - [Current selectable dense-head implementation](../../../py/src/training/network.py)
-- [Dense-variant bake-off implementation commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/23eb8e2c)
-- [Recorded rank-96 selection rationale](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/3c5d01f6)
+- [Dense-variant bake-off implementation commit](https://github.com/BertilBraun/alphazero-chess/commit/23eb8e2c)
+- [Recorded rank-96 selection rationale](https://github.com/BertilBraun/alphazero-chess/commit/3c5d01f6)
 - [Controlled dense/from-to comparison](../../benchmarks/chess-attention-viability-rtx3060-20260827/README.md)
 
 ## Structured 76-plane policy heads
@@ -248,12 +248,12 @@ into publication text.
 
 ### Sources
 
-- [Structured-head implementation commit](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/cbf74199)
+- [Structured-head implementation commit](https://github.com/BertilBraun/alphazero-chess/commit/cbf74199)
 - [Direct-plane throughput controls](../../benchmarks/chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md)
 - [Short supervised plane/dense comparison](../../benchmarks/supervised-testbed-rtx4070-20260821/README.md)
 - [Failure diagnosis and measured initialization](../../plan/chess-post-four-day-regression-analysis-20260820.md)
 - [Recovery design for the repaired plane head](../../plan/chess-recovery-plan-20260820.md)
-- [Restoration of the reduced action contract](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/commit/afefba9a)
+- [Restoration of the reduced action contract](https://github.com/BertilBraun/alphazero-chess/commit/afefba9a)
 
 ## From-to attention policy head
 
@@ -706,7 +706,7 @@ into publication text.
 - [Current WDL head](../../../py/src/training/network.py)
 - [Wider-head matched probe](../../benchmarks/tensorrt-int8-replay-screen-rtx4070s-20260912/README.md)
 - [Quantization salvage value-head check](../../benchmarks/tensorrt-int8-salvage-rtx4070s-20260912/README.md)
-- [Earliest tagged scalar-head implementation](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/blob/v1.0/py/src/Network.py)
+- [Earliest tagged scalar-head implementation](https://github.com/BertilBraun/alphazero-chess/blob/v1.0/py/src/Network.py)
 
 ## Distillation and compact deployment models
 

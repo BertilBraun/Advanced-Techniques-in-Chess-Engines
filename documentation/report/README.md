@@ -8,7 +8,7 @@ decision, including why small-board Go was not retained as a proxy for chess hyp
 work is presented as the throughput foundation for self-play learning rather than as a separate algorithmic claim.
 
 **[Read the published technical report (arXiv:2609.37447)](https://arxiv.org/abs/2609.37447).**
-The [GitHub release](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/final-chess-report)
+The [GitHub release](https://github.com/BertilBraun/alphazero-chess/releases/tag/final-chess-report)
 also preserves the submitted PDF and project release notes.
 The complete narrative is typeset as a two-column paper. The [narrative outline](narrative-outline.md) and
 [completion plan](publication-plan.md) remain editorial working records, not chapters of the paper.

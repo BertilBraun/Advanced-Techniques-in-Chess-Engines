@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-engine_repository_url="${ENGINE_REPOSITORY_URL:-https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git}"
+engine_repository_url="${ENGINE_REPOSITORY_URL:-https://github.com/BertilBraun/alphazero-chess.git}"
 engine_revision="${ENGINE_REVISION:-master}"
 engine_repository_root="${ENGINE_REPOSITORY_ROOT:-/workspace/alphazero-engine}"
 lichess_bot_root="${LICHESS_BOT_ROOT:-/workspace/lichess-bot}"
